@@ -1,0 +1,10 @@
+nicegui>=2.0.0
+python-pptx>=1.0.0
+python-dotenv>=1.0.0
+pywin32>=306
+fpdf2>=2.7.0
+python-docx>=1.1.0
+Pillow>=10.0.0
+openpyxl>=3.1.0
+pytest>=8.0.0
+httpx>=0.27.0
