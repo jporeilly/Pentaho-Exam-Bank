@@ -90,11 +90,14 @@ def build_question_editor(state: AppState, refs: UIRefs):
                 with ui.row().classes("gap-2 items-center"):
                     # Question number and source
                     label_parts = [f"Q{idx + 1} of {total}"]
-                    if q.source_slides:
-                        slides_str = ", ".join(str(s + 1) for s in q.source_slides)
-                        label_parts.append(f"from Slide {slides_str}")
+                    # PCM/docs sources aren't slides — cite the section/source.
+                    if q.source_type == "pcm":
+                        label_parts.append(f"from {q.topic}" if q.topic else "from PCM course")
                     elif q.source_type == "docs":
                         label_parts.append("from Docs")
+                    elif q.source_slides:
+                        slides_str = ", ".join(str(s + 1) for s in q.source_slides)
+                        label_parts.append(f"from Slide {slides_str}")
                     ui.label(" · ".join(label_parts)).classes("text-xs text-grey-5 font-mono")
 
                 with ui.row().classes("gap-2 items-center"):
@@ -176,6 +179,15 @@ def build_question_editor(state: AppState, refs: UIRefs):
                         )
                 elif q.source_file:
                     ui.label(f"Source: {q.source_file}").classes("text-xs text-grey-6 q-mt-xs")
+            elif q.source_type == "pcm":
+                # PCM grounds on course prose, not a slide — cite the section, no slide number.
+                if q.key_source_text:
+                    with ui.row().classes("gap-1 q-mt-xs items-start"):
+                        ui.icon("menu_book", size="xs", color="purple")
+                        label = f"Source ({q.topic}): {q.key_source_text}" if q.topic else f"Source: {q.key_source_text}"
+                        ui.label(label).classes("text-xs text-purple-8 italic")
+                elif q.topic:
+                    ui.label(f"Source: {q.topic}").classes("text-xs text-grey-6 q-mt-xs")
             elif q.key_source_text:
                 with ui.row().classes("gap-1 q-mt-xs items-start"):
                     ui.icon("format_quote", size="xs", color="blue")

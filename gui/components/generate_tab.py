@@ -50,12 +50,28 @@ def build_generate_tab(state: AppState, refs: UIRefs):
                 ).classes("flex-grow").props("dense outlined").tooltip(
                     "Controls how challenging the questions will be"
                 )
+                # Initialise the multi-select Bloom's state from saved default.
+                if not getattr(state, "_gen_bloom_levels", None):
+                    state._gen_bloom_levels = [config.default_bloom_level]
+
+                def _on_bloom_change(e):
+                    levels = e.value or []
+                    if isinstance(levels, str):
+                        levels = [levels]
+                    if not levels:
+                        levels = [config.default_bloom_level]
+                    state._gen_bloom_levels = levels
+                    # Keep the single saved default in sync (first selected).
+                    _save("default_bloom_level", levels[0])
+
                 ui.select(
-                    BLOOM_OPTIONS, value=config.default_bloom_level,
-                    label="Bloom's Taxonomy Level",
-                    on_change=lambda e: _save("default_bloom_level", e.value),
-                ).classes("flex-grow").props("dense outlined").tooltip(
-                    "Controls the depth of thinking required — higher levels demand more analysis"
+                    BLOOM_OPTIONS, value=list(state._gen_bloom_levels),
+                    label="Bloom's Taxonomy Level(s)",
+                    multiple=True,
+                    on_change=_on_bloom_change,
+                ).classes("flex-grow").props("dense outlined use-chips").tooltip(
+                    "Pick one or more levels. With several selected, they're spread across "
+                    "slides/sections in turn — higher levels demand more analysis."
                 )
 
             # ── Question specs ──
@@ -70,13 +86,17 @@ def build_generate_tab(state: AppState, refs: UIRefs):
                 specs_container.clear()
                 with specs_container:
                     with ui.row().classes("w-full items-center gap-2"):
-                        ui.label("Questions per slide").classes("text-sm font-semibold")
+                        ui.label("Questions per slide / section").classes("text-sm font-semibold")
                         ui.button(icon="add", on_click=_add_question_spec).props(
                             "flat round dense size=xs color=positive"
-                        ).tooltip("Add another question per slide")
+                        ).tooltip("Add another question per slide/section")
+                        _n = len(state._gen_question_specs)
+                        ui.label(f"· {_n} per slide/section").classes("text-xs text-grey-5")
                     ui.label(
-                        "Each row generates one question per slide. Set 1 key for single-select, "
-                        "2+ keys for multi-select (\"Which two...\"). Add rows to generate more questions per slide."
+                        "Each row = one question generated per slide (PPTX) or per section "
+                        "(PCM course / Docs). Set 1 key for single-select, 2+ for multi-select "
+                        "(\"Which two…\"). Add rows with ＋ to generate more questions each. "
+                        "Total generated = (slides or sections) × rows."
                     ).classes("text-xs text-grey-5 q-mb-xs")
 
                     for qi, spec in enumerate(state._gen_question_specs):
@@ -121,6 +141,29 @@ def build_generate_tab(state: AppState, refs: UIRefs):
                     _rebuild_specs()
 
             _rebuild_specs()
+
+            # ── Total target (PCM course / Docs) ──
+            ui.separator().classes("q-my-sm")
+            if not hasattr(state, "_gen_target_total"):
+                state._gen_target_total = 0
+
+            def _on_target_change(e):
+                state._gen_target_total = int(e.value or 0)
+
+            with ui.row().classes("w-full items-center gap-2"):
+                ui.number(
+                    label="Total questions to generate",
+                    value=state._gen_target_total, min=0, max=500, step=1,
+                    on_change=_on_target_change,
+                ).classes("w-56").props("dense outlined").tooltip(
+                    "For a PCM course or Docs: total questions to generate, spread across "
+                    "all sections (overrides the per-section count above). 0 = use the "
+                    "per-slide/section rows instead."
+                )
+                ui.label(
+                    "Set a total to generate more than one per section — e.g. 20 across "
+                    "a 6-section course. Leave 0 to use the rows above."
+                ).classes("text-xs text-grey-5")
 
             # ── Options toggles ──
             ui.separator().classes("q-my-sm")

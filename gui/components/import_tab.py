@@ -19,6 +19,7 @@ from ...core.question_bank import Question
 from ...core.question_importer import (
     import_from_csv, import_from_json, import_from_text, _is_text_format,
     import_from_qti21, import_from_moodle_xml, detect_xml_format,
+    is_pcm_exam_json, import_from_pcm_exam_json,
 )
 from ...core.spreadsheet_converter import import_from_xlsx, HAS_OPENPYXL
 from ...utils.config import config
@@ -342,7 +343,16 @@ def build_import_tab(state: AppState, refs: UIRefs):
                 else:
                     questions = import_from_csv(tmp)
             elif suffix == ".json":
-                questions = import_from_json(tmp)
+                # Auto-detect a PCM exam.json (object with questions[].prompt)
+                # vs the bank's own export (top-level array of stem/key).
+                if is_pcm_exam_json(tmp):
+                    questions = import_from_pcm_exam_json(tmp)
+                    ui.notify(
+                        f"Detected PCM exam.json — imported {len(questions)} question(s) as PCM-sourced drafts.",
+                        type="info", timeout=6000,
+                    )
+                else:
+                    questions = import_from_json(tmp)
             elif suffix == ".xlsx":
                 if not HAS_OPENPYXL:
                     ui.notify("openpyxl is required for Excel import. Install with: pip install openpyxl", type="negative")

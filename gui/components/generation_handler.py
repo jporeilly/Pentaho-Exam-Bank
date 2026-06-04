@@ -222,7 +222,10 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
         state._gen_start_time = time.time()
 
         difficulty = config.default_difficulty
-        bloom = config.default_bloom_level
+        # One or more Bloom's levels (multi-select); spread across slides/sections.
+        bloom = getattr(state, "_gen_bloom_levels", None) or [config.default_bloom_level]
+        # Optional total question target for batch sources (PCM/docs); 0 = per-section.
+        target_total = int(getattr(state, "_gen_target_total", 0) or 0) or None
         if not is_docs and not is_pcm:
             file_topic = (f.topic if f else "") or ""
         include_scenario = getattr(state, '_gen_include_scenario', True)
@@ -259,12 +262,12 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
             if is_docs:
                 return _generate_from_docs(
                     state, cert_id, cert, file_topic, num_per, difficulty, bloom,
-                    custom, question_specs, progress_cb,
+                    custom, question_specs, progress_cb, target_total=target_total,
                 )
             elif is_pcm:
                 return _generate_from_pcm(
                     state, cert_id, cert, num_per, difficulty, bloom,
-                    custom, question_specs, progress_cb,
+                    custom, question_specs, progress_cb, target_total=target_total,
                 )
             else:
                 slide = state.current_slide
@@ -420,7 +423,7 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
         state._gen_start_time = time.time()
 
         difficulty = config.default_difficulty
-        bloom = config.default_bloom_level
+        bloom = getattr(state, "_gen_bloom_levels", None) or [config.default_bloom_level]
         file_topic = (f.topic if f else "") or ""
         include_scenario = getattr(state, '_gen_include_scenario', True)
 
@@ -561,7 +564,7 @@ def _poll_progress(state):
 
 
 def _generate_from_docs(state, cert_id, cert, file_topic, num_per, difficulty, bloom,
-                        custom, question_specs, progress_cb):
+                        custom, question_specs, progress_cb, target_total=None):
     """Generate questions from MCP documentation sources."""
     search_query = file_topic or cert.name
     selected_urls = state.active_mcp_servers
@@ -621,6 +624,7 @@ def _generate_from_docs(state, cert_id, cert, file_topic, num_per, difficulty, b
         topic=file_topic,
         custom_instructions=custom,
         question_specs=question_specs,
+        target_total=target_total,
     )
     unique_links = list(dict.fromkeys(doc_links))
     for q in results:
@@ -632,12 +636,13 @@ def _generate_from_docs(state, cert_id, cert, file_topic, num_per, difficulty, b
 
 
 def _generate_from_pcm(state, cert_id, cert, num_per, difficulty, bloom,
-                       custom, question_specs, progress_cb):
+                       custom, question_specs, progress_cb, target_total=None):
     """Generate questions from a Pentaho Content Manager course's content.
 
-    Reads the course's lab guides into per-section SlideInfo and generates
-    num_per question(s) per section. Passing topic="" lets each question
-    inherit its section title as the topic (→ the PCM `module` label).
+    Reads the course's lab guides into per-section SlideInfo. By default each
+    section yields one "pass" of question_specs; when target_total is set, that
+    many questions are distributed across the sections instead. Passing topic=""
+    lets each question inherit its section title as the topic (→ PCM `module`).
     """
     from ...core.pcm_reader import load_pcm_course
 
@@ -664,6 +669,7 @@ def _generate_from_pcm(state, cert_id, cert, num_per, difficulty, bloom,
         topic="",  # per-section: question inherits slide.title as topic
         custom_instructions=custom,
         question_specs=question_specs,
+        target_total=target_total,
     )
     for q in results:
         q.source_type = "pcm"

@@ -13,9 +13,12 @@ from .generation_prompts import (
 from .generation_parsing import _extract_json_array, _extract_json_object, validate_key_against_notes
 
 
-# Warnings that the AI can fix by rewriting the question
+# Warnings that the AI can fix by rewriting the question. Length balance is
+# deliberately NOT here: it's a cosmetic heuristic that fires on nearly every
+# question, and a local model rarely satisfies it — so auto-fixing it spent an
+# extra (often fruitless) LLM call per question. It's still surfaced as a review
+# tag via validate(); it just no longer triggers an automatic rewrite.
 _FIXABLE_WARNINGS = {
-    "Answer lengths are unbalanced",
     "A distractor is identical to a correct answer",
     "'All/None of the above' is a weak distractor",
 }
@@ -247,7 +250,7 @@ def generate_questions_batch(
     base_url: str = "http://localhost:11434",
     num_per_slide: int = 2,
     difficulty: str = "Medium",
-    bloom_level: str = "Apply",
+    bloom_level="Apply",
     certification_id: str = "",
     source_file: str = "",
     system_prompt: str = "",
@@ -258,25 +261,48 @@ def generate_questions_batch(
     custom_instructions: str = "",
     slide_images: Optional[List[Optional[str]]] = None,
     question_specs: Optional[List[dict]] = None,
+    target_total: Optional[int] = None,
 ) -> List[Question]:
     """Generate questions for multiple slides.
 
     Args:
         progress_callback: Optional callable(current, total, message) for UI updates.
+        bloom_level: A single Bloom's level, or a list of levels to spread across
+            slides/sections round-robin (slide i uses levels[i % len]).
         topic: If set, overrides slide title as the question topic.
         custom_instructions: Extra instructions appended to the generation prompt.
         slide_images: Optional list of image paths (one per slide, None if unavailable).
+        target_total: When set, generate this many questions in total, distributed
+            as evenly as possible across the slides/sections that have content
+            (rather than a fixed count per slide). If it exceeds the number of
+            sections, sections get multiple; if smaller, only the first N sections
+            are used.
     """
     all_questions = []
     total = len(slides)
+
+    # Normalise Bloom's to a list and rotate it across slides/sections.
+    blooms = [b for b in (bloom_level if isinstance(bloom_level, (list, tuple)) else [bloom_level]) if b]
+    if not blooms:
+        blooms = ["Apply"]
 
     # Source shapes the progress wording: PCM/docs items are sections, not slides.
     is_docs = bool(source_file and source_file.startswith("docs:"))
     is_pcm = bool(source_file and source_file.startswith("pcm:"))
 
+    # Per-slide question counts. Default: one "pass" of question_specs per slide.
+    # With target_total set, distribute that total across slides with content.
+    base_n = len(question_specs) if question_specs else max(1, int(num_per_slide))
+    eligible = [i for i, s in enumerate(slides) if s.speaker_notes.strip() or s.body_text]
+    per_slide_n = {i: base_n for i in eligible}
+    if target_total and target_total > 0 and eligible:
+        base, extra = divmod(int(target_total), len(eligible))
+        per_slide_n = {idx: base + (1 if k < extra else 0) for k, idx in enumerate(eligible)}
+
     for i, slide in enumerate(slides):
-        if not slide.speaker_notes.strip() and not slide.body_text:
-            if progress_callback:
+        n_this = per_slide_n.get(i, 0)
+        if n_this <= 0:
+            if progress_callback and i not in eligible:
                 label = (slide.title or f"item {i + 1}") if (is_docs or is_pcm) else f"Slide {slide.index + 1}"
                 progress_callback(i + 1, total, f"{label}: No content, skipping")
             continue
@@ -286,7 +312,7 @@ def generate_questions_batch(
             if is_docs:
                 progress_callback(i, total, f"Generating from docs: {slide.title or source_file}...")
             elif is_pcm:
-                progress_callback(i, total, f"Generating from section {i + 1}/{total}: {slide.title or 'course content'}...")
+                progress_callback(i, total, f"Generating from section {i + 1}/{total}: {slide.title or 'course content'} ({n_this} Q)...")
             else:
                 progress_callback(i, total, f"Generating for slide {slide.index + 1}...")
 
@@ -295,13 +321,20 @@ def generate_questions_batch(
         if slide_images and i < len(slide_images) and slide_images[i]:
             img_path = str(slide_images[i])
 
+        # Build this slide's specs by cycling the base specs up to n_this questions.
+        if question_specs:
+            specs_this = [question_specs[j % len(question_specs)] for j in range(n_this)]
+        else:
+            specs_this = None  # generate_questions builds its own from num_questions
+
+        slide_bloom = blooms[i % len(blooms)]
         questions = generate_questions(
             slide=slide,
             model=model,
             base_url=base_url,
-            num_questions=num_per_slide,
+            num_questions=n_this,
             difficulty=difficulty,
-            bloom_level=bloom_level,
+            bloom_level=slide_bloom,
             certification_id=certification_id,
             source_file=source_file,
             system_prompt=system_prompt,
@@ -309,7 +342,7 @@ def generate_questions_batch(
             num_distractors=num_distractors,
             topic=topic,
             custom_instructions=custom_instructions,
-            question_specs=question_specs,
+            question_specs=specs_this,
             slide_image=img_path,
             progress_callback=progress_callback,
         )

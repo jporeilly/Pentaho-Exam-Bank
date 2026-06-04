@@ -367,6 +367,80 @@ def import_from_json(path: Path) -> List[Question]:
     return questions
 
 
+def is_pcm_exam_json(path: Path) -> bool:
+    """True when a .json file is a PCM ``exam.json`` rather than a bank export.
+
+    A PCM exam is an object with a ``questions`` array whose items use
+    ``prompt``/``options`` (vs the bank's top-level array of ``stem``/``key``).
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(data, dict):
+        return False
+    qs = data.get("questions")
+    if not isinstance(qs, list) or not qs:
+        return False
+    first = qs[0]
+    return isinstance(first, dict) and "prompt" in first and "options" in first
+
+
+def import_from_pcm_exam_json(path: Path) -> List[Question]:
+    """Import questions from a Pentaho Content Manager ``exam.json``.
+
+    The inverse of ``exporter.export_pcm_exam_json``: each item's ``options``
+    are split into key(s) + distractors using ``correct``/``correctIndices``,
+    ``prompt`` becomes the stem, and ``module`` becomes the topic. Imported
+    questions are tagged as the ``pcm`` source and land as drafts.
+    """
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return []
+    exam_title = str(data.get("title") or "").strip()
+
+    questions = []
+    for item in data.get("questions", []):
+        if not isinstance(item, dict):
+            continue
+        options = [str(o) for o in item.get("options", []) if isinstance(o, (str, int, float))]
+        if not options:
+            continue
+
+        # Resolve correct indices: correctIndices (multi) wins, else correct (single).
+        idxs = item.get("correctIndices")
+        if isinstance(idxs, list) and idxs:
+            correct_idx = [i for i in idxs if isinstance(i, int) and 0 <= i < len(options)]
+        else:
+            c = item.get("correct")
+            correct_idx = [c] if isinstance(c, int) and 0 <= c < len(options) else []
+
+        keys_list = [options[i] for i in correct_idx]
+        distractors = [o for j, o in enumerate(options) if j not in set(correct_idx)]
+        is_multi = len(keys_list) > 1
+
+        q = Question(
+            stem=item.get("prompt", ""),
+            question_type="multi" if is_multi else "single",
+            key=keys_list[0] if keys_list else "",
+            keys=keys_list if is_multi else [],
+            scenario=item.get("scenario", ""),
+            distractors=distractors,
+            option_order=list(options),                 # preserve authored order
+            explanation=item.get("explanation", ""),
+            topic=item.get("module", "") or exam_title,
+            difficulty="Medium",
+            bloom_level="Apply",
+            source_type="pcm",
+            source_file=str(item.get("source", "")),
+            status="draft",
+            created_by="Import",
+        )
+        questions.append(q)
+
+    return questions
+
+
 def _strip_html(text: str) -> str:
     """Simple HTML tag stripper for Moodle content."""
     return re.sub(r'<[^>]+>', '', text or "").strip()
