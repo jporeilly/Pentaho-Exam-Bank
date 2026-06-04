@@ -165,6 +165,24 @@ def build_generate_tab(state: AppState, refs: UIRefs):
                     "a 6-section course. Leave 0 to use the rows above."
                 ).classes("text-xs text-grey-5")
 
+            # Randomize which format row each question uses.
+            if not hasattr(state, "_gen_shuffle_formats"):
+                state._gen_shuffle_formats = False
+
+            def _on_shuffle_change(e):
+                state._gen_shuffle_formats = bool(e.value)
+
+            with ui.row().classes("w-full items-center gap-1 q-mt-xs"):
+                ui.switch(
+                    "Randomize question formats", value=state._gen_shuffle_formats,
+                    on_change=_on_shuffle_change,
+                ).props("dense")
+                ui.icon("help_outline", size="xs").classes("text-grey-5 cursor-pointer").tooltip(
+                    "On: spreads the format rows above evenly across all questions, in random "
+                    "order (e.g. 5 formats over 20 questions → ~4 of each, shuffled and dealt "
+                    "across the sections). Off: formats cycle in row order by question position."
+                )
+
             # ── Options toggles ──
             ui.separator().classes("q-my-sm")
             with ui.row().classes("w-full items-center gap-4"):

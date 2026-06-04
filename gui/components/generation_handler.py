@@ -226,6 +226,8 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
         bloom = getattr(state, "_gen_bloom_levels", None) or [config.default_bloom_level]
         # Optional total question target for batch sources (PCM/docs); 0 = per-section.
         target_total = int(getattr(state, "_gen_target_total", 0) or 0) or None
+        # Randomly assign formats from the spec rows instead of cycling by position.
+        shuffle_formats = bool(getattr(state, "_gen_shuffle_formats", False))
         if not is_docs and not is_pcm:
             file_topic = (f.topic if f else "") or ""
         include_scenario = getattr(state, '_gen_include_scenario', True)
@@ -263,11 +265,13 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
                 return _generate_from_docs(
                     state, cert_id, cert, file_topic, num_per, difficulty, bloom,
                     custom, question_specs, progress_cb, target_total=target_total,
+                    shuffle_formats=shuffle_formats,
                 )
             elif is_pcm:
                 return _generate_from_pcm(
                     state, cert_id, cert, num_per, difficulty, bloom,
                     custom, question_specs, progress_cb, target_total=target_total,
+                    shuffle_formats=shuffle_formats,
                 )
             else:
                 slide = state.current_slide
@@ -289,6 +293,7 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
                     custom_instructions=custom,
                     slide_images=slide_image_paths,
                     question_specs=question_specs,
+                    shuffle_formats=shuffle_formats,
                 )
 
         # Progress polling timer
@@ -465,6 +470,7 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
                 custom_instructions=custom,
                 slide_images=batch_image_paths,
                 question_specs=question_specs,
+                shuffle_formats=bool(getattr(state, "_gen_shuffle_formats", False)),
             )
 
         with _callback_anchor:
@@ -564,7 +570,8 @@ def _poll_progress(state):
 
 
 def _generate_from_docs(state, cert_id, cert, file_topic, num_per, difficulty, bloom,
-                        custom, question_specs, progress_cb, target_total=None):
+                        custom, question_specs, progress_cb, target_total=None,
+                        shuffle_formats=False):
     """Generate questions from MCP documentation sources."""
     search_query = file_topic or cert.name
     selected_urls = state.active_mcp_servers
@@ -625,6 +632,7 @@ def _generate_from_docs(state, cert_id, cert, file_topic, num_per, difficulty, b
         custom_instructions=custom,
         question_specs=question_specs,
         target_total=target_total,
+        shuffle_formats=shuffle_formats,
     )
     unique_links = list(dict.fromkeys(doc_links))
     for q in results:
@@ -636,7 +644,8 @@ def _generate_from_docs(state, cert_id, cert, file_topic, num_per, difficulty, b
 
 
 def _generate_from_pcm(state, cert_id, cert, num_per, difficulty, bloom,
-                       custom, question_specs, progress_cb, target_total=None):
+                       custom, question_specs, progress_cb, target_total=None,
+                       shuffle_formats=False):
     """Generate questions from a Pentaho Content Manager course's content.
 
     Reads the course's lab guides into per-section SlideInfo. By default each
@@ -670,6 +679,7 @@ def _generate_from_pcm(state, cert_id, cert, num_per, difficulty, bloom,
         custom_instructions=custom,
         question_specs=question_specs,
         target_total=target_total,
+        shuffle_formats=shuffle_formats,
     )
     for q in results:
         q.source_type = "pcm"

@@ -1,6 +1,7 @@
 """Core question generation pipeline using Ollama AI."""
 
 import json
+import random
 import re
 from typing import List, Optional
 
@@ -262,6 +263,7 @@ def generate_questions_batch(
     slide_images: Optional[List[Optional[str]]] = None,
     question_specs: Optional[List[dict]] = None,
     target_total: Optional[int] = None,
+    shuffle_formats: bool = False,
 ) -> List[Question]:
     """Generate questions for multiple slides.
 
@@ -277,6 +279,9 @@ def generate_questions_batch(
             (rather than a fixed count per slide). If it exceeds the number of
             sections, sections get multiple; if smaller, only the first N sections
             are used.
+        shuffle_formats: When True, each question's format is picked at random from
+            question_specs instead of cycling them by position — so several format
+            rows get spread randomly across the generated questions.
     """
     all_questions = []
     total = len(slides)
@@ -298,6 +303,25 @@ def generate_questions_batch(
     if target_total and target_total > 0 and eligible:
         base, extra = divmod(int(target_total), len(eligible))
         per_slide_n = {idx: base + (1 if k < extra else 0) for k, idx in enumerate(eligible)}
+
+    # When randomizing, pre-build a *balanced* format assignment for the whole
+    # run: each spec row is used an equal share of the grand total (the
+    # remainder going to a random subset of rows), then shuffled and dealt out
+    # across sections in order. This spreads the formats evenly rather than
+    # picking with replacement (which can over-use one format by chance).
+    format_queue = None
+    if question_specs and shuffle_formats:
+        total_q = sum(per_slide_n.values())
+        n_fmt = len(question_specs)
+        base, rem = divmod(total_q, n_fmt)
+        order = []
+        for k in range(n_fmt):
+            order.extend([k] * base)
+        extra_rows = list(range(n_fmt))
+        random.shuffle(extra_rows)
+        order.extend(extra_rows[:rem])           # remainder spread across distinct rows
+        random.shuffle(order)
+        format_queue = [question_specs[k] for k in order]
 
     for i, slide in enumerate(slides):
         n_this = per_slide_n.get(i, 0)
@@ -321,9 +345,15 @@ def generate_questions_batch(
         if slide_images and i < len(slide_images) and slide_images[i]:
             img_path = str(slide_images[i])
 
-        # Build this slide's specs by cycling the base specs up to n_this questions.
+        # Build this slide's specs from the base specs up to n_this questions —
+        # deal from the balanced shuffled queue when randomizing, else cycle by
+        # position.
         if question_specs:
-            specs_this = [question_specs[j % len(question_specs)] for j in range(n_this)]
+            if format_queue is not None:
+                specs_this = format_queue[:n_this]
+                del format_queue[:n_this]
+            else:
+                specs_this = [question_specs[j % len(question_specs)] for j in range(n_this)]
         else:
             specs_this = None  # generate_questions builds its own from num_questions
 
