@@ -94,6 +94,10 @@ def export_pcm_exam_json(
     pass_mark: int = 80,
     questions_per_attempt: int = None,
     shuffle: bool = True,
+    description: str = "",
+    webhook_url: str = "",
+    webhook_secret: str = "",
+    source_label: str = "",
 ):
     """Export questions as a Pentaho Content Manager ``exam.json``.
 
@@ -101,6 +105,14 @@ def export_pcm_exam_json(
     correct | correctIndices, ... }``. Single-select emits ``correct``
     (one index); multi-select emits ``correctIndices`` (graded
     all-or-nothing). Drop the result straight into a course dir.
+
+    ``source`` is the citation shown in the post-submission review
+    ("Source: ..."). It is set to a concise location — ``source_label``
+    (the course) plus the question's section/module — rather than the raw
+    grounding passage, so it reads as a citation. ``description``,
+    ``webhook_url``/``webhook_secret``, ``pass_mark`` and
+    ``questions_per_attempt`` let the caller carry over a course's existing
+    exam settings so regenerating questions doesn't wipe them.
     """
     items = []
     for q in questions:
@@ -128,20 +140,29 @@ def export_pcm_exam_json(
             item["correct"] = correct_idx[0] if correct_idx else 0
         if q.explanation:
             item["explanation"] = q.explanation
-        source = q.key_source_text or q.source_file
-        if source:
-            item["source"] = source
+        # Citation for the results review — a concise "where to look" location,
+        # not the answer-bearing source text. Prefer course + section.
+        cite = (q.topic or "").strip()
+        if source_label and cite:
+            item["source"] = f"{source_label}: {cite}"
+        elif cite:
+            item["source"] = cite
+        elif q.source_file:
+            item["source"] = q.source_file
         items.append(item)
 
-    exam = {
-        "title": title,
-        "passMark": pass_mark,
-        "shuffle": bool(shuffle),
-        "webhookUrl": "",
-        "questions": items,
-    }
+    # Field order mirrors a hand-authored exam.json for readable diffs.
+    exam = {"title": title}
+    if description:
+        exam["description"] = description
+    exam["passMark"] = pass_mark
     if questions_per_attempt:
         exam["questionsPerAttempt"] = questions_per_attempt
+    exam["shuffle"] = bool(shuffle)
+    exam["webhookUrl"] = webhook_url
+    if webhook_secret:
+        exam["webhookSecret"] = webhook_secret
+    exam["questions"] = items
     path.write_text(json.dumps(exam, indent=2, ensure_ascii=False), encoding="utf-8")
 
 

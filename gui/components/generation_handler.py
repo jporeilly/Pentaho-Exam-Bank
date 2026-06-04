@@ -297,7 +297,12 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
             error_msg = ""
             cancelled = False
             try:
-                label = f"docs:{file_topic}" if is_docs else f"slide {slide_idx + 1}"
+                if is_docs:
+                    label = f"docs:{file_topic}"
+                elif is_pcm:
+                    label = f"pcm:{cert.source_ref}"
+                else:
+                    label = f"slide {state.current_slide_idx + 1}"
                 print(f"[GENERATE] Starting for {label}...")
                 raw_questions = do_generate()
                 print(f"[GENERATE] Got {len(raw_questions)} question(s) from AI")
@@ -340,7 +345,13 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
 
                 state.bus.emit(EVT_QUESTIONS_CHANGED)
 
-                if dupe_qs:
+                # The duplicate-replacement loop re-runs do_generate() to swap out
+                # dupes. That only makes sense for a single slide. For PCM/docs,
+                # do_generate() regenerates the WHOLE course/topic set, so retrying
+                # per duplicate re-runs everything up to 3× — looking like an endless
+                # loop. Batch-shaped sources just drop dupes and report, like the
+                # "Generate All Slides" path does.
+                if dupe_qs and not is_pcm and not is_docs:
                     ui.notify(
                         f"{len(unique_qs)} unique, {len(dupe_qs)} duplicate(s) — regenerating duplicates...",
                         type="info",
@@ -350,7 +361,10 @@ def setup_generation_handlers(state: AppState, refs: UIRefs, _callback_anchor):
                         dupe_count=len(dupe_qs), attempt=1, max_attempts=3,
                     )
                 else:
-                    ui.notify(f"Generation complete — {len(unique_qs)} question(s)", type="positive")
+                    msg = f"Generation complete — {len(unique_qs)} question(s)"
+                    if dupe_qs:
+                        msg += f" ({len(dupe_qs)} duplicate(s) skipped)"
+                    ui.notify(msg, type="positive")
                     if unique_qs and config.ollama_enabled and config.ollama_model:
                         auto_qa_batch(state, refs, _callback_anchor)
 

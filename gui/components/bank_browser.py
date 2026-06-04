@@ -1,6 +1,7 @@
 """Question bank browser: search, filter, lifecycle management, and export."""
 
 
+import json
 import string
 from pathlib import Path
 
@@ -781,7 +782,7 @@ def build_bank_browser(state: AppState, refs: UIRefs):
 
         filter_desc = ", ".join(active_filters) if active_filters else "no filters (all questions)"
 
-        fmt_labels = {"csv": "CSV", "json": "JSON", "qti": "QTI 2.1", "moodle": "Moodle XML", "text": "Text", "docx": "DOCX"}
+        fmt_labels = {"csv": "CSV", "json": "JSON", "qti": "QTI 2.1", "moodle": "Moodle XML", "text": "Text", "docx": "DOCX", "pcm_exam": "PCM Exam JSON"}
         ui.notify(f"Exporting {len(questions)} questions as {fmt_labels.get(fmt, fmt)} ({filter_desc})...", type="info")
 
         out_dir = Path(config.output_folder)
@@ -807,7 +808,43 @@ def build_bank_browser(state: AppState, refs: UIRefs):
             elif fmt == "docx":
                 export_docx(questions, path)
             elif fmt == "pcm_exam":
-                export_pcm_exam_json(questions, path)
+                # Title the exam after the filtered certification (a PCM cert's
+                # name is the course title); fall back to a generic label.
+                exam_title = "Practitioner Exam"
+                source_label = ""
+                description = webhook_url = webhook_secret = ""
+                qpa = None
+                pass_mark = 80
+                cert_id = filters.get("certification_id")
+                cert_obj = state.db.get_certification(cert_id) if cert_id else None
+                if cert_obj and cert_obj.name:
+                    exam_title = f"{cert_obj.name} Exam"
+                    source_label = cert_obj.name
+                # For a PCM course, carry over settings from its existing exam.json
+                # so regenerating questions doesn't wipe the webhook/description/
+                # sampling config the course already ships with.
+                if cert_obj and cert_obj.source_type == "pcm" and config.pcm_courses_dir:
+                    existing = Path(config.pcm_courses_dir) / cert_obj.source_ref / "exam.json"
+                    if existing.is_file():
+                        try:
+                            old = json.loads(existing.read_text(encoding="utf-8"))
+                            description = old.get("description") or ""
+                            webhook_url = old.get("webhookUrl") or ""
+                            webhook_secret = old.get("webhookSecret") or ""
+                            pass_mark = old.get("passMark") or 80
+                            qpa = old.get("questionsPerAttempt")
+                            # Don't sample more than we're exporting.
+                            if qpa and qpa > len(questions):
+                                qpa = None
+                        except Exception:
+                            pass
+                export_pcm_exam_json(
+                    questions, path,
+                    title=exam_title, pass_mark=pass_mark,
+                    questions_per_attempt=qpa, description=description,
+                    webhook_url=webhook_url, webhook_secret=webhook_secret,
+                    source_label=source_label,
+                )
             ui.download(path)
             ui.notify(f"Exported {len(questions)} questions → {path.name}", type="positive")
         except Exception as e:

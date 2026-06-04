@@ -31,12 +31,33 @@ def build_slide_panel(state: AppState, refs: UIRefs):
         f = state.selected_file
 
         if not f or not slide:
-            # Check if a docs-based certification is active (no PPTX needed)
+            # Docs and PCM certs generate without a PPTX — resolve the active
+            # cert's source type once and branch to the matching empty state.
             docs_cert = None
+            pcm_cert = None
             if state.active_cert_id:
                 cert = state.db.get_certification(state.active_cert_id)
                 if cert and cert.source_type == "docs":
                     docs_cert = cert
+                elif cert and cert.source_type == "pcm":
+                    pcm_cert = cert
+
+            if pcm_cert:
+                lab_slug = getattr(state, "pcm_lab_slug", "") or ""
+                scope = lab_slug or "Whole course"
+                slide_info.set_text(f"PCM: {pcm_cert.name}")
+                panel_title.set_text("PCM Course Source")
+                with preview_container:
+                    with ui.column().classes("w-full items-center q-pa-lg gap-2"):
+                        ui.icon("menu_book", size="64px", color="purple")
+                        ui.label(f"Course: {pcm_cert.name}").classes("text-sm font-medium")
+                        ui.label(f"Scope: {scope}").classes("text-sm text-purple")
+                        ui.label(
+                            "Optionally narrow to one lab/module in the sidebar, "
+                            "then click Generate from PCM course below."
+                        ).classes("text-xs muted text-center").style("max-width: 450px;")
+                refresh_action_bar()
+                return
 
             if docs_cert:
                 topic_display = state.active_topic or docs_cert.name
@@ -68,12 +89,12 @@ def build_slide_panel(state: AppState, refs: UIRefs):
                 refresh_action_bar()
                 return
 
-            slide_info.set_text("Select a file or select a Docs certification")
+            slide_info.set_text("Select a file or a Docs/PCM certification")
             panel_title.set_text("Slide Preview")
             with preview_container:
                 with ui.column().classes("w-full items-center q-pa-xl"):
                     ui.icon("slideshow", size="64px").classes("muted")
-                    ui.label("Load a PPTX file, or select a Docs certification to generate from documentation").classes("muted text-sm text-center")
+                    ui.label("Load a PPTX file, or select a Docs or PCM certification to generate without slides").classes("muted text-sm text-center")
             return
 
         slide_idx = state.current_slide_idx
@@ -232,16 +253,26 @@ def build_slide_panel(state: AppState, refs: UIRefs):
                 if _pcm_mode:
                     btn_label = "Generate from PCM course"
                     btn_tip = "Generate questions from the selected PCM course's content"
+                    btn_color = "purple"        # matches the PCM badge colour in the sidebar
+                    btn_icon = "menu_book"      # matches the PCM source panel icon
                 elif _docs_mode:
                     btn_label = "Generate from Docs"
                     btn_tip = "Generate questions from MCP documentation"
+                    btn_color = "teal"          # matches the Docs badge colour in the sidebar
+                    btn_icon = "auto_stories"   # matches the Docs source panel icon
                 else:
                     btn_label = "Generate"
                     btn_tip = "Generate questions for this slide using AI"
+                    btn_color = "primary"
+                    btn_icon = "auto_awesome"
+                # Filled (unelevated) rather than flat: a flat button renders as
+                # coloured text only, which is near-invisible on the dark theme.
                 ui.button(
-                    btn_label, icon="auto_awesome",
+                    btn_label, icon=btn_icon,
                     on_click=lambda: refs.on_generate() if refs.on_generate else None,
-                ).props("dense flat color=primary size=sm").tooltip(btn_tip)
+                ).props(f"dense unelevated color={btn_color} size=sm").classes(
+                    "text-white"
+                ).tooltip(btn_tip)
                 if not _docs_mode and not _pcm_mode:
                     ui.button(
                         "Generate All Slides", icon="dynamic_feed",

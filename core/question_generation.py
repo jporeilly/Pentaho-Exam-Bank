@@ -270,16 +270,23 @@ def generate_questions_batch(
     all_questions = []
     total = len(slides)
 
+    # Source shapes the progress wording: PCM/docs items are sections, not slides.
+    is_docs = bool(source_file and source_file.startswith("docs:"))
+    is_pcm = bool(source_file and source_file.startswith("pcm:"))
+
     for i, slide in enumerate(slides):
         if not slide.speaker_notes.strip() and not slide.body_text:
             if progress_callback:
-                progress_callback(i + 1, total, f"Slide {slide.index + 1}: No content, skipping")
+                label = (slide.title or f"item {i + 1}") if (is_docs or is_pcm) else f"Slide {slide.index + 1}"
+                progress_callback(i + 1, total, f"{label}: No content, skipping")
             continue
 
         if progress_callback:
-            # Use slide title for docs-sourced content, slide number for PPTX
-            if source_file and source_file.startswith("docs:"):
+            # Use the section title for docs/PCM content, slide number for PPTX.
+            if is_docs:
                 progress_callback(i, total, f"Generating from docs: {slide.title or source_file}...")
+            elif is_pcm:
+                progress_callback(i, total, f"Generating from section {i + 1}/{total}: {slide.title or 'course content'}...")
             else:
                 progress_callback(i, total, f"Generating for slide {slide.index + 1}...")
 
