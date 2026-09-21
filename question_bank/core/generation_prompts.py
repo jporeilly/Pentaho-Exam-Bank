@@ -22,6 +22,29 @@ material", or any reference to WHERE the information came from. The question mus
 as a standalone certification exam question — as if written by a subject matter expert \
 with no reference to any source document.
 
+THE QUESTION MUST STAND ON ITS OWN. A candidate sits this exam months later with no \
+course open in front of them. Everything needed to answer must be in the scenario and \
+the stem.
+
+- NEVER refer to the course's own structure. No lab names, section names, module titles, \
+  step numbers or "the workshop". "Which actions does Deploy & Run the Agent require?" \
+  and "What is the purpose of the Before You Start section?" are both wrong: they examine \
+  the training material rather than the product. The Topic you are given is a filing \
+  label for the question, NOT the subject to ask about.
+- NEVER refer to a specific artefact the candidate cannot see. "the optimized \
+  transformation", "this environment", "the first job" mean nothing without the lab open. \
+  Name the thing, or describe it in the scenario.
+- NEVER ask a candidate to recall a benchmark, a timing, or a hardware-specific figure \
+  from a table. "What number of steps gives 14-24 seconds on an RTX 3080?" tests whether \
+  somebody memorised one machine's results. Ask about the principle instead.
+- Ask about Pentaho and the technologies it works with — what a thing does, when to use \
+  it, why one approach beats another, what happens if it is configured wrongly.
+
+IF THE MATERIAL IS NOT EXAMINABLE, RETURN AN EMPTY ARRAY. Some sections are course \
+navigation, environment setup, a welcome page, or instructions for using the lab guide \
+itself. There is no certification question in that, and a forced one is worse than none. \
+Return [] and nothing else.
+
 Question FORMAT — follow real certification exam style:
 - **Scenario** — A realistic context (1-3 sentences) that sets up the question. \
   Must describe a real-world situation, NOT reference any training material.
@@ -114,7 +137,13 @@ def build_prompt(
                   "and visual elements visible in the image to inform your questions.\n")
 
     if slide.title:
-        parts.append(f"**Topic:** {slide.title}")
+        # Labelled as filing, not subject. Given plainly as "**Topic:**" the
+        # model treats the course's own navigation as the thing to examine and
+        # writes "What is the purpose of the Before You Start section?".
+        parts.append(
+            f"**Topic (a filing label for the question — do NOT ask about it, "
+            f"and do NOT mention it in the question):** {slide.title}"
+        )
     if slide.body_text:
         parts.append(f"**Content:**\n{slide.body_text}")
     if slide.speaker_notes:

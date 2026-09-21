@@ -113,3 +113,67 @@ def test_cancellation_still_stops_the_run(monkeypatch):
             sections(10), model="test", target_total=10,
             progress_callback=cancel_after_two,
         )
+
+
+class TestSectionsThatReturnNothing:
+    """A section the model answered, but with nothing the parser could read.
+
+    Different from a section that failed, and different again from one that
+    was never asked — but until this was counted all three looked identical
+    from outside. The first real run asked for 12 questions, produced 7, and
+    reported "Done — 7 questions generated" as though 7 had been the plan.
+    """
+
+    @pytest.fixture
+    def run_empty(self, monkeypatch):
+        def go(count: int, empty_on: set[int]):
+            def fake(slide, model, **kwargs):
+                if slide.index in empty_on:
+                    return []          # unparseable response, swallowed
+                return [question(slide.index)]
+
+            monkeypatch.setattr(gen, "generate_questions", fake)
+            messages: list[str] = []
+            result = gen.generate_questions_batch(
+                sections(count), model="test", target_total=count,
+                progress_callback=lambda c, t, m="": messages.append(m),
+            )
+            return result, messages
+
+        return go
+
+    def test_the_shortfall_is_reported(self, run_empty):
+        _, messages = run_empty(5, empty_on={1, 3})
+        assert "2 section(s) returned nothing usable" in messages[-1]
+
+    def test_the_sections_are_named(self, run_empty):
+        _, messages = run_empty(5, empty_on={3})
+        assert "Section 3" in messages[-1]
+
+    def test_a_full_run_says_nothing_about_it(self, run_empty):
+        _, messages = run_empty(4, empty_on=set())
+        assert "nothing usable" not in messages[-1]
+
+    def test_the_questions_that_did_come_back_are_kept(self, run_empty):
+        questions, _ = run_empty(5, empty_on={1, 3})
+        assert len(questions) == 3
+
+    def test_empty_is_distinguished_from_failed(self, monkeypatch):
+        """Both leave a hole, but for different reasons and with different
+        fixes — one is a model that rambled, the other a call that died."""
+        def fake(slide, model, **kwargs):
+            if slide.index == 0:
+                return []
+            if slide.index == 1:
+                raise TimeoutError("timed out")
+            return [question(slide.index)]
+
+        monkeypatch.setattr(gen, "generate_questions", fake)
+        messages: list[str] = []
+        gen.generate_questions_batch(
+            sections(4), model="test", target_total=4,
+            progress_callback=lambda c, t, m="": messages.append(m),
+        )
+        final = messages[-1]
+        assert "returned nothing usable" in final
+        assert "skipped" in final

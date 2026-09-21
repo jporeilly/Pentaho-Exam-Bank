@@ -175,6 +175,18 @@ def generate_questions(
 
     items = _extract_json_array(response)
     if not items:
+        # Two different things land here and the sample tells them apart:
+        # a deliberate "[]", which is the model correctly refusing material
+        # that has no exam question in it, and unreadable output, which is a
+        # failure. Either way the section produced nothing, so it is logged
+        # rather than swallowed and the caller counts it — an empty return
+        # used to be indistinguishable from a section never asked.
+        sample = (response or "").strip().replace("\n", " ")[:160]
+        where = slide.title or f"section {slide.index + 1}"
+        if sample.startswith("[]"):
+            print(f"[GENERATE] {where}: the model judged this material not examinable")
+        else:
+            print(f"[GENERATE] {where}: no usable JSON — {sample or '(empty response)'}")
         return []
 
     questions = []
@@ -286,6 +298,7 @@ def generate_questions_batch(
     """
     all_questions = []
     failed: List[str] = []       # sections skipped because the model failed on them
+    empty: List[str] = []        # sections the model answered, but with nothing usable
     total = len(slides)
 
     # Normalise Bloom's to a list and rotate it across slides/sections.
@@ -406,10 +419,27 @@ def generate_questions_batch(
             if progress_callback:
                 progress_callback(i + 1, total, f"Skipped {slide.title or i + 1}: {e}")
             continue
+
+        if not questions:
+            # The call succeeded and produced nothing usable. That is a
+            # different thing from a section that failed and a different
+            # thing again from one that was never asked, and until this was
+            # counted all three looked identical from outside: a run that
+            # asked for twelve questions and returned seven reported "Done —
+            # 7 questions generated" as though seven had been the plan.
+            empty.append(slide.title or f"section {i + 1}")
+
         all_questions.extend(questions)
 
     if progress_callback:
         done = f"Done — {len(all_questions)} questions generated"
+        if empty:
+            done += (
+                f"; {len(empty)} section(s) returned nothing usable: "
+                f"{', '.join(empty[:3])}"
+            )
+            if len(empty) > 3:
+                done += f" and {len(empty) - 3} more"
         if failed:
             # Named, not just counted: a section that failed produced no
             # questions, and the author needs to know which part of the course
