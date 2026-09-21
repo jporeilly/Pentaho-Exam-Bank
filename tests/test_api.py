@@ -245,8 +245,52 @@ class TestCourses:
 
     def test_sections_are_what_the_generator_would_see(self, client, courses):
         body = client.get("/api/courses/demo-course/sections").json()
-        assert body and body[0]["title"].endswith("Opening")
-        assert body[0]["characters"] > 60
+        sections = body["sections"]
+        assert sections and sections[0]["title"].endswith("Opening")
+        assert sections[0]["characters"] > 60
+
+    def test_sections_report_the_context_budget(self, client, courses, monkeypatch):
+        from question_bank.utils.config import config
+
+        monkeypatch.setattr(config, "ollama_num_ctx", 8192)
+        body = client.get("/api/courses/demo-course/sections").json()
+        assert body["budget"]["numCtx"] == 8192
+        assert body["budget"]["chars"] > 0
+        assert body["sections"][0]["exceedsContext"] is False
+
+    def test_a_section_too_long_for_the_window_is_flagged(
+        self, client, tmp_path, monkeypatch
+    ):
+        """Ollama truncates an over-long section silently — the questions come
+        back thinner than the material deserved with nothing to say why. The
+        author has to be able to see it before spending a run."""
+        from question_bank.utils.config import config
+
+        root = tmp_path / "big"
+        lab = root / "big-course" / "01-lab"
+        lab.mkdir(parents=True)
+        (root / "big-course" / "course.json").write_text("{}", encoding="utf-8")
+        (lab / "guide.md").write_text(
+            "## Enormous\n\n" + ("This section runs on and on. " * 4000), encoding="utf-8")
+        monkeypatch.setattr(config, "pcm_courses_dir", str(root))
+        monkeypatch.setattr(config, "ollama_num_ctx", 8192)
+
+        body = client.get("/api/courses/big-course/sections").json()
+        assert body["sections"][0]["exceedsContext"] is True
+        assert body["sections"][0]["characters"] > body["budget"]["chars"]
+
+    def test_nothing_is_flagged_when_no_window_is_configured(
+        self, client, courses, monkeypatch
+    ):
+        """With no num_ctx, Ollama uses the model's own default, which this app
+        does not know. Flagging against a made-up number would be worse than
+        not flagging."""
+        from question_bank.utils.config import config
+
+        monkeypatch.setattr(config, "ollama_num_ctx", 0)
+        body = client.get("/api/courses/demo-course/sections").json()
+        assert body["budget"]["chars"] == 0
+        assert all(s["exceedsContext"] is False for s in body["sections"])
 
     def test_exam_reports_settings_and_pool(self, client, courses):
         body = client.get("/api/courses/demo-course/exam").json()

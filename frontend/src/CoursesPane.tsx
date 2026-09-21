@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { api, ApiError, type Course, type Lab, type Section } from "./api";
+import { api, ApiError, type Course, type CourseSections, type Lab } from "./api";
 
 /**
  * The courses the Content Manager has, and what is inside one.
@@ -91,7 +91,7 @@ function CourseRow({
 /** A course's labs, and the sections a question could be generated from. */
 function CourseContents({ slug }: { slug: string }) {
   const [labs, setLabs] = useState<Lab[] | null>(null);
-  const [sections, setSections] = useState<Section[] | null>(null);
+  const [contents, setContents] = useState<CourseSections | null>(null);
   const [lab, setLab] = useState("");
   const [error, setError] = useState("");
 
@@ -102,7 +102,7 @@ function CourseContents({ slug }: { slug: string }) {
       .then(([l, s]) => {
         if (!live) return;
         setLabs(l);
-        setSections(s);
+        setContents(s);
       })
       .catch((e: unknown) => {
         if (live) setError(e instanceof ApiError ? e.message : String(e));
@@ -114,7 +114,10 @@ function CourseContents({ slug }: { slug: string }) {
   }, [slug, lab]);
 
   if (error) return <div className="banner">{error}</div>;
-  if (!labs || !sections) return <div className="muted">Reading the course…</div>;
+  if (!labs || !contents) return <div className="muted">Reading the course…</div>;
+
+  const { sections, budget } = contents;
+  const oversized = sections.filter((s) => s.exceedsContext);
 
   return (
     <div>
@@ -136,6 +139,23 @@ function CourseContents({ slug }: { slug: string }) {
         </span>
       </div>
 
+      {oversized.length > 0 && (
+        // Ollama truncates an over-long section without saying so: the
+        // questions come back thinner than the material deserved and nothing
+        // explains why. Naming the model and the window makes the fix
+        // obvious — a larger window, a smaller model, or split the section.
+        <div className="banner warn">
+          <strong>
+            {oversized.length} section{oversized.length === 1 ? " is" : "s are"} longer
+            than {budget.model || "the model"} can read in one go
+          </strong>{" "}
+          — the context is {budget.numCtx.toLocaleString()} tokens, which leaves about{" "}
+          {budget.chars.toLocaleString()} characters for the source after the prompt.
+          Anything past that is dropped silently, so questions from{" "}
+          {oversized.length === 1 ? "it" : "them"} will only cover the beginning.
+        </div>
+      )}
+
       {sections.length === 0 ? (
         <div className="empty">
           Nothing here has enough prose to ground a question in.
@@ -145,7 +165,7 @@ function CourseContents({ slug }: { slug: string }) {
           <thead>
             <tr>
               <th>Section</th>
-              <th style={{ width: 90, textAlign: "right" }}>Chars</th>
+              <th style={{ width: 120, textAlign: "right" }}>Chars</th>
             </tr>
           </thead>
           <tbody>
@@ -153,11 +173,29 @@ function CourseContents({ slug }: { slug: string }) {
               <tr key={section.index}>
                 <td>
                   {section.title ?? <span className="faint">untitled</span>}
+                  {section.exceedsContext && (
+                    <span
+                      className="pill"
+                      style={{
+                        marginLeft: 8,
+                        background: "var(--bg-input)",
+                        color: "var(--warn)",
+                      }}
+                      title={`Longer than the ${budget.chars.toLocaleString()} characters that fit ${budget.model}'s context — the rest is dropped`}
+                    >
+                      truncated
+                    </span>
+                  )}
                   <div className="faint" style={{ fontSize: 12 }}>
                     {section.preview.slice(0, 140)}…
                   </div>
                 </td>
-                <td className="num">{section.characters}</td>
+                <td
+                  className="num"
+                  style={section.exceedsContext ? { color: "var(--warn)", fontWeight: 600 } : undefined}
+                >
+                  {section.characters.toLocaleString()}
+                </td>
               </tr>
             ))}
           </tbody>

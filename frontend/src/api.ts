@@ -135,7 +135,23 @@ export interface Section {
   index: number;
   title: string | null;
   characters: number;
+  /** True when this section is longer than the model can read in one go.
+   *  Ollama truncates silently, so the author has to be told. */
+  exceedsContext: boolean;
   preview: string;
+}
+
+/** What the configured model can actually take in. `chars` is 0 when no
+ *  context window is configured, in which case nothing is flagged. */
+export interface ContextBudget {
+  chars: number;
+  numCtx: number;
+  model: string;
+}
+
+export interface CourseSections {
+  budget: ContextBudget;
+  sections: Section[];
 }
 
 export interface Job {
@@ -202,7 +218,7 @@ export const api = {
   courses: () => request<Course[]>("/api/courses"),
   labs: (slug: string) => request<Lab[]>(`/api/courses/${encodeURIComponent(slug)}/labs`),
   sections: (slug: string, lab = "") =>
-    request<Section[]>(`/api/courses/${encodeURIComponent(slug)}/sections${query({ lab })}`),
+    request<CourseSections>(`/api/courses/${encodeURIComponent(slug)}/sections${query({ lab })}`),
 
   generate: (body: GenerateRequest) =>
     request<{ jobId: string; sections: number }>("/api/generate", {

@@ -15,7 +15,9 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from ...core.context_budget import source_budget_chars
 from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course
+from ...utils.config import config
 from ..deps import courses_dir
 
 router = APIRouter(tags=["courses"])
@@ -60,24 +62,44 @@ def list_labs(slug: str) -> list[dict[str, str]]:
 
 
 @router.get("/api/courses/{slug}/sections")
-def list_sections(slug: str, lab: str = "") -> list[dict[str, Any]]:
+def list_sections(slug: str, lab: str = "") -> dict[str, Any]:
     """The course read as the sections a question can be generated from.
 
     Returns what the generator would be given — the same split, the same
     cleaning — so an author can see the material before spending a model call
     on it, and can tell an empty result from a thin one.
+
+    Each section also says whether it fits the model's context window. A
+    section that does not is **truncated silently** by Ollama: the questions
+    come back thinner than the material deserved, with nothing anywhere to say
+    why. Reported rather than prevented, because the right fix depends on the
+    material — a larger window, a smaller model, or splitting the section.
     """
     _course_dir(slug)
     sections = load_pcm_course(courses_dir(), slug, lab_slug=lab)
-    return [
-        {
-            "index": s.index,
-            "title": s.title,
-            "characters": len(s.speaker_notes or ""),
-            "preview": (s.speaker_notes or "")[:280],
-        }
-        for s in sections
-    ]
+    num_ctx = int(getattr(config, "ollama_num_ctx", 0) or 0)
+    budget = source_budget_chars(num_ctx)
+
+    return {
+        "budget": {
+            # 0 means no configured window: Ollama falls back to the model's
+            # own default, which this app does not know, so nothing is flagged
+            # rather than flagged against a number that was made up.
+            "chars": budget,
+            "numCtx": num_ctx,
+            "model": config.ollama_model,
+        },
+        "sections": [
+            {
+                "index": s.index,
+                "title": s.title,
+                "characters": len(s.speaker_notes or ""),
+                "exceedsContext": bool(budget) and len(s.speaker_notes or "") > budget,
+                "preview": (s.speaker_notes or "")[:280],
+            }
+            for s in sections
+        ],
+    }
 
 
 @router.get("/api/courses/{slug}/exam")
