@@ -5,7 +5,12 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# The repo root, two levels above this package (question_bank/utils/config.py).
+# Everything that needs a path off the repo root imports PROJECT_ROOT or
+# ASSETS_DIR from here rather than re-deriving its own `parent.parent...`
+# walk — four modules used to do that, and each one was a separate thing to
+# get wrong the next time the tree moved.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ASSETS_DIR = PROJECT_ROOT / "assets"
 DB_DIR = ASSETS_DIR / "db"
 DB_DIR.mkdir(parents=True, exist_ok=True)

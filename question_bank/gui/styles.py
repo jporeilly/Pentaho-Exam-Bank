@@ -2,10 +2,9 @@
 
 import html as _html
 import re as _re
-from pathlib import Path
 
 # -- Directory constants -----------------------------------------------------
-ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+from ..utils.config import ASSETS_DIR
 PPTX_CACHE_DIR = ASSETS_DIR / "pptx"
 PPTX_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 

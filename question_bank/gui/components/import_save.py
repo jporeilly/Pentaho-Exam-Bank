@@ -1,6 +1,5 @@
 """Save/commit/export logic for imported questions."""
 
-from pathlib import Path
 
 from nicegui import ui
 
@@ -11,7 +10,9 @@ from ...utils.config import config
 from ..state import EVT_BANK_CHANGED, EVT_STATS_CHANGED
 from .import_context import ImportContext
 
-QUESTIONS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "questions"
+from ...utils.config import ASSETS_DIR
+
+QUESTIONS_DIR = ASSETS_DIR / "questions"
 
 
 def auto_export_csv(ctx: ImportContext, saved_questions: list):

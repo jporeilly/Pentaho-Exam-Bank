@@ -29,7 +29,9 @@ from . import import_validation as iv
 from . import import_edit_dialog as ied
 from . import import_save as isv
 
-QUESTIONS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "questions"
+from ...utils.config import ASSETS_DIR
+
+QUESTIONS_DIR = ASSETS_DIR / "questions"
 
 
 def build_import_tab(state: AppState, refs: UIRefs):
@@ -358,7 +360,7 @@ def build_import_tab(state: AppState, refs: UIRefs):
                     ui.notify("openpyxl is required for Excel import. Install with: pip install openpyxl", type="negative")
                     _refresh()
                     return
-                backup_dir = Path(__file__).resolve().parent.parent.parent / "assets" / "questions"
+                backup_dir = QUESTIONS_DIR
                 questions = import_from_xlsx(tmp, backup_dir=backup_dir)
                 ui.notify("Converted CSV backup saved to assets/questions/", type="info")
             elif suffix == ".xml":

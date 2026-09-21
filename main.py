@@ -4,8 +4,10 @@ import signal
 import sys
 from pathlib import Path
 
-# Ensure the project root is on the path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Ensure the repo root is on the path, so `question_bank` resolves as a
+# package. It sits beside this file now; before the rename the package WAS
+# the repo directory, which made C:\Projects itself a source root.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from question_bank.gui.web_app import run_app
 

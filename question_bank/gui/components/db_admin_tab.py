@@ -73,8 +73,10 @@ def _build_docs_section():
     import threading
     from ...core import ollama_client
 
-    guide_path = Path(__file__).resolve().parent.parent.parent / "HOW_TO_GUIDE.md"
-    readme_path = Path(__file__).resolve().parent.parent.parent / "README.md"
+    from ...utils.config import PROJECT_ROOT
+
+    guide_path = PROJECT_ROOT / "HOW_TO_GUIDE.md"
+    readme_path = PROJECT_ROOT / "README.md"
 
     # Load content once
     guide_content = ""
