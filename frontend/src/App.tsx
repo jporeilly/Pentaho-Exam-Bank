@@ -3,11 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Health } from "./api";
 import { BankPane } from "./BankPane";
 import { CoursesPane } from "./CoursesPane";
+import { GeneratePane } from "./GeneratePane";
 
-type Tab = "courses" | "bank";
+type Tab = "courses" | "generate" | "bank";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "courses", label: "Courses" },
+  { id: "generate", label: "Generate" },
   { id: "bank", label: "Bank" },
 ];
 
@@ -94,6 +96,7 @@ export function App() {
         )}
 
         {tab === "courses" && <CoursesPane />}
+        {tab === "generate" && <GeneratePane onCommitted={loadHealth} />}
         {tab === "bank" && <BankPane onChanged={loadHealth} />}
       </main>
     </div>
