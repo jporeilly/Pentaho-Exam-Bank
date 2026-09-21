@@ -33,3 +33,10 @@ class SlideInfo:
     title: Optional[str] = None
     body_text: Optional[str] = None
     thumbnail_path: Optional[Path] = None
+    # The topic this section belongs to — a course's lab. Sections are not
+    # evenly distributed between them: one lab may be a single section and
+    # another twenty, so spreading questions evenly over SECTIONS gives each
+    # lab a share of the exam decided by how finely its guide happens to be
+    # split. Generation balances over this instead. Empty when the source has
+    # no grouping, in which case the sections are treated as one flat run.
+    group: str = ""

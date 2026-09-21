@@ -118,7 +118,7 @@ def start_generation(req: GenerateRequest) -> dict[str, Any]:
             progress_callback=job.progress,
         )
 
-    job = jobs.start("generate", work)
+    job = jobs.start("generate", work, requested=req.total)
     return {"jobId": job.id, "sections": len(sections), "status": job.status}
 
 

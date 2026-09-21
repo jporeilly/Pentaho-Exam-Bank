@@ -22,7 +22,7 @@ function job(over: Partial<Job> = {}): Job {
   return {
     id: "job-1", kind: "generate", status: "done",
     progress: { current: 2, total: 2, message: "Done" },
-    count: 1, result: [question()], error: "", ...over,
+    count: 1, requested: 0, result: [question()], error: "", ...over,
   };
 }
 
@@ -400,5 +400,28 @@ describe("question formats", () => {
         { keys: 2, distractors: 3 },
       ]);
     });
+  });
+});
+
+describe("a run that returned fewer than asked", () => {
+  it("says so, instead of reporting the shortfall as the plan", async () => {
+    // The real run asked for 12, produced 7, and reported "Generated 7" —
+    // which reads as success unless you remember what you typed.
+    mockApi({ jobs: [job({ count: 7, requested: 12, result: [question()] })] });
+    render(<GeneratePane />);
+    await chooseCourse();
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(await screen.findByText("Generated 7 of 12")).toBeInTheDocument();
+  });
+
+  it("stays quiet when the run delivered what was asked", async () => {
+    mockApi({ jobs: [job({ count: 12, requested: 12, result: [question()] })] });
+    render(<GeneratePane />);
+    await chooseCourse();
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(await screen.findByText("Generated 12")).toBeInTheDocument();
+    expect(screen.queryByText(/of 12/)).not.toBeInTheDocument();
   });
 });

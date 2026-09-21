@@ -372,7 +372,11 @@ export function GeneratePane({
               {job.status === "running"
                 ? "Generating"
                 : job.status === "done"
-                  ? `Generated ${job.count}`
+                  ? // "7 of 12" when the model returned fewer than asked, so a
+                    // shortfall is visible rather than looking like the plan.
+                    job.requested && job.count < job.requested
+                    ? `Generated ${job.count} of ${job.requested}`
+                    : `Generated ${job.count}`
                   : job.status === "cancelled"
                     ? "Cancelled"
                     : "Failed"}

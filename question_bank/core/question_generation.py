@@ -258,6 +258,52 @@ def generate_questions(
     return questions
 
 
+def _spread(items: List, total: int) -> dict:
+    """Hand out `total` across `items`, evenly and without favouring the front.
+
+    Each item gets ``total // len(items)``, and the remainder goes to every
+    (len/remainder)th item rather than to the first few. That expression is
+    strictly increasing while remainder <= len, so nothing is picked twice.
+    """
+    counts = {item: 0 for item in items}
+    if not items or total <= 0:
+        return counts
+    base, extra = divmod(total, len(items))
+    for item in items:
+        counts[item] = base
+    for k in range(extra):
+        counts[items[(k * len(items)) // extra]] += 1
+    return counts
+
+
+def _distribute(slides: List[SlideInfo], eligible: List[int], total: int) -> dict:
+    """How many questions each section should be asked for.
+
+    Balanced over TOPICS first, then over the sections inside each topic.
+    Spreading evenly over sections alone gives a lab a share of the exam
+    decided by how finely its guide happens to be split: on the AI Specialty
+    course that put four questions in one 21-section workshop and none at all
+    in twelve single-section labs, so two thirds of the syllabus went
+    unexamined. A topic is a topic whether it took one page to explain or
+    twenty.
+
+    Falls back to a flat spread when the sections carry no topic, which is
+    what a PPTX or a docs search produces.
+    """
+    groups: dict = {}
+    for i in eligible:
+        groups.setdefault(slides[i].group or "", []).append(i)
+
+    if len(groups) <= 1:
+        return _spread(eligible, total)
+
+    per_group = _spread(list(groups.keys()), total)
+    counts = {i: 0 for i in eligible}
+    for name, indexes in groups.items():
+        counts.update(_spread(indexes, per_group[name]))
+    return counts
+
+
 def generate_questions_batch(
     slides: List[SlideInfo],
     model: str,
@@ -316,18 +362,7 @@ def generate_questions_batch(
     eligible = [i for i, s in enumerate(slides) if s.speaker_notes.strip() or s.body_text]
     per_slide_n = {i: base_n for i in eligible}
     if target_total and target_total > 0 and eligible:
-        count = len(eligible)
-        base, extra = divmod(int(target_total), count)
-        per_slide_n = {idx: base for idx in eligible}
-        # Spread the remainder across the whole course instead of giving it to
-        # the first sections. Asking for 20 questions from a 63-section course
-        # used to mean 20 questions about its opening: sections 20 onwards got
-        # nothing, so the end of a course — often the part worth examining —
-        # was never covered at all. Every (count/extra)th section now gets one,
-        # which is strictly increasing while extra <= count, so no section is
-        # picked twice.
-        for k in range(extra):
-            per_slide_n[eligible[(k * count) // extra]] += 1
+        per_slide_n = _distribute(slides, eligible, int(target_total))
 
     # When randomizing, pre-build a *balanced* format assignment for the whole
     # run: each spec row is used an equal share of the grand total (the

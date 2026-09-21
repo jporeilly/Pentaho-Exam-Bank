@@ -160,6 +160,8 @@ export interface Job {
   status: "running" | "done" | "error" | "cancelled";
   progress: { current: number; total: number; message: string };
   count: number;
+  /** How many were asked for, so the UI can say "7 of 12". */
+  requested: number;
   result: Question[];
   error: string;
 }

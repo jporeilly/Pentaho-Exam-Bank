@@ -40,6 +40,9 @@ class Job:
     total: int = 0
     message: str = ""
     result: List[Any] = field(default_factory=list)
+    # How many were asked for, so a client can say "7 of 12" rather than
+    # reporting 7 as though 7 had been the plan. 0 when the job has no target.
+    requested: int = 0
     error: str = ""
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     finished_at: str = ""
@@ -70,6 +73,7 @@ class Job:
                 "message": self.message,
             },
             "count": len(self.result),
+            "requested": self.requested,
             "result": [serialise(r) for r in self.result] if serialise else [],
             "error": self.error,
             "createdAt": self.created_at,
@@ -115,13 +119,13 @@ def _prune() -> None:
         _jobs.pop(job.id, None)
 
 
-def start(kind: str, work: Callable[[Job], List[Any]]) -> Job:
+def start(kind: str, work: Callable[[Job], List[Any]], requested: int = 0) -> Job:
     """Run `work` on its own thread and return the job immediately.
 
     `work` is handed the job so it can report progress and check for
     cancellation. Whatever it returns becomes the job's result.
     """
-    job = Job(id=str(uuid.uuid4()), kind=kind)
+    job = Job(id=str(uuid.uuid4()), kind=kind, requested=requested)
     with _lock:
         _jobs[job.id] = job
         _prune()

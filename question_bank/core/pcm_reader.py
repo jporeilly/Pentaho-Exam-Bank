@@ -228,6 +228,8 @@ def load_pcm_course(
                 title = f"{lab_title} — {piece_heading}" if piece_heading else lab_title
                 # Prepend the heading so the model sees the section topic in-context.
                 notes = f"{piece_heading}\n\n{prose}" if piece_heading else prose
-                slides.append(SlideInfo(index=idx, speaker_notes=notes, title=title))
+                slides.append(SlideInfo(
+                    index=idx, speaker_notes=notes, title=title, group=lab_title,
+                ))
                 idx += 1
     return slides

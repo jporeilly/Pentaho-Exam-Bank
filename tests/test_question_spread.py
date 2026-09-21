@@ -91,3 +91,70 @@ def test_sections_with_no_prose_are_left_out(spread, monkeypatch):
     gen.generate_questions_batch(slides, model="test", target_total=2)
     assert 1 not in asked, "an empty section should not be asked for a question"
     assert sum(asked.values()) == 2
+
+
+class TestBalanceAcrossTopics:
+    """Sections are not evenly distributed between a course's labs.
+
+    On developer-ai-specialty one lab is 21 sections and twelve others are a
+    single section each. Spreading questions evenly over SECTIONS therefore
+    gave that one workshop four questions and twelve labs none — two thirds
+    of the syllabus unexamined. A topic is a topic whether it took one page
+    to explain or twenty.
+    """
+
+    def lopsided(self, sizes: dict[str, int]) -> list[SlideInfo]:
+        """A course whose labs are wildly different sizes."""
+        out, index = [], 0
+        for lab, n in sizes.items():
+            for _ in range(n):
+                out.append(SlideInfo(index=index, group=lab, title=f"{lab} bit {index}",
+                                     speaker_notes=f"Prose about {lab}. " * 10))
+                index += 1
+        return out
+
+    def counts_by_lab(self, slides, total) -> dict[str, int]:
+        eligible = list(range(len(slides)))
+        per_section = gen._distribute(slides, eligible, total)
+        out: dict[str, int] = {}
+        for i, n in per_section.items():
+            if n:
+                out[slides[i].group] = out.get(slides[i].group, 0) + n
+        return out
+
+    SIZES = {"Huge": 21, "Big": 9, "Medium": 6, "One": 1, "Two": 1, "Three": 1, "Four": 1}
+
+    def test_a_big_lab_no_longer_takes_the_exam(self):
+        by_lab = self.counts_by_lab(self.lopsided(self.SIZES), 7)
+        assert by_lab.get("Huge", 0) == 1, f"the 21-section lab took {by_lab}"
+
+    def test_every_lab_is_covered_when_there_is_room(self):
+        by_lab = self.counts_by_lab(self.lopsided(self.SIZES), 7)
+        assert len(by_lab) == 7, f"only {len(by_lab)} of 7 labs covered: {by_lab}"
+
+    def test_single_section_labs_are_not_squeezed_out(self):
+        by_lab = self.counts_by_lab(self.lopsided(self.SIZES), 7)
+        for small in ("One", "Two", "Three", "Four"):
+            assert by_lab.get(small, 0) == 1, f"{small} got nothing: {by_lab}"
+
+    def test_the_total_is_still_exact(self):
+        for total in (3, 7, 14, 40):
+            by_lab = self.counts_by_lab(self.lopsided(self.SIZES), total)
+            assert sum(by_lab.values()) == total, (total, by_lab)
+
+    def test_fewer_questions_than_labs_still_spreads_them(self):
+        by_lab = self.counts_by_lab(self.lopsided(self.SIZES), 3)
+        assert len(by_lab) == 3 and max(by_lab.values()) == 1
+
+    def test_more_questions_than_labs_stacks_evenly(self):
+        by_lab = self.counts_by_lab(self.lopsided(self.SIZES), 21)
+        assert min(by_lab.values()) == 3 and max(by_lab.values()) == 3
+
+    def test_sections_with_no_topic_fall_back_to_a_flat_spread(self):
+        """A PPTX or a docs search has no labs, so there is nothing to
+        balance over and the old behaviour is correct."""
+        slides = [SlideInfo(index=i, speaker_notes="Prose. " * 10) for i in range(10)]
+        per_section = gen._distribute(slides, list(range(10)), 4)
+        assert sum(per_section.values()) == 4
+        chosen = [i for i, n in per_section.items() if n]
+        assert chosen[0] < 3 and chosen[-1] > 6, "not spread across the run"
