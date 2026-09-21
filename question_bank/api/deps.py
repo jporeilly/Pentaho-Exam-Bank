@@ -21,8 +21,16 @@ def get_db() -> Iterator[QuestionBankDB]:
     raise ``ProgrammingError`` as soon as a second thread touched it, which
     surfaces as an intermittent 500 under concurrent requests rather than as
     an obvious bug. Opening a SQLite connection is cheap.
+
+    ``same_thread_only=False`` because per-request is not the same as
+    per-thread: anyio may run this generator's teardown on a different worker
+    from the one that ran its setup, so the request succeeds and then
+    ``db.close()`` raises. That was seen once in a real run before it was
+    fixed, buried in a traceback after a response had already gone out. Safe
+    here precisely because the connection is used by one request and shared
+    with nothing.
     """
-    db = QuestionBankDB(DB_PATH)
+    db = QuestionBankDB(DB_PATH, same_thread_only=False)
     try:
         yield db
     finally:

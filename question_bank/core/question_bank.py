@@ -309,9 +309,22 @@ class Question:
 class QuestionBankDB:
     """SQLite database for storing and querying questions and certifications."""
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, same_thread_only: bool = True):
+        """``same_thread_only=False`` allows the connection to be used from a
+        thread other than the one that opened it.
+
+        Only pass it where the connection belongs to **one** logical unit of
+        work that is not shared — a single HTTP request. It is needed there
+        because a FastAPI dependency's setup and its teardown are not
+        guaranteed to run on the same worker thread: the request succeeds and
+        then closing the connection raises, which is how this was found.
+
+        It is not a general licence to share a connection between threads.
+        sqlite3's check is a real guard against concurrent use corrupting
+        state, and the default keeps it.
+        """
         self.db_path = db_path
-        self.conn = sqlite3.connect(str(db_path))
+        self.conn = sqlite3.connect(str(db_path), check_same_thread=same_thread_only)
         self.conn.row_factory = sqlite3.Row
         self._create_tables()
         self._migrate()
