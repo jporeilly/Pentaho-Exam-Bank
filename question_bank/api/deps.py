@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Iterator
 
+from fastapi import HTTPException
+
 from ..core.question_bank import Question, QuestionBankDB
-from ..utils.config import DB_PATH
+from ..utils.config import DB_PATH, config
 
 
 def get_db() -> Iterator[QuestionBankDB]:
@@ -24,6 +27,24 @@ def get_db() -> Iterator[QuestionBankDB]:
         yield db
     finally:
         db.close()
+
+
+def courses_dir() -> Path:
+    """The configured Content Manager courses directory, or a 409 saying why not.
+
+    One definition, used by every route that needs it. Written twice it was
+    also written wrong the second time: ``Path(config.pcm_courses_dir or ".")``
+    turns "not configured" into **the current working directory**, which is a
+    real directory, so the guard never fires and the app goes looking for
+    courses wherever it happens to have been started from.
+    """
+    raw = (config.pcm_courses_dir or "").strip()
+    if not raw:
+        raise HTTPException(409, "No Content Manager courses directory is configured.")
+    path = Path(raw)
+    if not path.is_dir():
+        raise HTTPException(409, f"The configured courses directory does not exist: {path}")
+    return path
 
 
 def question_json(question: Question) -> dict[str, Any]:

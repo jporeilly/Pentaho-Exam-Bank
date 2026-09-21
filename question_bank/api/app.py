@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from .. import __version__
 from ..core.providers import ProviderError
-from .routers import certifications, courses, questions, system
+from .routers import certifications, courses, export, generation, questions, system
 
 app = FastAPI(
     title="Pentaho Question Bank",
@@ -49,3 +49,5 @@ app.include_router(system.router)
 app.include_router(questions.router)
 app.include_router(certifications.router)
 app.include_router(courses.router)
+app.include_router(generation.router)
+app.include_router(export.router)

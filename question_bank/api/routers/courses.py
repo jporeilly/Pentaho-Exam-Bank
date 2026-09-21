@@ -16,27 +16,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course
-from ...utils.config import config
+from ..deps import courses_dir
 
 router = APIRouter(tags=["courses"])
 
 
-def _courses_dir() -> Path:
-    raw = (config.pcm_courses_dir or "").strip()
-    if not raw:
-        raise HTTPException(
-            409, "No Content Manager courses directory is configured."
-        )
-    path = Path(raw)
-    if not path.is_dir():
-        raise HTTPException(
-            409, f"The configured courses directory does not exist: {path}"
-        )
-    return path
-
-
 def _course_dir(slug: str) -> Path:
-    root = _courses_dir()
+    root = courses_dir()
     # Resolve and confine: a slug is a path segment from a client, and
     # "../../etc" must not escape the courses directory.
     candidate = (root / slug).resolve()
@@ -51,7 +37,7 @@ def _course_dir(slug: str) -> Path:
 @router.get("/api/courses")
 def list_courses() -> list[dict[str, Any]]:
     """Every course, with whether it has an exam and how big its pool is."""
-    root = _courses_dir()
+    root = courses_dir()
     out = []
     for course in list_pcm_courses(root):
         exam = root / course["slug"] / "exam.json"
@@ -70,7 +56,7 @@ def list_courses() -> list[dict[str, Any]]:
 @router.get("/api/courses/{slug}/labs")
 def list_labs(slug: str) -> list[dict[str, str]]:
     _course_dir(slug)
-    return list_pcm_labs(_courses_dir(), slug)
+    return list_pcm_labs(courses_dir(), slug)
 
 
 @router.get("/api/courses/{slug}/sections")
@@ -82,7 +68,7 @@ def list_sections(slug: str, lab: str = "") -> list[dict[str, Any]]:
     on it, and can tell an empty result from a thin one.
     """
     _course_dir(slug)
-    sections = load_pcm_course(_courses_dir(), slug, lab_slug=lab)
+    sections = load_pcm_course(courses_dir(), slug, lab_slug=lab)
     return [
         {
             "index": s.index,
