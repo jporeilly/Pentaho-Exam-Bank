@@ -69,6 +69,19 @@ class AppConfig:
     # slow section ended the run. Generous rather than tight: the cost of
     # waiting is a slow section, the cost of cutting it short is losing one.
     generation_timeout_seconds: int = 600
+    # Cap on the model's reply, in tokens. 0 = no cap, and that is the right
+    # default for a REASONING model.
+    #
+    # Tried at 2000 to bound a runaway and it broke generation outright: every
+    # section came back empty. gemma4 spends thousands of tokens reasoning
+    # before it answers, and Ollama does not return those in `response` — one
+    # call showed eval_count 4091 for a 330-token answer. A cap counts the
+    # reasoning too, so it cuts the model off mid-thought and nothing is
+    # produced at all.
+    #
+    # The context window already bounds the reply, and the timeout bounds the
+    # wall clock. Set this only for a model you know does not reason first.
+    generation_max_reply_tokens: int = 0
     system_prompt: str = ""
 
     # MCP documentation servers

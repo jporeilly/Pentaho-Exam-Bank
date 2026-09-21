@@ -128,6 +128,7 @@ def generate(
     base_url: str = "",
     timeout: float = 120.0,
     num_ctx: int = 0,
+    num_predict: int = 0,
     images: Optional[List[str]] = None,
 ) -> str:
     """One completion from the active provider.
@@ -156,6 +157,7 @@ def generate(
                 base_url=base_url or config.ollama_url,
                 timeout=timeout,
                 num_ctx=num_ctx,
+                num_predict=num_predict,
                 images=images,
             )
         except Exception as e:  # noqa: BLE001 — one error type out of this module

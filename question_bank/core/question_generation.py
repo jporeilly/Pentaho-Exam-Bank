@@ -170,6 +170,7 @@ def generate_questions(
         system=system_prompt or GENERATION_SYSTEM_PROMPT,
         base_url=base_url,
         timeout=float(config.generation_timeout_seconds),
+        num_predict=int(config.generation_max_reply_tokens),
         images=images,
     )
 
@@ -231,9 +232,13 @@ def generate_questions(
             else:
                 q.stem = f"{stem} (Choose {choose_word}.)"
 
-        # Validate that the key is traceable to the speaker notes
+        # Anchor the question to the syllabus. key_source_text is the passage
+        # showing the TOPIC is part of the course, so this checks the question
+        # is on-syllabus — not that the answer is right. Nothing here can check
+        # that: the answer now comes from knowledge of the product rather than
+        # from the text, and matching strings against a lab guide will never
+        # catch a confident falsehood. The tag sends it to a reviewer.
         if not validate_key_against_notes(q, slide):
-            # Tag the question so reviewers know validation failed
             q.tags = list(set(q.tags + ["key-not-validated"]))
 
         # Auto-fix quality issues by sending back to AI for improvement

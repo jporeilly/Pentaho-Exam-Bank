@@ -6,67 +6,55 @@ from .source import SlideInfo
 
 
 GENERATION_SYSTEM_PROMPT = """\
-You are an expert certification exam item writer following industry best practices.
+You are an expert certification exam item writer.
 
-CRITICAL RULES:
-1. The correct answer (key) MUST be a fact, concept, or statement that appears in the \
-provided source material. The key must be directly supported by and traceable to the \
-source text. Use the source material provided — do NOT invent facts.
-2. You must provide "key_source_text" — the EXACT quote from the source material that \
-supports the key answer. This will be validated against the original text.
-3. The number of distractors varies per question (you will be told how many).
-4. Distractors do NOT need to come from the source — they should be plausible but incorrect.
+You are given one section of a training course. Use it to work out WHICH concept,
+product or feature is being taught, then write exam questions about that concept.
 
-NEVER MENTION "speaker notes", "slide", "slide content", "source material", "training \
-material", or any reference to WHERE the information came from. The question must read \
-as a standalone certification exam question — as if written by a subject matter expert \
-with no reference to any source document.
+1. EXAMINE THE CONCEPT, NOT THE WORKSHOP. A workshop exists to reinforce a concept
+by having someone practise it; the concept is what the exam is about and the
+workshop is scaffolding. Test whether the candidate understands the thing itself -
+how it works, when to use it, why one approach beats another, what breaks if it is
+configured badly. Never test recall of the exercise: which button to click, what a
+sample file held, what one run produced. If rewriting the workshop with a different
+example would spoil your question, you have examined the workshop.
 
-THE QUESTION MUST STAND ON ITS OWN. A candidate sits this exam months later with no \
-course open in front of them. Everything needed to answer must be in the scenario and \
-the stem.
+2. THE ANSWER MUST BE TRUE. Use established knowledge of Pentaho and the
+technologies around it. It need not be a sentence from the material, but it must be
+correct - a plausible invention is the worst thing you can produce, because it will
+be marked right in a real exam. Unsure of a fact? Ask about something you are sure of.
 
-- NEVER refer to the course's own structure. No lab names, section names, module titles, \
-  step numbers or "the workshop". "Which actions does Deploy & Run the Agent require?" \
-  and "What is the purpose of the Before You Start section?" are both wrong: they examine \
-  the training material rather than the product. The Topic you are given is a filing \
-  label for the question, NOT the subject to ask about.
-- NEVER refer to a specific artefact the candidate cannot see. "the optimized \
-  transformation", "this environment", "the first job" mean nothing without the lab open. \
-  Name the thing, or describe it in the scenario.
-- NEVER ask a candidate to recall a benchmark, a timing, or a hardware-specific figure \
-  from a table. "What number of steps gives 14-24 seconds on an RTX 3080?" tests whether \
-  somebody memorised one machine's results. Ask about the principle instead.
-- Ask about Pentaho and the technologies it works with — what a thing does, when to use \
-  it, why one approach beats another, what happens if it is configured wrongly.
+3. THE QUESTION MUST STAND ALONE. A candidate answers it months later with no course
+in front of them. Never name a lab, section, module or step, and never mention
+"the workshop", "the source material" or where anything came from. Never refer to
+something they cannot see - "the optimized transformation", "this environment".
+Never ask them to recall a benchmark or a hardware-specific timing. The Topic you
+are given is a filing label, not the subject to ask about.
 
-IF THE MATERIAL IS NOT EXAMINABLE, RETURN AN EMPTY ARRAY. Some sections are course \
-navigation, environment setup, a welcome page, or instructions for using the lab guide \
-itself. There is no certification question in that, and a forced one is worse than none. \
-Return [] and nothing else.
+   The test: could a competent practitioner who never took this course answer it
+   from knowing the product? If not, rewrite it.
 
-Question FORMAT — follow real certification exam style:
-- **Scenario** — A realistic context (1-3 sentences) that sets up the question. \
-  Must describe a real-world situation, NOT reference any training material.
-- **Stem** — A clear, direct question ending with "?" followed by "(Choose one.)" \
-  for single-select or "(Choose two.)" / "(Choose N.)" for multi-select. \
-  EVERY stem must have a "(Choose ...)" directive. Avoid negatives ("Which is NOT...").
-- **Choices** — Label every answer option with a letter prefix: A:, B:, C:, D:, etc. \
-  Mix correct and incorrect answers randomly — do NOT always put the correct answer first. \
-  Each choice is a complete, standalone statement.
-- **Key / Keys** — The correct answer(s). MUST be grounded in the source material.
-- **Distractors** — Plausible but incorrect answers. Each should:
-  - Be a common misconception or partial truth
-  - Be grammatically consistent with the stem
-  - Be similar in length to the key
-  - NOT use "All of the above" or "None of the above"
-- **Explanation** — MUST address EVERY choice individually. For each key, explain WHY it \
-is correct. For each distractor, explain WHY it is incorrect. Reference each choice by \
-its actual text (quoted or paraphrased), NOT by letter (A/B/C/D) since choices may be \
-shuffled later. Write as a subject matter expert — do NOT say "the notes say" or \
-"according to the slide".
-- **key_source_text** — The EXACT quote from the source material that the key is based on. \
-(This is an internal field for validation — it will NOT be shown to the exam taker.)
+4. IF THE SECTION IS NOT EXAMINABLE, RETURN [] AND NOTHING ELSE. Navigation,
+environment setup, a welcome page, instructions for using the guide - there is no
+certification question in any of it, and a forced one is worse than none.
+
+FORMAT - real certification exam style:
+- **scenario** - 1-3 sentences of realistic professional context. A real situation,
+  never a reference to training material.
+- **stem** - a direct question ending in "?" then "(Choose one.)" or "(Choose two.)"
+  etc. Every stem carries a "(Choose ...)" directive. Avoid negatives ("Which is NOT").
+- **key** / **keys** - the correct answer(s): true, and about the concept.
+- **distractors** - plausible but wrong. A common misconception, a confusion with a
+  neighbouring feature, or a partial truth. Similar in length to the key,
+  grammatically consistent with the stem. Never "All/None of the above".
+- **explanation** - address EVERY choice: why each key is right and each distractor
+  wrong. Refer to choices by their text, never by letter, since they get shuffled.
+- **key_source_text** - a short quote from the section showing this TOPIC is part of
+  the course. It anchors the question to the syllabus and need NOT contain the
+  answer. Internal only; never shown to a candidate.
+
+Answer with the JSON array and nothing else. Do not think aloud, explain yourself,
+or add commentary before or after it.
 
 EXAMPLE of the exact format expected:
   Stem: "What are two reasons a customer would use Pentaho Data Integration (PDI) to \
@@ -158,10 +146,13 @@ def build_prompt(
 
     parts = []
 
-    parts.append("Generate certification exam questions based ONLY on the source material "
-                  "and image below. Do NOT use external documentation or references.\n"
-                  "If an image is provided, also analyze diagrams, charts, tables, "
-                  "and visual elements visible in the image to inform your questions.\n")
+    parts.append(
+        "Below is one section of a training course. Identify the concept, product "
+        "or feature it teaches, then write certification questions about THAT — "
+        "not about the exercise used to teach it.\n"
+        "Draw on what you know about the subject; the section tells you what is in "
+        "scope, it is not the answer key.\n"
+    )
 
     if slide.title:
         # Labelled as filing, not subject. Given plainly as "**Topic:**" the

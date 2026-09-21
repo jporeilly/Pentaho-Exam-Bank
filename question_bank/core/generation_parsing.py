@@ -46,6 +46,18 @@ def validate_key_against_notes(question: Question, slide: SlideInfo) -> bool:
     Uses fuzzy substring matching (case-insensitive, whitespace-normalized) to account
     for minor AI paraphrasing while still enforcing traceability.
     Returns True if the key source text is found in the notes (or body text if no notes).
+
+    **What a failure means changed.** ``key_source_text`` used to be the sentence
+    containing the ANSWER, so a failure meant the model had invented one. It is
+    now the passage showing the TOPIC is part of the course, so a failure means
+    the question could not be anchored to the syllabus — it may be about
+    something the course does not cover, or the model may have paraphrased too
+    freely to match.
+
+    Either way it is a flag for a reviewer, not a verdict. Nothing here can
+    check whether the answer is TRUE: the question now draws on knowledge of
+    the product rather than on the text, and no amount of string matching
+    against a lab guide will catch a confident falsehood. That is a human's job.
     """
     source_text = question.key_source_text.strip()
     if not source_text:

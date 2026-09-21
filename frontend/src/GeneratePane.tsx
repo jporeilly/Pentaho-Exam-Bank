@@ -597,10 +597,12 @@ function Review({
               <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
                 {q.topic} · {q.difficulty} · {q.bloom_level}
                 {q.tags.includes("key-not-validated") && (
-                  // The generator tags a question whose answer it could not
-                  // trace back to the source text. That is the one thing a
-                  // reviewer most needs to see before keeping it.
-                  <strong style={{ color: "var(--warn)" }}> · answer not traced to the source</strong>
+                  // The question could not be anchored to anything in the
+                  // course material, so it may be about something the course
+                  // does not cover. Note this says nothing about whether the
+                  // ANSWER is right — that cannot be checked here, and every
+                  // question needs a human read before it is trusted.
+                  <strong style={{ color: "var(--warn)" }}> · not anchored to the course material</strong>
                 )}
               </div>
             </span>

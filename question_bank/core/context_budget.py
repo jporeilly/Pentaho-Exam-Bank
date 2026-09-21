@@ -26,10 +26,19 @@ from .source import SlideInfo
 # truncated question.
 CHARS_PER_TOKEN = 4
 
-# Room for the generated JSON. A question with its scenario, options and
-# per-choice explanation runs to a few hundred tokens, so this covers a
-# reasonable batch before the answer starts competing with the source.
-RESERVED_OUTPUT_TOKENS = 1500
+# Room for the model to answer in — which is NOT the size of the answer.
+#
+# A question with its scenario, options and per-choice explanation is only a
+# few hundred tokens. But a reasoning model spends thousands more thinking
+# first, and Ollama counts those against the same window while returning none
+# of them: one measured call used 4,091 tokens to produce a 330-token answer.
+#
+# Reserving for the answer alone is what made generation flaky. A section
+# whose prompt came to 8,769 of a 12,288 window left 3,519 for thinking, the
+# model ran past it, and Ollama returned `done_reason: "length"` with an EMPTY
+# response after two minutes of work. Reserving for the thinking too costs
+# some source text and buys a reply that actually arrives.
+RESERVED_OUTPUT_TOKENS = 4500
 
 
 def estimate_tokens(text: str) -> int:

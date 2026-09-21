@@ -299,7 +299,7 @@ describe("review and commit", () => {
     await chooseCourse();
     await userEvent.click(screen.getByRole("button", { name: "Generate" }));
 
-    expect(await screen.findByText(/answer not traced to the source/)).toBeInTheDocument();
+    expect(await screen.findByText(/not anchored to the course material/)).toBeInTheDocument();
   });
 
   it("confirms the save and clears the review", async () => {

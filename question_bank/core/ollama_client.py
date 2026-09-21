@@ -284,6 +284,7 @@ def generate(
     timeout: float = 120.0,
     images: Optional[List[str]] = None,
     num_ctx: int = 0,
+    num_predict: int = 0,
 ) -> str:
     resolved_ctx = _resolve_num_ctx(num_ctx)
     body = {
@@ -292,8 +293,18 @@ def generate(
         "system": system,
         "stream": False,
     }
+    options = {}
     if resolved_ctx > 0:
-        body["options"] = {"num_ctx": resolved_ctx}
+        options["num_ctx"] = resolved_ctx
+    if num_predict > 0:
+        # Cap the reply. Without one, a model that starts rambling generates
+        # until it fills the whole context and Ollama returns done_reason
+        # "length" with an EMPTY response — 5,807 tokens and nearly three
+        # minutes spent producing nothing. A bound turns that into a fast
+        # failure the caller can report instead of a long silent one.
+        options["num_predict"] = num_predict
+    if options:
+        body["options"] = options
     if images:
         encoded = [b64 for path in images if (b64 := _encode_image(path))]
         if encoded:
@@ -307,7 +318,20 @@ def generate(
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read().decode())
-        return data.get("response", "").strip()
+        reply = (data.get("response") or "").strip()
+        if not reply:
+            # An empty reply has more than one cause and they need different
+            # fixes, so say which. "length" means the model filled the context
+            # before answering — on a reasoning model that is thousands of
+            # tokens of thinking Ollama never returns, and the fix is a shorter
+            # prompt or a bigger window, NOT a num_predict cap, which counts
+            # the thinking too and cuts it off even earlier.
+            print(
+                f"[OLLAMA] empty reply from {model}: done_reason="
+                f"{data.get('done_reason')!r} generated={data.get('eval_count')} "
+                f"prompt={data.get('prompt_eval_count')} ctx={resolved_ctx}"
+            )
+        return reply
 
 
 def generate_stream(
