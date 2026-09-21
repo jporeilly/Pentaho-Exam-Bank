@@ -6,6 +6,7 @@ import re
 from typing import List, Optional
 
 from . import providers
+from ..utils.config import config
 from .question_bank import Question
 from .source import SlideInfo
 from .generation_prompts import (
@@ -83,7 +84,7 @@ Return ONLY a JSON object with these keys (nothing else):
             model=model,
             system=system_prompt or GENERATION_SYSTEM_PROMPT,
             base_url=base_url,
-            timeout=120.0,
+            timeout=float(config.generation_timeout_seconds),
         )
     except Exception as e:
         print(f"[AUTO-FIX] AI call failed: {e}")
@@ -168,7 +169,7 @@ def generate_questions(
         model=model,
         system=system_prompt or GENERATION_SYSTEM_PROMPT,
         base_url=base_url,
-        timeout=180.0,
+        timeout=float(config.generation_timeout_seconds),
         images=images,
     )
 
@@ -284,6 +285,7 @@ def generate_questions_batch(
             rows get spread randomly across the generated questions.
     """
     all_questions = []
+    failed: List[str] = []       # sections skipped because the model failed on them
     total = len(slides)
 
     # Normalise Bloom's to a list and rotate it across slides/sections.
@@ -368,27 +370,53 @@ def generate_questions_batch(
             specs_this = None  # generate_questions builds its own from num_questions
 
         slide_bloom = blooms[i % len(blooms)]
-        questions = generate_questions(
-            slide=slide,
-            model=model,
-            base_url=base_url,
-            num_questions=n_this,
-            difficulty=difficulty,
-            bloom_level=slide_bloom,
-            certification_id=certification_id,
-            source_file=source_file,
-            system_prompt=system_prompt,
-            num_keys=num_keys,
-            num_distractors=num_distractors,
-            topic=topic,
-            custom_instructions=custom_instructions,
-            question_specs=specs_this,
-            slide_image=img_path,
-            progress_callback=progress_callback,
-        )
+        try:
+            questions = generate_questions(
+                slide=slide,
+                model=model,
+                base_url=base_url,
+                num_questions=n_this,
+                difficulty=difficulty,
+                bloom_level=slide_bloom,
+                certification_id=certification_id,
+                source_file=source_file,
+                system_prompt=system_prompt,
+                num_keys=num_keys,
+                num_distractors=num_distractors,
+                topic=topic,
+                custom_instructions=custom_instructions,
+                question_specs=specs_this,
+                slide_image=img_path,
+                progress_callback=progress_callback,
+            )
+        except Exception as e:  # noqa: BLE001 — one bad section must not end the run
+            # A whole course is dozens of model calls over an hour or more.
+            # Letting one of them end the run throws away everything already
+            # generated, and the usual cause is a single slow section timing
+            # out — the least interesting reason imaginable to lose an hour's
+            # work. The section is skipped, said out loud, and the run goes on.
+            #
+            # Cancellation is deliberately NOT caught: that one is meant to
+            # stop the run, and it reaches here as an exception from the
+            # progress callback.
+            if type(e).__name__ == "JobCancelled":
+                raise
+            failed.append(slide.title or f"section {i + 1}")
+            print(f"[GENERATE] section {i + 1}/{total} failed, skipping: {e}")
+            if progress_callback:
+                progress_callback(i + 1, total, f"Skipped {slide.title or i + 1}: {e}")
+            continue
         all_questions.extend(questions)
 
     if progress_callback:
-        progress_callback(total, total, f"Done — {len(all_questions)} questions generated")
+        done = f"Done — {len(all_questions)} questions generated"
+        if failed:
+            # Named, not just counted: a section that failed produced no
+            # questions, and the author needs to know which part of the course
+            # has a hole in it rather than discovering it later.
+            done += f"; {len(failed)} section(s) skipped: {', '.join(failed[:3])}"
+            if len(failed) > 3:
+                done += f" and {len(failed) - 3} more"
+        progress_callback(total, total, done)
 
     return all_questions

@@ -36,7 +36,12 @@ function ok(body: unknown) {
  * Route by path and method. `jobs` is a queue: each poll takes the next, and
  * the last one repeats — which is how a running job is made to finish.
  */
-function mockApi(opts: { jobs?: Job[]; generateError?: { status: number; detail: string } } = {}) {
+function mockApi(opts: {
+  jobs?: Job[];
+  generateError?: { status: number; detail: string };
+  /** Jobs already running when the pane mounts. */
+  existing?: Job[];
+} = {}) {
   const calls: Array<{ url: string; method: string; body?: unknown }> = [];
   const queue = [...(opts.jobs ?? [job()])];
 
@@ -69,6 +74,8 @@ function mockApi(opts: { jobs?: Job[]; generateError?: { status: number; detail:
     if (path.includes("/commit")) return ok({ saved: 1 });
     if (path.includes("/cancel")) return ok({ ok: true });
     if (path.includes("/api/jobs/")) return ok(queue.length > 1 ? queue.shift() : queue[0]);
+    // The bare list, asked for on mount to find a run already in flight.
+    if (path.endsWith("/api/jobs")) return ok(opts.existing ?? []);
     return ok({});
   });
   return calls;
@@ -203,6 +210,33 @@ describe("the job", () => {
     const after = calls.filter((c) => c.url.includes("/api/jobs/")).length;
     await new Promise((r) => setTimeout(r, 1200));
     expect(calls.filter((c) => c.url.includes("/api/jobs/")).length).toBe(after);
+  });
+
+  it("picks up a run that was already going", async () => {
+    // A course takes the better part of an hour and the job lives in the
+    // backend. Reloading the page, or opening a second tab, must not show an
+    // idle form with no sign that anything is happening.
+    const running = job({
+      id: "job-1", status: "running", result: [], count: 0,
+      progress: { current: 7, total: 63, message: "Generating from section 7/63…" },
+    });
+    mockApi({ existing: [running], jobs: [running] });
+    render(<GeneratePane />);
+
+    expect(await screen.findByText("Generating")).toBeInTheDocument();
+    expect(await screen.findByText(/section 7\/63/)).toBeInTheDocument();
+    expect(await screen.findByText("7/63")).toBeInTheDocument();
+  });
+
+  it("does not adopt a job that has already finished", async () => {
+    // Only a RUNNING job is worth attaching to. Showing a stale result on
+    // every page load would be noise, and would read as a run just ending.
+    mockApi({ existing: [job({ id: "old", status: "done" })] });
+    render(<GeneratePane />);
+    await screen.findByLabelText("Course");
+
+    expect(screen.queryByText("Generated 1")).not.toBeInTheDocument();
+    expect(screen.queryByText("Review")).not.toBeInTheDocument();
   });
 
   it("reports a failed job with the backend's reason", async () => {

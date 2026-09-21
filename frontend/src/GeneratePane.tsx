@@ -65,6 +65,28 @@ export function GeneratePane({
     api.certifications().then(setCertifications).catch(() => setCertifications([]));
   }, []);
 
+  // Pick up a run that is already going. A course takes the better part of an
+  // hour, and the job lives in the backend, not in this component — so
+  // reloading the page, or opening it in a second tab, or starting the run
+  // from somewhere else, should all show the run rather than an idle form
+  // with no sign that anything is happening.
+  useEffect(() => {
+    if (jobId) return;
+    let live = true;
+    api
+      .jobs()
+      .then((all) => {
+        const running = all.find((j) => j.status === "running");
+        if (live && running) setJobId(running.id);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+    // Only on mount: once a job is being followed, the poll below owns it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Labs belong to the chosen course, so the selected lab has to be dropped
   // when the course changes — otherwise a stale lab slug is sent for a course
   // that has never heard of it.

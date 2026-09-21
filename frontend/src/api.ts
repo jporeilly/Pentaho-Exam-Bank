@@ -225,6 +225,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** Every job, without results — a status list, not a payload. */
+  jobs: () => request<Job[]>("/api/jobs"),
   job: (id: string) => request<Job>(`/api/jobs/${encodeURIComponent(id)}`),
   cancelJob: (id: string) =>
     request<{ ok: boolean }>(`/api/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),

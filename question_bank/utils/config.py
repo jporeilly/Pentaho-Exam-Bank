@@ -63,6 +63,12 @@ class AppConfig:
     ollama_model: str = ""
     ollama_enabled: bool = True
     ollama_num_ctx: int = 8192          # context window size for Ollama (tokens)
+    # How long to wait for one question before giving up on a section. A
+    # 12B model on a mid-range card takes a little over two minutes for a
+    # short section, so the old 180s left almost no headroom and a single
+    # slow section ended the run. Generous rather than tight: the cost of
+    # waiting is a slow section, the cost of cutting it short is losing one.
+    generation_timeout_seconds: int = 600
     system_prompt: str = ""
 
     # MCP documentation servers
