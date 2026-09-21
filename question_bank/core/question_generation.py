@@ -301,8 +301,18 @@ def generate_questions_batch(
     eligible = [i for i, s in enumerate(slides) if s.speaker_notes.strip() or s.body_text]
     per_slide_n = {i: base_n for i in eligible}
     if target_total and target_total > 0 and eligible:
-        base, extra = divmod(int(target_total), len(eligible))
-        per_slide_n = {idx: base + (1 if k < extra else 0) for k, idx in enumerate(eligible)}
+        count = len(eligible)
+        base, extra = divmod(int(target_total), count)
+        per_slide_n = {idx: base for idx in eligible}
+        # Spread the remainder across the whole course instead of giving it to
+        # the first sections. Asking for 20 questions from a 63-section course
+        # used to mean 20 questions about its opening: sections 20 onwards got
+        # nothing, so the end of a course — often the part worth examining —
+        # was never covered at all. Every (count/extra)th section now gets one,
+        # which is strictly increasing while extra <= count, so no section is
+        # picked twice.
+        for k in range(extra):
+            per_slide_n[eligible[(k * count) // extra]] += 1
 
     # When randomizing, pre-build a *balanced* format assignment for the whole
     # run: each spec row is used an equal share of the grand total (the
