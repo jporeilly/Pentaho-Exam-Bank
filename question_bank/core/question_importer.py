@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from .question_bank import Question
-from .pptx_reader import PPTXReader, SlideInfo
+from .pptx_reader import PPTXReader
+from .source import SlideInfo
 from . import mcp_client
 from ..utils.config import config as _config
 

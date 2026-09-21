@@ -1,19 +1,15 @@
 """PowerPoint reader for extracting slides and speaker notes."""
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 from pptx import Presentation
 
+# SlideInfo is the generic source-section type and now lives in `source`.
+# Re-exported here so `from .pptx_reader import SlideInfo` keeps working while
+# this module is on its way out.
+from .source import SlideInfo
 
-@dataclass
-class SlideInfo:
-    """Information about a single slide."""
-    index: int  # 0-based index
-    speaker_notes: str
-    title: Optional[str] = None
-    body_text: Optional[str] = None
-    thumbnail_path: Optional[Path] = None
+__all__ = ["SlideInfo", "PPTXReader"]
 
 
 class PPTXReader:

@@ -610,7 +610,7 @@ def _generate_from_docs(state, cert_id, cert, file_topic, num_per, difficulty, b
             doc_links.append(r.link)
     doc_content = "--- Relevant Documentation ---\n" + "\n\n".join(parts_doc) + "\n--- End Documentation ---"
 
-    from ...core.pptx_reader import SlideInfo
+    from ...core.source import SlideInfo
     doc_slide = SlideInfo(
         index=0,
         title=search_query,

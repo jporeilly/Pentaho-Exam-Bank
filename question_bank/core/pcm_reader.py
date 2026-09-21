@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 from typing import List
 
-from .pptx_reader import SlideInfo
+from .source import SlideInfo
 
 
 def _humanise(slug: str) -> str:

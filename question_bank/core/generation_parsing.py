@@ -5,7 +5,7 @@ import re
 from typing import Optional
 
 from .question_bank import Question
-from .pptx_reader import SlideInfo
+from .source import SlideInfo
 
 
 def _extract_json_array(text: str) -> Optional[list]:

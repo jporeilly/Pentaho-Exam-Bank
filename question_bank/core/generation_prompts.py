@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from .pptx_reader import SlideInfo
+from .source import SlideInfo
 
 
 GENERATION_SYSTEM_PROMPT = """\

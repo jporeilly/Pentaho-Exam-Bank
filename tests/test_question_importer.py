@@ -10,7 +10,8 @@ from question_bank.core.question_importer import (
     validate_batch,
 )
 from question_bank.core.question_bank import Question
-from question_bank.core.pptx_reader import SlideInfo, PPTXReader
+from question_bank.core.pptx_reader import PPTXReader
+from question_bank.core.source import SlideInfo
 
 
 # ── CSV Import ─────────────────────────────────────────

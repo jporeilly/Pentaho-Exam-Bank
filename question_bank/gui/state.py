@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from ..core.pptx_reader import PPTXReader, SlideInfo
+from ..core.pptx_reader import PPTXReader
+from ..core.source import SlideInfo
 from ..core.question_bank import Question, QuestionBankDB, Certification
 from ..utils.config import DB_PATH
 

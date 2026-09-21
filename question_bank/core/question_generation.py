@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from . import ollama_client
 from .question_bank import Question
-from .pptx_reader import SlideInfo
+from .source import SlideInfo
 from .generation_prompts import (
     GENERATION_SYSTEM_PROMPT, _build_question_specs, build_prompt, _num_word,
 )

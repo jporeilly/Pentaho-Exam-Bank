@@ -9,7 +9,7 @@ from question_bank.core.question_generator import (
     _build_question_specs, _num_word, validate_key_against_notes,
 )
 from question_bank.core.question_bank import Question
-from question_bank.core.pptx_reader import SlideInfo
+from question_bank.core.source import SlideInfo
 
 
 # ── Helper functions ───────────────────────────────────
