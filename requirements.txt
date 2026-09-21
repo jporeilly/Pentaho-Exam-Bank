@@ -8,3 +8,13 @@ Pillow>=10.0.0
 openpyxl>=3.1.0
 pytest>=8.0.0
 httpx>=0.27.0
+
+# HTTP layer. Replaces NiceGUI as the app's surface once the React front end
+# lands in 0.4.0; both run against the same core until then.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+
+# Optional — only needed to use the cloud providers in Settings. Ollama needs
+# neither: it is a local HTTP server called over the standard library.
+anthropic>=0.40
+openai>=1.40

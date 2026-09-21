@@ -1,0 +1,123 @@
+"""Content Manager courses — what is available to generate from or adopt.
+
+Everything here resolves the course against the configured courses directory
+**at request time**. No slug is ever stored and trusted later: a cached slug
+that quietly stopped resolving is how this app's original two certifications
+died when the courses were renamed under them, and it failed by returning an
+empty list rather than by saying anything.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+
+from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course
+from ...utils.config import config
+
+router = APIRouter(tags=["courses"])
+
+
+def _courses_dir() -> Path:
+    raw = (config.pcm_courses_dir or "").strip()
+    if not raw:
+        raise HTTPException(
+            409, "No Content Manager courses directory is configured."
+        )
+    path = Path(raw)
+    if not path.is_dir():
+        raise HTTPException(
+            409, f"The configured courses directory does not exist: {path}"
+        )
+    return path
+
+
+def _course_dir(slug: str) -> Path:
+    root = _courses_dir()
+    # Resolve and confine: a slug is a path segment from a client, and
+    # "../../etc" must not escape the courses directory.
+    candidate = (root / slug).resolve()
+    if candidate.parent != root.resolve() or not candidate.is_dir():
+        known = [c["slug"] for c in list_pcm_courses(root)]
+        raise HTTPException(
+            404, f"No course '{slug}' in {root}. Available: {', '.join(known) or 'none'}"
+        )
+    return candidate
+
+
+@router.get("/api/courses")
+def list_courses() -> list[dict[str, Any]]:
+    """Every course, with whether it has an exam and how big its pool is."""
+    root = _courses_dir()
+    out = []
+    for course in list_pcm_courses(root):
+        exam = root / course["slug"] / "exam.json"
+        pool = 0
+        if exam.is_file():
+            try:
+                data = json.loads(exam.read_text(encoding="utf-8"))
+                questions = data.get("questions")
+                pool = len(questions) if isinstance(questions, list) else 0
+            except (ValueError, OSError):
+                pool = 0
+        out.append({**course, "hasExam": exam.is_file(), "questionCount": pool})
+    return out
+
+
+@router.get("/api/courses/{slug}/labs")
+def list_labs(slug: str) -> list[dict[str, str]]:
+    _course_dir(slug)
+    return list_pcm_labs(_courses_dir(), slug)
+
+
+@router.get("/api/courses/{slug}/sections")
+def list_sections(slug: str, lab: str = "") -> list[dict[str, Any]]:
+    """The course read as the sections a question can be generated from.
+
+    Returns what the generator would be given — the same split, the same
+    cleaning — so an author can see the material before spending a model call
+    on it, and can tell an empty result from a thin one.
+    """
+    _course_dir(slug)
+    sections = load_pcm_course(_courses_dir(), slug, lab_slug=lab)
+    return [
+        {
+            "index": s.index,
+            "title": s.title,
+            "characters": len(s.speaker_notes or ""),
+            "preview": (s.speaker_notes or "")[:280],
+        }
+        for s in sections
+    ]
+
+
+@router.get("/api/courses/{slug}/exam")
+def get_course_exam(slug: str) -> dict[str, Any]:
+    """A course's exam as it stands on disk — settings summary plus the pool.
+
+    The settings are reported, never written: they belong to the Content
+    Editor. This app owns `questions`.
+    """
+    course = _course_dir(slug)
+    exam = course / "exam.json"
+    if not exam.is_file():
+        return {"exists": False, "questionCount": 0}
+    try:
+        data = json.loads(exam.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as e:
+        raise HTTPException(422, f"{slug}/exam.json could not be read: {e}")
+    questions = data.get("questions")
+    questions = questions if isinstance(questions, list) else []
+    return {
+        "exists": True,
+        "title": data.get("title", ""),
+        "description": data.get("description", ""),
+        "passMark": data.get("passMark"),
+        "questionsPerAttempt": data.get("questionsPerAttempt"),
+        "shuffle": data.get("shuffle"),
+        "questionCount": len(questions),
+        "questions": questions,
+    }
