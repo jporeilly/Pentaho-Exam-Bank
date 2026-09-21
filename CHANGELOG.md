@@ -7,7 +7,44 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **An HTTP API** (`question_bank/api`) over the existing core — system,
+  questions, certifications, courses, generation and export. Generation runs as
+  a background job, because a course is dozens of model calls and minutes of
+  work. Started by `run.bat` alongside the interface, or alone with
+  `run-api.bat` / `python -m question_bank.api`. It binds loopback only: there
+  is no authentication, so anything that can reach it can read and change the
+  bank.
+
+- **One provider module** (`core/providers.py`). Sixteen call sites named
+  Ollama directly; they now dispatch to Ollama, Anthropic or OpenAI, with keys
+  read from the environment at call time and never stored.
+
+- **`core/source.py`** — the generation input type, moved out of the PPTX
+  reader so that reading a course no longer drags in `python-pptx`.
+
+### Fixed
+
+- **The launchers now call the venv's interpreter by explicit path.** They
+  activated the venv and trusted `python`, which on a machine with the Windows
+  Store Python still resolved to the Store build — so the dependency check
+  passed against the wrong interpreter and the app died later on the first
+  package that was only in the venv.
+
+- **Sibling scripts are called via `%~dp0`.** A bare name fails outright where
+  `NoDefaultCurrentDirectoryInExePath=1` is set, which stops `cmd` resolving an
+  executable from the current directory.
+
+- **Resolving the courses directory was written twice, and the second copy was
+  wrong**: `Path(config.pcm_courses_dir or ".")` turned "not configured" into
+  the *current working directory*, which is a real directory — so the guard
+  never fired and the app would look for courses wherever it had been started
+  from.
+
+- **Exporting an `exam.json` across two courses is refused** rather than
+  produced. Each course's `pool_order` starts at 0, so two pools interleave
+  instead of concatenating, giving a plausible file in an order nobody chose.
 
 ## [0.1.0] - 2026-09-21
 

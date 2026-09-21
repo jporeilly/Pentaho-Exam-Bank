@@ -35,7 +35,9 @@ Two writers, one file, no overlapping keys.
 ## Getting started
 
 See [`INSTALL.md`](INSTALL.md). In short: Python 3.10+, then `install.bat`
-once and `run.bat` to start the app on <http://localhost:7777>.
+once and `run.bat` to start the app — the interface on
+<http://localhost:7777> and the HTTP API on <http://localhost:7788>, whose
+interactive documentation is at `/docs`. `run-api.bat` starts the API alone.
 
 To bring a course's existing questions into the bank:
 
@@ -105,8 +107,11 @@ All three survive adoption and export, covered by `tests/test_pcm_roundtrip.py`.
 
 ```
 Pentaho-Question-Bank/
-├── main.py                      # Entry point (NiceGUI, port 7777)
-├── install.bat / run.bat        # One-click install and launch
+├── main.py                      # Interface entry point (NiceGUI, port 7777)
+├── install.bat                  # One-click install
+├── run.bat                      # Launch: interface + API
+├── run-api.bat                  # Launch: API alone
+├── _venv.bat                    # Shared venv check/repair for both launchers
 │
 ├── question_bank/               # The package (the repo root is the source root)
 │   ├── __init__.py              #   __version__ — the source of truth
@@ -120,6 +125,11 @@ Pentaho-Question-Bank/
 │   │   ├── pcm_reader.py        #     reads a course's guide.md as sections
 │   │   ├── ollama_client.py, mcp_client.py
 │   │   └── pptx_*.py            #     slated for removal in 0.2.0
+│   ├── api/                     #   FastAPI over core — the surface React will use
+│   │   ├── __main__.py          #     `python -m question_bank.api`
+│   │   ├── jobs.py              #     background jobs; generation takes minutes
+│   │   └── routers/             #     system, questions, certifications, courses,
+│   │                            #     generation, export
 │   ├── gui/                     #   NiceGUI layer — replaced by React in 0.4.0
 │   │   └── components/          #     one module per tab
 │   └── utils/config.py          #   settings, and PROJECT_ROOT for everything else

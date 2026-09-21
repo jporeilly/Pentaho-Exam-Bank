@@ -136,6 +136,24 @@ def export_course_exam(
     nothing else.
     """
     questions = _selection(db, dict(certification_id=certification_id, status=status))
+
+    # An exam.json belongs to one course. Two pools in one file is not a
+    # smaller mistake than it looks: each course's pool_order starts at 0, so
+    # they interleave rather than concatenate, and the result is a plausible
+    # file in an order nobody chose. Better to say so than to produce it.
+    spanned = {q.certification_id for q in questions}
+    if len(spanned) > 1:
+        names = sorted(
+            (db.get_certification(c).name if db.get_certification(c) else "(none)")
+            for c in spanned
+        )
+        raise HTTPException(
+            400,
+            "An exam.json is for one course, but this selection spans "
+            f"{len(spanned)}: {', '.join(names)}. Pass certification_id to "
+            "pick one.",
+        )
+
     if questions_per_attempt and questions_per_attempt > len(questions):
         # The learner app draws this many from the pool; asking for more than
         # exist is an exam that cannot be sat.

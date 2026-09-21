@@ -29,9 +29,49 @@ install.bat
 run.bat
 ```
 
-That starts the NiceGUI app on <http://localhost:7777> and opens a browser.
-`run.bat` kills any previous instance on that port first, and repairs the venv
+That starts two things:
+
+| | Port | What |
+| --- | ---- | ---- |
+| **Interface** | 7777 | The NiceGUI app, which opens in a browser |
+| **API** | 7788 | The HTTP API, in its own minimised window |
+
+Both are started because the app is mid-restack. The interface still calls the
+core directly and does not need the API — but the API is what the React front
+end will use in 0.4.0, so having it up means it can be driven while the old
+interface is still the one in use. Closing the interface takes the API down
+with it. When the NiceGUI layer goes, `run.bat` stops starting it and nothing
+else about the launch changes.
+
+`run.bat` releases both ports from any previous run first, and repairs the venv
 if dependencies have gone missing.
+
+### Just the API
+
+```bat
+run-api.bat
+```
+
+Use this when you want only the API — driving it from a REST client, or
+developing the front end. `QB_API_PORT` overrides the port, and any extra
+arguments are passed through:
+
+```bat
+run-api.bat --reload
+```
+
+Or without the launcher:
+
+```bat
+venv\Scripts\python.exe -m question_bank.api --port 9000
+```
+
+Interactive documentation is at `/docs` on whichever port it is using.
+
+> The API has **no authentication**, so it binds loopback only. Anything that
+> can reach it can read the bank, change it, and spend the machine's model
+> time. `--host` refuses a non-loopback address unless you also pass
+> `--allow-remote`.
 
 Everything the app keeps lives under `assets\`, which is **gitignored**:
 

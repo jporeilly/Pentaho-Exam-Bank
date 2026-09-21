@@ -1,8 +1,19 @@
 @echo off
-title Question Bank Generator
+:: Start the Question Bank: the API, and the NiceGUI interface on top of it.
+::
+:: Both are started because the app is mid-restack. The NiceGUI layer still
+:: calls core directly and does not need the API, but the API is what the
+:: React front end will use in 0.4.0, and having it up means it can be driven
+:: and developed against while the old interface is still the one in use.
+:: When the NiceGUI layer goes, this file stops starting it and nothing else
+:: about the launch changes.
+::
+:: ASCII only - a .bat is read in the console codepage, and anything else
+:: turns into mojibake in the window the user is reading.
+title Pentaho Question Bank
 cd /d "%~dp0"
 
-:: Load environment variables from .env file
+:: Load environment variables from .env
 if exist ".env" (
     for /f "usebackq tokens=* eol=#" %%a in (".env") do (
         set "%%a"
@@ -10,99 +21,54 @@ if exist ".env" (
 )
 
 set "PORT_FILE=%TEMP%\question_bank_port.txt"
+set "API_PORT_FILE=%TEMP%\question_bank_api_port.txt"
 
-:: If a previous instance is running, kill it using the saved port
-if exist "%PORT_FILE%" call :kill_port_from_file
-:: Also try the default port
-call :kill_port 7777
+set "UI_PORT=7777"
+set "API_PORT=%QB_API_PORT%"
+if "%API_PORT%"=="" set "API_PORT=7788"
 
-:: Check if virtual environment is healthy (activate.bat must exist)
-if not exist "venv\Scripts\activate.bat" (
-    echo Virtual environment is missing or corrupted.
-    call :repair_venv
-    if not exist "venv\Scripts\activate.bat" (
-        echo ERROR: Could not repair virtual environment.
-        pause
-        exit /b 1
-    )
-)
+:: Release ports a previous run left behind
+if exist "%PORT_FILE%" call :kill_port_from_file "%PORT_FILE%"
+if exist "%API_PORT_FILE%" call :kill_port_from_file "%API_PORT_FILE%"
+call :kill_port %UI_PORT%
+call :kill_port %API_PORT%
 
-call venv\Scripts\activate.bat
-
-:: Check key dependencies are actually installed
-python -c "import nicegui" >nul 2>&1
+:: Verify the environment once, for both servers.
+:: %~dp0 is this script's own directory. Calling a sibling by bare name fails
+:: outright where NoDefaultCurrentDirectoryInExePath=1 is set, which stops cmd
+:: resolving an executable from the current directory.
+call "%~dp0_venv.bat" nicegui
 if errorlevel 1 (
-    echo Dependencies are missing — repairing virtual environment...
-    call :repair_venv
-    if not exist "venv\Scripts\activate.bat" (
-        echo ERROR: Could not repair virtual environment.
-        pause
-        exit /b 1
-    )
-    call venv\Scripts\activate.bat
+    pause
+    exit /b 1
 )
 
-:: Launch the app
-echo Starting Question Bank Generator...
-python main.py
+:: The API goes to its own window so its log stays readable and closing it
+:: does not take the interface down with it.
+echo Starting the API on port %API_PORT%...
+start "Pentaho Question Bank - API" /min "%VENV_PY%" -m question_bank.api --port %API_PORT%
 
-:: Kill any leftover process on the actual port used
-if exist "%PORT_FILE%" call :cleanup_port_file
+echo Starting the interface on port %UI_PORT%...
+"%VENV_PY%" main.py
+
+:: The interface has exited - take the API down with it rather than leaving
+:: an orphan holding the port until someone notices.
+echo Stopping the API...
+call :kill_port %API_PORT%
+if exist "%PORT_FILE%" call :cleanup_port_file "%PORT_FILE%"
+if exist "%API_PORT_FILE%" call :cleanup_port_file "%API_PORT_FILE%"
 
 exit
 
-:repair_venv
-:: Auto-repair: rebuild venv from requirements.txt
-echo.
-echo ============================================================
-echo   Auto-repairing virtual environment...
-echo ============================================================
-echo.
-:: Save current package list if pip is still functional
-if exist "venv\Scripts\pip.exe" (
-    echo Saving installed package list...
-    venv\Scripts\pip.exe freeze > "assets\db\packages_backup.txt" 2>nul
-    if not errorlevel 1 (
-        echo Saved to assets\db\packages_backup.txt
-    )
-)
-:: Remove broken venv
-if exist "venv" (
-    echo Removing corrupted venv...
-    rmdir /s /q venv
-)
-:: Recreate
-echo Creating fresh virtual environment...
-python -m venv venv
-if errorlevel 1 (
-    echo ERROR: Failed to create virtual environment.
-    echo Make sure Python 3.10+ is installed and in PATH.
-    goto :eof
-)
-call venv\Scripts\activate.bat
-echo Installing dependencies from requirements.txt...
-pip install --upgrade pip >nul 2>&1
-pip install -r requirements.txt
-if errorlevel 1 (
-    echo ERROR: Failed to install dependencies.
-    goto :eof
-)
-echo.
-echo Virtual environment repaired successfully.
-echo.
-goto :eof
-
 :kill_port_from_file
-:: Read port from file and kill that port (outside if-block to avoid expansion issues)
-set /p PREV_PORT=<"%PORT_FILE%"
+set /p PREV_PORT=<%~1
 call :kill_port %PREV_PORT%
 goto :eof
 
 :cleanup_port_file
-:: Read port from file, kill it, delete the file
-set /p USED_PORT=<"%PORT_FILE%"
+set /p USED_PORT=<%~1
 call :kill_port %USED_PORT%
-del "%PORT_FILE%" >nul 2>&1
+del %~1 >nul 2>&1
 goto :eof
 
 :kill_port

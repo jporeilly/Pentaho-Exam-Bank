@@ -285,6 +285,31 @@ class TestExport:
         ids = [q["id"] for q in json.loads(response.content)["questions"]]
         assert ids == ["e-q2", "e-q1", "e-q0"]
 
+    def test_exam_json_refuses_to_span_two_courses(self, client, stocked, db):
+        """Each course's pool_order starts at 0, so two pools in one file
+        interleave rather than concatenate — a plausible-looking exam in an
+        order nobody chose. It has to be refused, not merged."""
+        other = Certification(name="Another Course")
+        db.save_certification(other)
+        db.save(Question(id="o-q0", stem="Other course?", key="k",
+                         distractors=["d"], certification_id=other.id, pool_order=0))
+
+        response = client.get("/api/export-exam/json")
+        assert response.status_code == 400
+        assert "one course" in response.json()["detail"]
+        assert "Another Course" in response.json()["detail"]
+
+    def test_exam_json_is_fine_when_scoped_to_one_course(self, client, stocked, db):
+        other = Certification(name="Another Course")
+        db.save_certification(other)
+        db.save(Question(id="o-q0", stem="Other course?", key="k",
+                         distractors=["d"], certification_id=other.id, pool_order=0))
+
+        response = client.get("/api/export-exam/json",
+                              params={"certification_id": stocked.id})
+        assert response.status_code == 200
+        assert len(json.loads(response.content)["questions"]) == 3
+
     def test_exam_json_rejects_more_per_attempt_than_exist(self, client, stocked):
         response = client.get("/api/export-exam/json",
                               params={"certification_id": stocked.id,
