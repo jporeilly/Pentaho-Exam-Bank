@@ -200,14 +200,21 @@ with `speaker_notes` → `text`. Mechanical, fully test-covered, and a prerequis
 | Capability | Verdict |
 |---|---|
 | Vision / image input (`images=`, base64) | **Accepted loss** — only used for PPTX slide images |
-| `num_ctx` override | Config-driven, **default off** — never active. Accepted. |
+| `num_ctx` override | **KEPT — this was assessed wrongly.** See below. |
 | Streaming (`generate_stream`, `chat_stream`) | Not needed for batch generation |
 | VRAM-based model catalogue (~30 models) | `providers.suggest_model()` covers the same ground |
 
 Gained: Anthropic and OpenAI providers, plus persisted settings.
 
-> **Watch:** long `guide.md` sections with no `num_ctx` set fall back to Ollama's default context
-> window. If generation quality drops on long sections, this is the first thing to check.
+> **Correction (2026-09-21).** `num_ctx` was recorded above as "config-driven, default off —
+> never active". That was wrong, and checking it rather than trusting the note is what caught it.
+> `AppConfig.ollama_num_ctx` defaults to **8192**, and the working config on this machine is
+> **65536**. So it is not merely active, it is deliberately large.
+>
+> PCE's `providers.py` sends Ollama no `options` at all, taking the model's own default of roughly
+> 4k. A verbatim adoption would therefore have cut the context window about **16x** and truncated
+> long `guide.md` sections silently — which reads as a model that stopped paying attention, not as
+> a bug. `num_ctx` is kept, and `tests/test_providers.py` fails if it stops reaching Ollama.
 
 ---
 

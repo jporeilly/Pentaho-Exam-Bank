@@ -52,6 +52,12 @@ def _default_pcm_courses_dir() -> str:
 @dataclass
 class AppConfig:
     """Application configuration."""
+    # Which LLM answers. Ollama is local and free; the cloud providers read
+    # their key from the environment at call time and it is never stored here.
+    ai_provider: str = "ollama"         # ollama | anthropic | openai
+    anthropic_model: str = "claude-opus-4-8"
+    openai_model: str = "gpt-4o"
+
     # Ollama
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = ""

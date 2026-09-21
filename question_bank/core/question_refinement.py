@@ -5,7 +5,7 @@ import re
 import string
 from typing import List, Optional
 
-from . import ollama_client
+from . import providers
 from .question_bank import Question
 from .generation_prompts import GENERATION_SYSTEM_PROMPT, _num_word
 from .generation_parsing import _extract_json_array, _extract_json_object
@@ -43,7 +43,7 @@ Return ONLY a JSON object:
 ```"""
 
     try:
-        response = ollama_client.generate(
+        response = providers.generate(
             prompt=prompt, model=model,
             system=system_prompt or GENERATION_SYSTEM_PROMPT,
             base_url=base_url, timeout=120.0,
@@ -105,7 +105,7 @@ Return ONLY a JSON object:
 ```"""
 
     try:
-        response = ollama_client.generate(
+        response = providers.generate(
             prompt=prompt, model=model,
             system=system_prompt or GENERATION_SYSTEM_PROMPT,
             base_url=base_url, timeout=120.0,
@@ -168,7 +168,7 @@ Return ONLY a JSON object:
 ```"""
 
     try:
-        response = ollama_client.generate(
+        response = providers.generate(
             prompt=prompt, model=model,
             system=system_prompt or GENERATION_SYSTEM_PROMPT,
             base_url=base_url, timeout=120.0,
@@ -229,7 +229,7 @@ Return ONLY a JSON object with these keys:
 }}
 ```"""
 
-    response = ollama_client.generate(
+    response = providers.generate(
         prompt=prompt,
         model=model,
         system=system_prompt or GENERATION_SYSTEM_PROMPT,
@@ -304,7 +304,7 @@ If the question has no errors, return: []
 [{{"field": "stem", "value": "Which optons describe...", "issue": "'optons' should be 'options'", "severity": "error"}}]
 ```"""
 
-    response = ollama_client.generate(
+    response = providers.generate(
         prompt=prompt,
         model=model,
         system="You are a meticulous QA reviewer. Return ONLY valid JSON.",
@@ -397,7 +397,7 @@ Return ONLY a JSON object with these keys:
 }}
 ```"""
 
-    response = ollama_client.generate(
+    response = providers.generate(
         prompt=prompt,
         model=model,
         system=system_prompt or GENERATION_SYSTEM_PROMPT,
@@ -463,7 +463,7 @@ Every option (both keys and distractors) must have its own line.
 Return ONLY the explanation text, no JSON wrapping."""
 
     try:
-        response = ollama_client.generate(
+        response = providers.generate(
             prompt=prompt,
             model=model,
             system="You are an exam question reviewer. Write concise, factual explanations citing the source notes.",
@@ -556,7 +556,7 @@ CRITICAL RULES:
 
     images = [slide_image] if slide_image else None
     try:
-        response = ollama_client.generate(
+        response = providers.generate(
             prompt=prompt,
             model=model,
             system="You are a certification exam validator. Identify correct answers based strictly on the source material provided.",

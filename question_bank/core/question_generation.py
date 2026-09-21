@@ -5,7 +5,7 @@ import random
 import re
 from typing import List, Optional
 
-from . import ollama_client
+from . import providers
 from .question_bank import Question
 from .source import SlideInfo
 from .generation_prompts import (
@@ -78,7 +78,7 @@ Return ONLY a JSON object with these keys (nothing else):
 ```"""
 
     try:
-        response = ollama_client.generate(
+        response = providers.generate(
             prompt=prompt,
             model=model,
             system=system_prompt or GENERATION_SYSTEM_PROMPT,
@@ -163,7 +163,7 @@ def generate_questions(
     # Pass slide image for vision-capable models (e.g. llava, llama3.2-vision)
     images = [slide_image] if slide_image else None
 
-    response = ollama_client.generate(
+    response = providers.generate(
         prompt=prompt,
         model=model,
         system=system_prompt or GENERATION_SYSTEM_PROMPT,
