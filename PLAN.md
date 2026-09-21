@@ -159,7 +159,7 @@ editor doesn't know about".
 |---|---:|---|
 | `gui/` (22 components) | 10,367 | NiceGUI layer replaced by React |
 | `core/ollama_client.py` | 547 | Replaced by PCE's `providers.py` (multi-provider) |
-| `core/mcp_client.py` | 138 | Replaced by PCE's `api/mcp.py` |
+| ~~`core/mcp_client.py`~~ | ~~138~~ | **KEPT — do not replace.** PCE's `api/mcp.py` searches a *single* endpoint; this one searches a list of servers and merges the hits (`search_multiple_servers`, `search_multiple_servers_structured`), used by the docs-validation path in `question_importer` and by Docs Chat. Swapping it in would lose multi-server search. |
 | `core/pptx_exporter_fallback.py` | 299 | PPTX dropped |
 | `core/pptx_exporter.py` | 128 | PPTX dropped (used only by `gui/components/sidebar.py:343`) |
 | `core/pptx_reader.py` | 86 | PPTX dropped — **but extract `SlideInfo` first**, see §4.3 |
@@ -228,6 +228,23 @@ Gained: Anthropic and OpenAI providers, plus persisted settings.
 - Fold `HOW_TO_GUIDE.md` (68 KB) into the docs set — it documents the NiceGUI UI that is about to go.
 
 **Exit:** repo renamed, remote working, four docs present, 263 tests still green.
+
+> ### Sequencing correction — PPTX removal belongs in Phase 3, not Phase 1
+>
+> Phase 1 was written to delete the PPTX modules. Measured, that is not a core-only change:
+> **345 references across 17 files of `gui/`** depend on them — `slide_panel.py` (80),
+> `import_validation.py` (54), `sidebar.py` (49), `generation_handler.py` (48),
+> `import_tab.py` (36), `web_app.py` (18), `state.py` (17). Deleting the core modules means
+> rebuilding most of the NiceGUI layer.
+>
+> That layer is deleted wholesale in Phase 3. Doing the surgery now is work Phase 3 throws
+> away, on a UI that is awkward to smoke-test from a tool shell — and it would leave the
+> app unusable in between. Deferred: PPTX falls out for free when `gui/` is replaced.
+>
+> The product decision is unchanged — PPTX and vision generation go. Only the timing moves.
+>
+> **`SlideInfo` was still worth extracting first** (done): it decouples six core modules from
+> `python-pptx` now, and it is what lets the deletion be a deletion later rather than a rewrite.
 
 ### Phase 1 — backend lift
 
