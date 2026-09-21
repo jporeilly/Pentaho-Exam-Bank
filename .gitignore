@@ -17,3 +17,7 @@ assets/
 .claude/
 .vscode/
 .idea/
+
+# Front end (0.4.0 restack)
+node_modules/
+frontend/dist/
