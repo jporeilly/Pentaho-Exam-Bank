@@ -1,10 +1,10 @@
 @echo off
-:: Start the Question Bank API on its own.
+:: Start the Exam Bank API on its own.
 :: run.bat starts this alongside the UI; use this when you want only the API
 :: - driving it from a REST client, or developing the React front end that
 :: replaces the NiceGUI layer in 0.4.0.
 :: ASCII only - a .bat is read in the console codepage.
-title Pentaho Question Bank - API
+title Pentaho Exam Bank - API
 cd /d "%~dp0"
 
 if exist ".env" (
@@ -27,6 +27,6 @@ if errorlevel 1 (
 )
 
 echo Starting the API on port %API_PORT%...
-"%VENV_PY%" -m question_bank.api --port %API_PORT% %*
+"%VENV_PY%" -m exam_bank.api --port %API_PORT% %*
 
 exit /b %errorlevel%

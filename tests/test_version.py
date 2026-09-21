@@ -1,6 +1,6 @@
 """The version string is hand-kept in several files; this test keeps them equal.
 
-Source of truth: ``question_bank.__version__``. Every other carrier — the
+Source of truth: ``exam_bank.__version__``. Every other carrier — the
 **Current:** line in VERSION.md and the most recent release heading in
 CHANGELOG.md — must match it exactly. See VERSION.md for the bump policy.
 
@@ -12,7 +12,7 @@ arrives: a carrier nobody checks is a carrier that drifts.
 import re
 from pathlib import Path
 
-from question_bank import __version__ as VERSION
+from exam_bank import __version__ as VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 

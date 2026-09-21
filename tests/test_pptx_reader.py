@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from question_bank.core.pptx_reader import SlideInfo, PPTXReader
+from exam_bank.core.pptx_reader import SlideInfo, PPTXReader
 
 
 class TestSlideInfo:

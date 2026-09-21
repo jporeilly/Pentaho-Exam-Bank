@@ -4,12 +4,12 @@ import json
 
 import pytest
 
-from question_bank.core.question_generator import (
+from exam_bank.core.question_generator import (
     build_prompt, _extract_json_array, _extract_json_object,
     _build_question_specs, _num_word, validate_key_against_notes,
 )
-from question_bank.core.question_bank import Question
-from question_bank.core.source import SlideInfo
+from exam_bank.core.bank import Question
+from exam_bank.core.source import SlideInfo
 
 
 # ── Helper functions ───────────────────────────────────

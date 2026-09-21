@@ -6,13 +6,13 @@ truncated question. What it must not do is be confidently wrong in a way that
 hides a real overflow.
 """
 
-from question_bank.core import context_budget as budget
+from exam_bank.core import context_budget as budget
 
 
 def test_overhead_is_measured_from_the_real_prompt():
     """Not a hard-coded guess: it follows the prompts when they change."""
     overhead = budget.prompt_overhead_chars()
-    from question_bank.core.generation_prompts import GENERATION_SYSTEM_PROMPT
+    from exam_bank.core.generation_prompts import GENERATION_SYSTEM_PROMPT
 
     assert overhead > len(GENERATION_SYSTEM_PROMPT), "the scaffolding is missing"
     assert overhead < 40_000, "suspiciously large — the source text may be leaking in"

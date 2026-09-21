@@ -1,19 +1,48 @@
 # Changelog
 
-All notable changes to Pentaho Question Bank are documented here.
+All notable changes to Pentaho Exam Bank are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Renamed to Pentaho Exam Bank.** The product, the Python package
+  (`question_bank` -> `exam_bank`), the module that was the same name as its
+  own package (`core/question_bank.py` -> `core/bank.py`), the class
+  (`QuestionBankDB` -> `ExamBankDB`), the launch handover (`PQB_COURSE` ->
+  `PEB_COURSE`) and every string an author reads. The Content Editor's
+  Questions button opened a window titled "Question Bank Generator" - a
+  third name for the same app, and the one that made this worth doing.
+
+- **The database moved with it**, `assets/db/question_bank.db` ->
+  `exam_bank.db`, by a rename at startup rather than a copy: two databases
+  that both look live is the worse failure, because a later session edits one
+  and reads the other. An `exam_bank.db` that already exists always wins.
+  `tests/test_config_migration.py` pins the old name literally - a sweep over
+  the repo silently rewrote that migration to `exam_bank.db -> exam_bank.db`
+  while it was being written, which read fine and did nothing.
+
+- **`PQB_COURSE` is still read** when `PEB_COURSE` is absent. A Content Editor
+  installed before the rename sends the old name, and the alternative is a
+  button that opens the bank on no course until two apps are reinstalled in
+  the right order. Drop it once no shipped editor sends it.
+
 ### Added
 
-- **An HTTP API** (`question_bank/api`) over the existing core — system,
+- **An app icon** (`icons/icon.ico`, plus the browser tab's
+  `frontend/public/favicon.ico`): the suite's black P tile with a violet
+  ticked-answer-box badge. Drawn by the Content Manager's `make-icons.py`,
+  which gained the `check` badge for it, and committed here as an artifact -
+  see **The icon** in the README for the regeneration recipe.
+
+- **An HTTP API** (`exam_bank/api`) over the existing core — system,
   questions, certifications, courses, generation and export. Generation runs as
   a background job, because a course is dozens of model calls and minutes of
   work. Started by `run.bat` alongside the interface, or alone with
-  `run-api.bat` / `python -m question_bank.api`. It binds loopback only: there
+  `run-api.bat` / `python -m exam_bank.api`. It binds loopback only: there
   is no authentication, so anything that can reach it can read and change the
   bank.
 

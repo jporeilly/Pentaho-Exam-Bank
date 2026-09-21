@@ -1,20 +1,20 @@
-"""Shared fixtures for Question Bank tests."""
+"""Shared fixtures for Exam Bank tests."""
 
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from question_bank.core.question_bank import (
-    Question, Certification, QuestionBankDB, STATUSES, STATUS_TRANSITIONS,
+from exam_bank.core.bank import (
+    Question, Certification, ExamBankDB, STATUSES, STATUS_TRANSITIONS,
 )
 
 
 @pytest.fixture
 def tmp_db(tmp_path):
-    """Create a temporary QuestionBankDB for testing."""
+    """Create a temporary ExamBankDB for testing."""
     db_path = tmp_path / "test.db"
-    db = QuestionBankDB(db_path)
+    db = ExamBankDB(db_path)
     yield db
     db.close()
 

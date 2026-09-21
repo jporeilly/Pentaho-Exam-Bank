@@ -9,9 +9,9 @@ developer-ai-specialty: it died on section 2 of 63 and kept nothing.
 
 import pytest
 
-from question_bank.core import question_generation as gen
-from question_bank.core.question_bank import Question
-from question_bank.core.source import SlideInfo
+from exam_bank.core import question_generation as gen
+from exam_bank.core.bank import Question
+from exam_bank.core.source import SlideInfo
 
 
 def sections(n: int) -> list[SlideInfo]:

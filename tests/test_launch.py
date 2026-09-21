@@ -1,4 +1,4 @@
-"""Tests for the launch handover — PQB_COURSE and PCM_REPO.
+"""Tests for the launch handover — PEB_COURSE and PCM_REPO.
 
 The Content Editor spawns this app with a course in mind. Both variables are
 hints: the slug is resolved every time it is read, and a disagreement about
@@ -10,10 +10,10 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from question_bank.api import deps, launch
-from question_bank.api.app import app
-from question_bank.core.question_bank import QuestionBankDB
-from question_bank.utils.config import config
+from exam_bank.api import deps, launch
+from exam_bank.api.app import app
+from exam_bank.core.bank import ExamBankDB
+from exam_bank.utils.config import config
 
 
 @pytest.fixture
@@ -29,14 +29,15 @@ def courses(tmp_path, monkeypatch):
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    monkeypatch.delenv("PQB_COURSE", raising=False)
+    for name in launch.COURSE_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("PCM_REPO", raising=False)
 
 
 @pytest.fixture
 def client(tmp_path):
     def override():
-        db = QuestionBankDB(tmp_path / "launch.db")
+        db = ExamBankDB(tmp_path / "launch.db")
         try:
             yield db
         finally:
@@ -54,7 +55,7 @@ class TestTheCourseHandover:
         assert context["courseKnown"] is False
 
     def test_a_course_that_resolves(self, courses, clean_env, monkeypatch):
-        monkeypatch.setenv("PQB_COURSE", "pdi-2hr-lab")
+        monkeypatch.setenv("PEB_COURSE", "pdi-2hr-lab")
         context = launch.launch_context()
         assert context["course"] == "pdi-2hr-lab"
         assert context["courseKnown"] is True
@@ -66,20 +67,47 @@ class TestTheCourseHandover:
         """This is the failure the whole module exists for: a slug that
         stopped resolving after the course was renamed under it. The bank's
         original two certifications died that way, silently."""
-        monkeypatch.setenv("PQB_COURSE", "developer-practitioner")  # renamed long ago
+        monkeypatch.setenv("PEB_COURSE", "developer-practitioner")  # renamed long ago
         context = launch.launch_context()
         assert context["course"] == "developer-practitioner"
         assert context["courseKnown"] is False, "an unresolvable slug must not look fine"
 
     def test_whitespace_is_not_a_course(self, courses, clean_env, monkeypatch):
-        monkeypatch.setenv("PQB_COURSE", "   ")
+        monkeypatch.setenv("PEB_COURSE", "   ")
         assert launch.launch_context()["course"] == ""
+
+    def test_the_pre_rename_variable_is_still_honoured(
+        self, courses, clean_env, monkeypatch
+    ):
+        """A Content Editor installed before the Exam Bank rename sends
+        PQB_COURSE. Ignoring it gives a Questions button that opens on no
+        course at all, with nothing on screen to say why."""
+        monkeypatch.setenv("PQB_COURSE", "pdi-2hr-lab")
+        context = launch.launch_context()
+        assert context["course"] == "pdi-2hr-lab"
+        assert context["courseKnown"] is True
+
+    def test_the_new_variable_wins_when_both_are_set(
+        self, courses, clean_env, monkeypatch
+    ):
+        monkeypatch.setenv("PEB_COURSE", "pdi-2hr-lab")
+        monkeypatch.setenv("PQB_COURSE", "developer-di-practitioner")
+        assert launch.launch_context()["course"] == "pdi-2hr-lab"
+
+    def test_an_empty_new_variable_does_not_mask_the_old_one(
+        self, courses, clean_env, monkeypatch
+    ):
+        """An empty PEB_COURSE is not a choice of course; it is no answer.
+        Reading it as one would break the very handover it replaces."""
+        monkeypatch.setenv("PEB_COURSE", "")
+        monkeypatch.setenv("PQB_COURSE", "pdi-2hr-lab")
+        assert launch.launch_context()["course"] == "pdi-2hr-lab"
 
     def test_it_reports_rather_than_raising_with_no_courses_directory(
         self, clean_env, monkeypatch
     ):
         monkeypatch.setattr(config, "pcm_courses_dir", "")
-        monkeypatch.setenv("PQB_COURSE", "pdi-2hr-lab")
+        monkeypatch.setenv("PEB_COURSE", "pdi-2hr-lab")
         context = launch.launch_context()
         assert context["courseKnown"] is False
 
@@ -115,7 +143,7 @@ class TestTheRepoHandover:
 
 class TestOverHttp:
     def test_health_carries_the_handover(self, client, courses, clean_env, monkeypatch):
-        monkeypatch.setenv("PQB_COURSE", "developer-di-practitioner")
+        monkeypatch.setenv("PEB_COURSE", "developer-di-practitioner")
         body = client.get("/api/health").json()
         assert body["launch"]["course"] == "developer-di-practitioner"
         assert body["launch"]["courseKnown"] is True
@@ -130,7 +158,7 @@ class TestOverHttp:
         """Health is what the UI asks first. If a malformed handover could
         500 it, a bad env var would make the whole app look dead."""
         monkeypatch.setattr(config, "pcm_courses_dir", "")
-        monkeypatch.setenv("PQB_COURSE", "anything")
+        monkeypatch.setenv("PEB_COURSE", "anything")
         monkeypatch.setenv("PCM_REPO", "Z:\\does\\not\\exist")
         response = client.get("/api/health")
         assert response.status_code == 200

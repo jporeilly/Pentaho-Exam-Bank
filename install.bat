@@ -1,9 +1,9 @@
 @echo off
-title Question Bank Generator - Installer
+title Pentaho Exam Bank - Installer
 cd /d "%~dp0"
 
 echo ============================================================
-echo   Question Bank Generator - Installer
+echo   Pentaho Exam Bank - Installer
 echo ============================================================
 echo.
 

@@ -11,11 +11,11 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from question_bank.api import deps, jobs
-from question_bank.api.app import app
-from question_bank.api.routers import generation as generation_router
-from question_bank.core.question_bank import Certification, Question, QuestionBankDB
-from question_bank.utils.config import config
+from exam_bank.api import deps, jobs
+from exam_bank.api.app import app
+from exam_bank.api.routers import generation as generation_router
+from exam_bank.core.bank import Certification, Question, ExamBankDB
+from exam_bank.utils.config import config
 
 
 def _wait(client, job_id, *, timeout=5.0):
@@ -37,7 +37,7 @@ def db_path(tmp_path):
 
 @pytest.fixture
 def db(db_path):
-    database = QuestionBankDB(db_path)
+    database = ExamBankDB(db_path)
     yield database
     database.close()
 
@@ -45,7 +45,7 @@ def db(db_path):
 @pytest.fixture
 def client(db_path):
     def override():
-        database = QuestionBankDB(db_path)
+        database = ExamBankDB(db_path)
         try:
             yield database
         finally:
@@ -329,7 +329,7 @@ def test_no_export_route_writes_into_a_course():
     that exists, nothing here may take a course as a destination."""
     import inspect
 
-    from question_bank.api.routers import export as export_module
+    from exam_bank.api.routers import export as export_module
 
     source = inspect.getsource(export_module)
     for forbidden in ("pcm_courses_dir", "COURSES_DIR", "courses_dir"):

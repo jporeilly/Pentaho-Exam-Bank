@@ -6,8 +6,8 @@ no model involved, so nothing exercised the dispatch itself. These do.
 
 import pytest
 
-from question_bank.core import ollama_client, providers
-from question_bank.utils.config import config
+from exam_bank.core import ollama_client, providers
+from exam_bank.utils.config import config
 
 
 @pytest.fixture

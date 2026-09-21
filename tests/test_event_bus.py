@@ -1,7 +1,7 @@
 """Tests for the EventBus class."""
 
 import pytest
-from question_bank.gui.state import EventBus
+from exam_bank.gui.state import EventBus
 
 
 class TestEventBus:

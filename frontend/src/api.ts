@@ -30,7 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     // A refused connection is the usual case here and has one cause worth
     // naming: the backend is not running.
-    throw new ApiError(0, "Can't reach the Question Bank API. Is it running?");
+    throw new ApiError(0, "Can't reach the Exam Bank API. Is it running?");
   }
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;

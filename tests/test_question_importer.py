@@ -5,13 +5,13 @@ import json
 
 import pytest
 
-from question_bank.core.question_importer import (
+from exam_bank.core.question_importer import (
     import_from_csv, import_from_json, validate_question_against_pptx,
     validate_batch,
 )
-from question_bank.core.question_bank import Question
-from question_bank.core.pptx_reader import PPTXReader
-from question_bank.core.source import SlideInfo
+from exam_bank.core.bank import Question
+from exam_bank.core.pptx_reader import PPTXReader
+from exam_bank.core.source import SlideInfo
 
 
 # ── CSV Import ─────────────────────────────────────────

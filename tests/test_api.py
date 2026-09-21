@@ -10,9 +10,9 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from question_bank.api import deps
-from question_bank.api.app import app
-from question_bank.core.question_bank import Certification, Question, QuestionBankDB
+from exam_bank.api import deps
+from exam_bank.api.app import app
+from exam_bank.core.bank import Certification, Question, ExamBankDB
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def db_path(tmp_path):
 @pytest.fixture
 def db(db_path):
     """A handle for the test thread, used to seed and to assert directly."""
-    database = QuestionBankDB(db_path)
+    database = ExamBankDB(db_path)
     yield database
     database.close()
 
@@ -44,7 +44,7 @@ def client(db_path):
     """
 
     def override():
-        database = QuestionBankDB(db_path)
+        database = ExamBankDB(db_path)
         try:
             yield database
         finally:
@@ -71,7 +71,7 @@ def seeded(db):
 
 class TestSystem:
     def test_version_matches_the_package(self, client):
-        from question_bank import __version__
+        from exam_bank import __version__
 
         assert client.get("/api/version").json() == {"version": __version__}
 
@@ -83,8 +83,8 @@ class TestSystem:
     def test_health_survives_an_unreachable_model(self, client, monkeypatch):
         """A dead Ollama must not make the app look broken — the bank, import
         and export all work without a model."""
-        from question_bank.core import ollama_client
-        from question_bank.utils.config import config
+        from exam_bank.core import ollama_client
+        from exam_bank.utils.config import config
 
         monkeypatch.setattr(config, "ai_provider", "ollama")
         monkeypatch.setattr(ollama_client, "list_models", lambda url, **kw: [])
@@ -216,7 +216,7 @@ class TestCertifications:
 class TestCourses:
     @pytest.fixture
     def courses(self, tmp_path, monkeypatch):
-        from question_bank.utils.config import config
+        from exam_bank.utils.config import config
 
         root = tmp_path / "courses"
         course = root / "demo-course"
@@ -250,7 +250,7 @@ class TestCourses:
         assert sections[0]["characters"] > 60
 
     def test_sections_report_the_context_budget(self, client, courses, monkeypatch):
-        from question_bank.utils.config import config
+        from exam_bank.utils.config import config
 
         monkeypatch.setattr(config, "ollama_num_ctx", 8192)
         body = client.get("/api/courses/demo-course/sections").json()
@@ -264,7 +264,7 @@ class TestCourses:
         """Ollama truncates an over-long section silently — the questions come
         back thinner than the material deserved with nothing to say why. The
         author has to be able to see it before spending a run."""
-        from question_bank.utils.config import config
+        from exam_bank.utils.config import config
 
         root = tmp_path / "big"
         lab = root / "big-course" / "01-lab"
@@ -285,7 +285,7 @@ class TestCourses:
         """With no num_ctx, Ollama uses the model's own default, which this app
         does not know. Flagging against a made-up number would be worse than
         not flagging."""
-        from question_bank.utils.config import config
+        from exam_bank.utils.config import config
 
         monkeypatch.setattr(config, "ollama_num_ctx", 0)
         body = client.get("/api/courses/demo-course/sections").json()
@@ -309,7 +309,7 @@ class TestCourses:
         assert client.get("/api/courses/..%2F..%2Fetc/labs").status_code in (404, 400)
 
     def test_no_courses_directory_is_reported_not_crashed(self, client, monkeypatch):
-        from question_bank.utils.config import config
+        from exam_bank.utils.config import config
 
         monkeypatch.setattr(config, "pcm_courses_dir", "")
         assert client.get("/api/courses").status_code == 409
@@ -321,7 +321,7 @@ def test_the_api_never_imports_the_nicegui_layer():
     import ast
     from pathlib import Path
 
-    api = Path(__file__).resolve().parents[1] / "question_bank" / "api"
+    api = Path(__file__).resolve().parents[1] / "exam_bank" / "api"
     offenders = []
     for path in api.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))

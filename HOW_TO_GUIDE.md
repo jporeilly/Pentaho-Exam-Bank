@@ -1,6 +1,6 @@
-# Question Bank Generator -- How-To Guide
+# Pentaho Exam Bank -- How-To Guide
 
-A step-by-step guide for using the Question Bank Generator to create, manage, and export certification exam questions.
+A step-by-step guide for using the Pentaho Exam Bank to create, manage, and export certification exam questions.
 
 ## Table of Contents
 
@@ -247,7 +247,7 @@ For certifications based on MCP documentation (not PPTX slides):
 
 ## Generating Questions from a PCM Course
 
-Generate questions grounded in a **Pentaho Content Manager (PCM)** course's own content -- the lab `guide.md` files -- then export them back into that course as an `exam.json`. This closes the loop: PCM course content -> Question Bank -> `exam.json` -> PCM.
+Generate questions grounded in a **Pentaho Content Manager (PCM)** course's own content -- the lab `guide.md` files -- then export them back into that course as an `exam.json`. This closes the loop: PCM course content -> Exam Bank -> `exam.json` -> PCM.
 
 ### One-Time Setup
 
@@ -404,7 +404,7 @@ If you already have questions in CSV, JSON, Excel, QTI 2.1, or Moodle XML format
 You can import questions from other LMS platforms:
 
 - **QTI 2.1** -- Standard format exported from Canvas, Blackboard, and other LMS platforms. Upload the XML file (or a .zip package containing QTI XML).
-- **Moodle XML** -- Exported from Moodle's question bank export feature.
+- **Moodle XML** -- Exported from Moodle's exam bank export feature.
 
 The importer **auto-detects the format** by inspecting the root XML element -- no manual format selection is needed. Imported questions feed into the same validation and review pipeline as CSV/JSON/Excel imports.
 
@@ -415,7 +415,7 @@ Imported questions go through **two independent checks** that serve different pu
 | Check | What it compares | Compared against | Threshold | Display |
 | ----- | ---------------- | ---------------- | --------- | ------- |
 | **Validation** | Correct answer text (key) | Slide speaker notes (PPTX) or MCP documentation (Docs) | Configurable (default 70%) word overlap or AI analysis | Green/red pass/fail badge with slide number and match quality |
-| **Duplicate detection** | Question stem | All existing stems in the question bank | Configurable (default 85%) word overlap | Orange badge: "Possible duplicate (92% match): existing stem..." |
+| **Duplicate detection** | Question stem | All existing stems in the exam bank | Configurable (default 85%) word overlap | Orange badge: "Possible duplicate (92% match): existing stem..." |
 
 **Validation** confirms that the correct answer is supported by the source material (speaker notes or documentation). For questions with known keys, the percentage shown (e.g. "Fuzzy match 75% overlap in slide 3") measures how much of the answer text appears in the notes. For text-format imports where the correct answer is unknown, AI analyzes the speaker notes and slide image to determine which options are keys vs distractors (see [AI Key Assignment](#ai-key-assignment) below).
 
@@ -758,7 +758,7 @@ The **Bank** tab includes a collapsible "Database Backup & Restore" section belo
 
 ### Database Location
 
-The SQLite database is stored in the project at `assets/db/question_bank.db`. App settings are in `assets/config/config.json` (automatically migrated from `assets/db/config.json` on startup). On first run, data is automatically migrated from the old location (`~/.question_bank/`) if present.
+The SQLite database is stored in the project at `assets/db/exam_bank.db`. App settings are in `assets/config/config.json` (automatically migrated from `assets/db/config.json` on startup). On first run, data is automatically migrated from the old location (`~/.exam_bank/`) if present.
 
 ### Creating a Backup
 
@@ -809,13 +809,13 @@ Exports are saved to `~/Documents/QuestionBank/` by default. Change this in **Se
 
 ### Round-Trip CSV Backup
 
-The CSV export includes all question fields (ID, status, SME, timestamps, certification, source slides, tags, etc.). You can re-import this CSV via the Import tab to fully restore your question bank. A sample CSV is provided at `assets/questions/sample_import.csv`.
+The CSV export includes all question fields (ID, status, SME, timestamps, certification, source slides, tags, etc.). You can re-import this CSV via the Import tab to fully restore your exam bank. A sample CSV is provided at `assets/questions/sample_import.csv`.
 
 ---
 
 ## Building PDF Exams
 
-The **Exam** tab lets you create formatted PDF exam papers from your question bank. It is organized into three collapsible sections, each with help text.
+The **Exam** tab lets you create formatted PDF exam papers from your exam bank. It is organized into three collapsible sections, each with help text.
 
 ### 1. Exam Configuration
 
@@ -853,7 +853,7 @@ The collapsible **PDF Options** section provides 5 toggles, each with a tooltip 
 
 ### Generate the PDF
 
-1. Click **Generate Exam PDF** (tooltip: "Build a formatted PDF exam paper from your question bank").
+1. Click **Generate Exam PDF** (tooltip: "Build a formatted PDF exam paper from your exam bank").
 2. The PDF is saved to the export folder and auto-downloaded in your browser.
 3. If fewer questions are available than requested, an info notification shows the actual count.
 
@@ -948,7 +948,7 @@ You can configure automatic database backups in the **Admin** tab (Database view
 - The auto-backup schedule persists across sessions (saved in config).
 - Auto-backups and manual backups share the same backup directory and are visible in the Bank tab's backup list.
 
-> **Tip**: Enable auto-backup if you are actively building a large question bank. The default settings (every 24 hours, keep 5) provide a rolling week of backups with minimal disk usage.
+> **Tip**: Enable auto-backup if you are actively building a large exam bank. The default settings (every 24 hours, keep 5) provide a rolling week of backups with minimal disk usage.
 
 ---
 
@@ -1132,7 +1132,7 @@ The Admin tab has three views, toggled at the top: **Dashboard**, **Database**, 
 
 ### Dashboard
 
-The dashboard provides visual analytics of your question bank. When the bank is empty, a friendly empty state guides you to generate or import questions.
+The dashboard provides visual analytics of your exam bank. When the bank is empty, a friendly empty state guides you to generate or import questions.
 
 - **KPI Cards** -- Total questions, approved, in review, drafts, certifications, and topics at a glance
 - **Status Distribution** -- Donut chart showing questions by lifecycle status

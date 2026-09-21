@@ -17,8 +17,8 @@ on the author's machine. For what the app does and why, see
 **Prerequisite:** Python 3.10 or newer on `PATH`.
 
 ```bat
-git clone https://github.com/jporeilly/Pentaho-Question-Bank.git
-cd Pentaho-Question-Bank
+git clone https://github.com/jporeilly/Pentaho-Exam-Bank.git
+cd Pentaho-Exam-Bank
 install.bat
 ```
 
@@ -63,7 +63,7 @@ run-api.bat --reload
 Or without the launcher:
 
 ```bat
-venv\Scripts\python.exe -m question_bank.api --port 9000
+venv\Scripts\python.exe -m exam_bank.api --port 9000
 ```
 
 Interactive documentation is at `/docs` on whichever port it is using.
@@ -77,7 +77,7 @@ Everything the app keeps lives under `assets\`, which is **gitignored**:
 
 | Path | Holds |
 | ---- | ----- |
-| `assets\db\question_bank.db` | the question bank (SQLite) |
+| `assets\db\exam_bank.db` | the exam bank (SQLite) |
 | `assets\db\backups\` | database backups, including one taken before every `--clean` |
 | `assets\config\config.json` | settings — provider, model, the PCM courses path |
 | `assets\questions\` | import staging and backups |
@@ -90,8 +90,8 @@ Everything the app keeps lives under `assets\`, which is **gitignored**:
 ## 2. Developer — work on it
 
 ```bat
-git clone https://github.com/jporeilly/Pentaho-Question-Bank.git
-cd Pentaho-Question-Bank
+git clone https://github.com/jporeilly/Pentaho-Exam-Bank.git
+cd Pentaho-Exam-Bank
 python -m venv venv
 venv\Scripts\python.exe -m pip install -r requirements.txt
 venv\Scripts\python.exe -m pytest -q
@@ -99,7 +99,7 @@ venv\Scripts\python.exe -m pytest -q
 
 Run the app from source with `venv\Scripts\python.exe main.py`.
 
-The repo root is the source root, so `question_bank` imports as a package from
+The repo root is the source root, so `exam_bank` imports as a package from
 there — do not add an `__init__.py` at the repo root, which is what used to make
 `C:\Projects` itself a source root.
 
@@ -153,5 +153,5 @@ directories. It clears — retry rather than force it.
 to the repo root:
 
 ```bat
-venv\Scripts\python.exe -c "from question_bank.utils.config import PROJECT_ROOT; print(PROJECT_ROOT)"
+venv\Scripts\python.exe -c "from exam_bank.utils.config import PROJECT_ROOT; print(PROJECT_ROOT)"
 ```

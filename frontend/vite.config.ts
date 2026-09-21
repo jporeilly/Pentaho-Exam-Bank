@@ -2,8 +2,8 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 /*
- * The Question Bank's front end. A plain browser app that talks to the
- * FastAPI backend (`python -m question_bank.api`, port 7788) over HTTP and
+ * The Exam Bank's front end. A plain browser app that talks to the
+ * FastAPI backend (`python -m exam_bank.api`, port 7788) over HTTP and
  * holds no business logic of its own — the bank, the generator and the
  * exporters all live in Python and are reached through the API.
  *

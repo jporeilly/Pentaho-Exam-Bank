@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from question_bank.core.pcm_reader import (
+from exam_bank.core.pcm_reader import (
     list_pcm_courses, list_pcm_labs, load_pcm_course, clean_markdown,
 )
 

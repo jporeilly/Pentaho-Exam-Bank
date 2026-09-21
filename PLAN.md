@@ -1,8 +1,8 @@
-# Pentaho Question Bank — restack and course integration
+# Pentaho Exam Bank — restack and course integration
 
 **Status:** proposed, not started
 **Date:** 2026-09-19
-**Applies to:** `C:\Projects\question_bank` (→ `Pentaho-Question-Bank`)
+**Applies to:** `C:\Projects\Pentaho-Question-Bank` (→ `Pentaho-Exam-Bank`)
 
 ---
 
@@ -11,9 +11,9 @@
 | Decision | Choice |
 |---|---|
 | Absorb into PCE, or keep separate? | **Keep separate.** It is a publisher with several outputs; `exam.json` is one of them. |
-| Repo | **Rename on GitHub** (`Question-Bank` → `Pentaho-Question-Bank`) — keeps history and redirects existing remotes. |
+| Repo | **Rename on GitHub** (`Question-Bank` → `Pentaho-Exam-Bank`) — keeps history and redirects existing remotes. |
 | PPTX / vision generation | **Dropped.** The future is course content, not slide decks. |
-| PCE integration | **PCE gets a "Questions" button** that launches PQB for the current course. |
+| PCE integration | **PCE gets a "Questions" button** that launches PEB for the current course. |
 | Stack | Match PCE: Tauri + React + TypeScript frontend, Python/FastAPI backend, vendored Python, NSIS installer. |
 
 ### Why separate, restated
@@ -34,11 +34,11 @@ Pentaho-Content-Manager        <- install first; owns courses/, the Engine,
   courses/<slug>/exam.json        scripts/*.mjs, and brings Node + git
         |
         +-- Pentaho-Content-Editor    edits guide.md, course.json, exam SETTINGS
-        +-- Pentaho-Question-Bank     owns exam.json `questions`
+        +-- Pentaho-Exam-Bank     owns exam.json `questions`
 ```
 
-**PCE is not the source of truth — `courses/` in git is.** PCE is one editor over it; PQB is another.
-PQB therefore depends on **PCM only**, and is installable and usable with PCE absent.
+**PCE is not the source of truth — `courses/` in git is.** PCE is one editor over it; PEB is another.
+PEB therefore depends on **PCM only**, and is installable and usable with PCE absent.
 
 ### 2.2 The disjoint-key contract
 
@@ -47,7 +47,7 @@ This already exists in code on both sides and needs no change to establish:
 | Owner | Keys in `exam.json` |
 |---|---|
 | **PCE** | `title`, `description`, `passMark`, `questionsPerAttempt`, `shuffle`, `webhookUrl`, `webhookSecret`, `intake` — the `_EXAM_SETTINGS` tuple in `api/routers/courses.py`, which deliberately excludes `questions` |
-| **PQB** | `questions` — and the numerals inside `description` (see §3.3) |
+| **PEB** | `questions` — and the numerals inside `description` (see §3.3) |
 
 Two writers, one file, no overlapping keys. Git reconciles if they ever collide. This is the same
 guarantee an API round-trip would give, without the runtime chain.
@@ -55,18 +55,18 @@ guarantee an API round-trip would give, without the runtime chain.
 **PCM owns the schema.** `scripts/verify-course.mjs` and `src/content/localFolderSource.ts` define
 the question shape; both editors conform to it.
 
-### 2.3 Why PQB does *not* call PCE's API
+### 2.3 Why PEB does *not* call PCE's API
 
 Considered and rejected:
 
 - PCE's port is assigned at launch — `desktop/boot.py` declares `--port` as `required=True` with no
-  default. PQB would have to *discover* a running PCE, not call a known port.
+  default. PEB would have to *discover* a running PCE, not call a known port.
 - It would make PCE a **runtime** dependency: three apps alive to move one question into a course,
   with a silent failure mode when PCE is closed.
 - It removes no conflict, because the key contract already prevents one.
 
-The "Questions" button is a **launch**, not a dependency: PCE spawns PQB with a course slug and gets
-out of the way. If PQB is not installed, the button says so.
+The "Questions" button is a **launch**, not a dependency: PCE spawns PEB with a course slug and gets
+out of the way. If PEB is not installed, the button says so.
 
 ---
 
@@ -125,7 +125,7 @@ silently and do not guess.
 attempt, or pass mark — e.g. "40 questions … drawn from a pool of 48. Pass mark is 80%."
 
 **Fix:** publishing must regenerate those numerals. It recognises several phrasings
-(`pool of (\d+)`, `(\d+)-question bank`, `(\d+) questions per attempt`, …), so match the existing
+(`pool of (\d+)`, `(\d+)-exam bank`, `(\d+) questions per attempt`, …), so match the existing
 sentence shape rather than rewriting the author's prose.
 
 ### 3.4 Publishing must MERGE into the existing file, never regenerate it
@@ -174,7 +174,7 @@ editor doesn't know about".
 
 `core/` is already the right stack. **4,761 lines** lift under FastAPI:
 
-`question_bank.py` (865, the SQLite store + model) · `question_importer.py` (703 after the PPTX
+`bank.py` (865, the SQLite store + model) · `question_importer.py` (703 after the PPTX
 cut) · `question_refinement.py` (618) · `exam_builder.py` (610, PDF papers — uses fpdf, no PPTX
 dependency) · `spreadsheet_converter.py` (588) · `exporter.py` (408) · `question_generation.py`
 (384) · `generation_prompts.py` (187) · `pcm_reader.py` (166) · `db_backup.py` (105) ·
@@ -222,8 +222,8 @@ Gained: Anthropic and OpenAI providers, plus persisted settings.
 
 ### Phase 0 — rename and repo hygiene
 
-- Rename the GitHub repo to `Pentaho-Question-Bank`; update the local remote.
-- Rename the working directory `C:\Projects\question_bank` → `C:\Projects\Pentaho-Question-Bank`.
+- Rename the GitHub repo to `Pentaho-Exam-Bank`; update the local remote.
+- Rename the working directory `C:\Projects\Pentaho-Question-Bank` → `C:\Projects\Pentaho-Exam-Bank`.
 - Add `VERSION.md`, `CHANGELOG.md`, `INSTALL.md`; rewrite `README.md` for the new stack.
 - Fold `HOW_TO_GUIDE.md` (68 KB) into the docs set — it documents the NiceGUI UI that is about to go.
 
@@ -322,9 +322,9 @@ Not a 22-component big bang. The existing app has seven tabs; port them in value
 |---|---|---|
 | **PCM** | — (brings Node + git) | **First** |
 | **PCE** | PCM: `courses/`, Engine, `scripts/*.mjs` | Second |
-| **PQB** | PCM: `courses/` only | Second — **independent of PCE** |
+| **PEB** | PCM: `courses/` only | Second — **independent of PCE** |
 
-PQB needs Node only for the optional post-publish `verify-course.mjs` run, and degrades the same way
+PEB needs Node only for the optional post-publish `verify-course.mjs` run, and degrades the same way
 PCE does when it is missing.
 
 ---
@@ -341,7 +341,7 @@ npm test
 cd api && .venv\Scripts\python -m pytest -q
 ```
 
-**Baselines (2026-09-19, all green):** PQB 263 pytest · PCE 93 pytest + 293 vitest at v1.22.0.
+**Baselines (2026-09-19, all green):** PEB 263 pytest · PCE 93 pytest + 293 vitest at v1.22.0.
 
 **The Phase 2 safety net — a round-trip test that must be in the suite:**
 

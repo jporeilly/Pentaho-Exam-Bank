@@ -8,7 +8,7 @@ from io import BytesIO
 
 import pytest
 
-from question_bank.core.ollama_client import (
+from exam_bank.core.ollama_client import (
     check_connection, list_models, _encode_image, OllamaModel,
 )
 

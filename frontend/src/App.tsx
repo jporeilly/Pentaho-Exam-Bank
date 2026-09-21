@@ -54,7 +54,7 @@ export function App() {
           <span className="tile" aria-hidden="true">
             P
           </span>
-          Question Bank
+          Exam Bank
         </span>
 
         <nav className="tabs">

@@ -1,4 +1,4 @@
-"""Tests for core/spreadsheet_converter.py — Excel to Question Bank CSV conversion."""
+"""Tests for core/spreadsheet_converter.py — Excel to Exam Bank CSV conversion."""
 
 import csv
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook
 
-from question_bank.core.spreadsheet_converter import (
+from exam_bank.core.spreadsheet_converter import (
     match_headers, convert_sheet, convert_workbook, convert_xlsx_to_csv,
     import_from_xlsx, _normalize_header, _resolve_correct_indicator,
     _detect_layout, CSV_COLUMNS,

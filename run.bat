@@ -1,5 +1,5 @@
 @echo off
-:: Start the Question Bank: the API, and the NiceGUI interface on top of it.
+:: Start the Exam Bank: the API, and the NiceGUI interface on top of it.
 ::
 :: Both are started because the app is mid-restack. The NiceGUI layer still
 :: calls core directly and does not need the API, but the API is what the
@@ -10,7 +10,7 @@
 ::
 :: ASCII only - a .bat is read in the console codepage, and anything else
 :: turns into mojibake in the window the user is reading.
-title Pentaho Question Bank
+title Pentaho Exam Bank
 cd /d "%~dp0"
 
 :: Load environment variables from .env
@@ -20,8 +20,8 @@ if exist ".env" (
     )
 )
 
-set "PORT_FILE=%TEMP%\question_bank_port.txt"
-set "API_PORT_FILE=%TEMP%\question_bank_api_port.txt"
+set "PORT_FILE=%TEMP%\exam_bank_port.txt"
+set "API_PORT_FILE=%TEMP%\exam_bank_api_port.txt"
 
 set "UI_PORT=7777"
 set "API_PORT=%QB_API_PORT%"
@@ -46,7 +46,7 @@ if errorlevel 1 (
 :: The API goes to its own window so its log stays readable and closing it
 :: does not take the interface down with it.
 echo Starting the API on port %API_PORT%...
-start "Pentaho Question Bank - API" /min "%VENV_PY%" -m question_bank.api --port %API_PORT%
+start "Pentaho Exam Bank - API" /min "%VENV_PY%" -m exam_bank.api --port %API_PORT%
 
 echo Starting the interface on port %UI_PORT%...
 "%VENV_PY%" main.py

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from question_bank.utils.config import AppConfig
+from exam_bank.utils.config import AppConfig
 
 
 class TestAppConfig:
@@ -21,7 +21,7 @@ class TestAppConfig:
 
     def test_save_and_load(self, tmp_path):
         config_file = tmp_path / "config.json"
-        with patch("question_bank.utils.config.CONFIG_FILE", config_file):
+        with patch("exam_bank.utils.config.CONFIG_FILE", config_file):
             cfg = AppConfig(
                 theme_color="Blue",
                 dark_mode=False,
@@ -44,21 +44,21 @@ class TestAppConfig:
             "unknown_field": "should be ignored",
             "another_unknown": 42,
         }))
-        with patch("question_bank.utils.config.CONFIG_FILE", config_file):
+        with patch("exam_bank.utils.config.CONFIG_FILE", config_file):
             loaded = AppConfig.load()
             assert loaded.theme_color == "Purple"
             assert not hasattr(loaded, "unknown_field")
 
     def test_load_missing_file(self, tmp_path):
         config_file = tmp_path / "nonexistent.json"
-        with patch("question_bank.utils.config.CONFIG_FILE", config_file):
+        with patch("exam_bank.utils.config.CONFIG_FILE", config_file):
             loaded = AppConfig.load()
             assert loaded.theme_color == "Slate"  # default
 
     def test_load_corrupt_file(self, tmp_path):
         config_file = tmp_path / "corrupt.json"
         config_file.write_text("not valid json {{{")
-        with patch("question_bank.utils.config.CONFIG_FILE", config_file):
+        with patch("exam_bank.utils.config.CONFIG_FILE", config_file):
             loaded = AppConfig.load()
             assert loaded.theme_color == "Slate"  # default
 

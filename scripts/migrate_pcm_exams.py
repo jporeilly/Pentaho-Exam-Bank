@@ -34,9 +34,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from question_bank.core.question_bank import Certification, QuestionBankDB
-from question_bank.core.question_importer import import_from_pcm_exam_json
-from question_bank.utils.config import config, DB_PATH, BACKUP_DIR
+from exam_bank.core.bank import Certification, ExamBankDB
+from exam_bank.core.question_importer import import_from_pcm_exam_json
+from exam_bank.utils.config import config, DB_PATH, BACKUP_DIR
 
 
 def courses_dir() -> Path:
@@ -66,12 +66,12 @@ def backup_db() -> Path | None:
         return None
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    dest = BACKUP_DIR / f"question_bank-pre-clean-{stamp}.db"
+    dest = BACKUP_DIR / f"exam_bank-pre-clean-{stamp}.db"
     shutil.copy2(DB_PATH, dest)
     return dest
 
 
-def clean(db: QuestionBankDB) -> tuple[int, int]:
+def clean(db: ExamBankDB) -> tuple[int, int]:
     """Empty the bank. Returns (questions_removed, certifications_removed)."""
     conn: sqlite3.Connection = db.conn
     n_q = conn.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
@@ -82,7 +82,7 @@ def clean(db: QuestionBankDB) -> tuple[int, int]:
     return n_q, n_c
 
 
-def adopt(db: QuestionBankDB, root: Path, slug: str) -> int:
+def adopt(db: ExamBankDB, root: Path, slug: str) -> int:
     course_dir = root / slug
     exam = course_dir / "exam.json"
     if not course_dir.is_dir():
@@ -126,7 +126,7 @@ def main() -> None:
     args = ap.parse_args()
 
     root = courses_dir()
-    db = QuestionBankDB(DB_PATH)
+    db = ExamBankDB(DB_PATH)
     try:
         if args.clean:
             saved = backup_db()

@@ -21,8 +21,8 @@ import json
 
 import pytest
 
-from question_bank.core.exporter import export_pcm_exam_json
-from question_bank.core.question_importer import (
+from exam_bank.core.exporter import export_pcm_exam_json
+from exam_bank.core.question_importer import (
     import_from_pcm_exam_json,
     is_pcm_exam_json,
 )
@@ -138,7 +138,7 @@ def test_export_restores_the_authored_order(exam_path, tmp_path):
 def test_generated_questions_keep_the_caller_order(tmp_path):
     """Questions with no authored position (pool_order -1) must not be
     reordered — only an adopted pool has an order to restore."""
-    from question_bank.core.question_bank import Question
+    from exam_bank.core.bank import Question
 
     made = [
         Question(id="b", stem="Second?", key="k", distractors=["d"]),

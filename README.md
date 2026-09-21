@@ -1,4 +1,4 @@
-# Pentaho Question Bank
+# Pentaho Exam Bank
 
 Writes certification exam questions from Pentaho course content, holds them in
 a reviewable bank, and publishes them where they are needed — as a Content
@@ -28,7 +28,7 @@ respect you did not mean to change.
 | Owner | Keys in a course's `exam.json` |
 | ----- | ------------------------------ |
 | **Content Editor** | `title`, `description`, `passMark`, `questionsPerAttempt`, `shuffle`, `webhookUrl`, `webhookSecret`, `intake` |
-| **Question Bank** | `questions`, and the numerals inside `description` |
+| **Exam Bank** | `questions`, and the numerals inside `description` |
 
 Two writers, one file, no overlapping keys.
 
@@ -106,17 +106,17 @@ All three survive adoption and export, covered by `tests/test_pcm_roundtrip.py`.
 ## Layout
 
 ```
-Pentaho-Question-Bank/
+Pentaho-Exam-Bank/
 ├── main.py                      # Interface entry point (NiceGUI, port 7777)
 ├── install.bat                  # One-click install
 ├── run.bat                      # Launch: interface + API
 ├── run-api.bat                  # Launch: API alone
 ├── _venv.bat                    # Shared venv check/repair for both launchers
 │
-├── question_bank/               # The package (the repo root is the source root)
+├── exam_bank/               # The package (the repo root is the source root)
 │   ├── __init__.py              #   __version__ — the source of truth
 │   ├── core/                    #   Business logic, no UI
-│   │   ├── question_bank.py     #     SQLite store + Question/Certification models
+│   │   ├── bank.py              #     SQLite store + Question/Certification models
 │   │   ├── question_generation.py, generation_prompts.py, generation_parsing.py
 │   │   ├── question_refinement.py   #  regenerate, improve, QA, explanations
 │   │   ├── question_importer.py #     CSV/JSON/Excel/QTI/Moodle/exam.json import
@@ -126,7 +126,7 @@ Pentaho-Question-Bank/
 │   │   ├── ollama_client.py, mcp_client.py
 │   │   └── pptx_*.py            #     slated for removal in 0.2.0
 │   ├── api/                     #   FastAPI over core — the surface React will use
-│   │   ├── __main__.py          #     `python -m question_bank.api`
+│   │   ├── __main__.py          #     `python -m exam_bank.api`
 │   │   ├── jobs.py              #     background jobs; generation takes minutes
 │   │   └── routers/             #     system, questions, certifications, courses,
 │   │                            #     generation, export
@@ -134,12 +134,13 @@ Pentaho-Question-Bank/
 │   │   └── components/          #     one module per tab
 │   └── utils/config.py          #   settings, and PROJECT_ROOT for everything else
 │
+├── icons/                       # The app icon; see "The icon" below
 ├── scripts/migrate_pcm_exams.py # Adopt a course's exam into the bank
 ├── tests/                       # 278 tests
 └── assets/                      # Database, config, caches — gitignored
 ```
 
-The repo root is the source root, so `question_bank` imports as a package from
+The repo root is the source root, so `exam_bank` imports as a package from
 there. **Do not add an `__init__.py` at the repo root** — that is what used to
 make `C:\Projects` itself a source root, and it made the folder name
 load-bearing.
@@ -193,6 +194,37 @@ The Content Manager is found as the sibling `..\Pentaho-Content-Manager`, or at
 the path set in the config. **No resolved course slug is ever cached** — a
 stored slug that quietly stopped resolving is how this app's original
 certifications died when the courses were renamed under them.
+
+## The icon
+
+The suite shares one mark: a black tile with a white capital P, no red and
+no swirl. What separates the taskbar pins at 24 px is the **badge** — the
+Content Manager wears a mortarboard, the Content Editor a pencil, and this
+app a ticked answer box in violet (`#7C3AED`).
+
+`icons/icon.ico` is a **committed artifact**. Nothing here draws it: the one
+drawing lives in the Content Manager's `scripts/make-icons.py`, and copying
+~380 lines of it here would make a second drawing of a brand that has
+already moved once. The two would diverge on the next move.
+
+**To regenerate** — only when the brand moves, from a machine with the
+Content Manager checked out:
+
+```bat
+venv\Scripts\python.exe <PCM>\scripts\make-icons.py ^
+    --installer-ico icons\icon.ico --badge check --badge-color "#7C3AED"
+```
+
+Then rescale the PNGs **down** from the .ico's largest frame — never up,
+which is what a blurry taskbar icon is made of:
+
+```bat
+venv\Scripts\python.exe -c "from PIL import Image; im=Image.open(r'icons\icon.ico'); im.size=max(im.ico.sizes()); m=im.convert('RGBA'); [m.resize((s,s), Image.LANCZOS).save(p) for p,s in (('icons/icon-256.png',256),('icons/icon-128.png',128),('icons/icon-32.png',32),('frontend/public/icon.png',256))]"
+```
+
+`frontend/public/favicon.ico` is the browser tab's copy, and Vite serves
+`public/` at the site root — `index.html` names both rather than leaving the
+browser to guess, because the guess does not survive a non-root base path.
 
 ## Development
 

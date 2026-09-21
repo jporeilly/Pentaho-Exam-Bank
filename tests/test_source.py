@@ -6,7 +6,7 @@ The type is shared by every generation source, so it outlives that module.
 
 from pathlib import Path
 
-from question_bank.core.source import SlideInfo
+from exam_bank.core.source import SlideInfo
 
 
 class TestSlideInfo:
@@ -39,7 +39,7 @@ def test_importable_without_python_pptx():
     import sys
     from pathlib import Path as P
 
-    src = P(__file__).resolve().parents[1] / "question_bank" / "core" / "source.py"
+    src = P(__file__).resolve().parents[1] / "exam_bank" / "core" / "source.py"
     tree = ast.parse(src.read_text(encoding="utf-8"))
     imported = {
         (node.module or "").split(".")[0]
@@ -53,4 +53,4 @@ def test_importable_without_python_pptx():
     }
     assert "pptx" not in imported, f"source.py pulls in {imported}"
     # And it really does import cleanly on its own.
-    assert "question_bank.core.source" in sys.modules
+    assert "exam_bank.core.source" in sys.modules

@@ -32,7 +32,7 @@ the source of truth.
 
 | File | Form |
 | ---- | ---- |
-| `question_bank/__init__.py` | `__version__ = "x.y.z"` — **source of truth** |
+| `exam_bank/__init__.py` | `__version__ = "x.y.z"` — **source of truth** |
 | `VERSION.md` | the **Current:** line above |
 | `CHANGELOG.md` | the most recent `## [x.y.z] - YYYY-MM-DD` heading |
 
@@ -43,7 +43,7 @@ is a carrier that drifts.
 
 ## Releasing
 
-1. Bump `__version__` in `question_bank/__init__.py`.
+1. Bump `__version__` in `exam_bank/__init__.py`.
 2. Bump the **Current:** line in this file.
 3. In [`CHANGELOG.md`](CHANGELOG.md), rename `## [Unreleased]` to
    `## [x.y.z] - YYYY-MM-DD` and open a fresh `Unreleased` section.

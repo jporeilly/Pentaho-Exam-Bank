@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from question_bank.core.pcm_reader import (
+from exam_bank.core.pcm_reader import (
     is_front_matter, list_pcm_labs, load_pcm_course,
 )
 

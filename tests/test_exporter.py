@@ -6,8 +6,8 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from question_bank.core.question_bank import Question
-from question_bank.core.exporter import (
+from exam_bank.core.bank import Question
+from exam_bank.core.exporter import (
     export_csv, export_json, export_qti21, export_moodle_xml, export_text,
     export_pcm_exam_json,
 )

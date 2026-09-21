@@ -2,8 +2,8 @@
 
 import pytest
 
-from question_bank.core.question_bank import Question, Certification, QuestionBankDB
-from question_bank.core.exam_builder import (
+from exam_bank.core.bank import Question, Certification, ExamBankDB
+from exam_bank.core.exam_builder import (
     select_exam_questions, generate_exam_pdf, get_available_topics, ExamPDF,
 )
 
@@ -11,7 +11,7 @@ from question_bank.core.exam_builder import (
 @pytest.fixture
 def exam_db(tmp_path):
     """Build a DB with questions across multiple topics for exam selection."""
-    db = QuestionBankDB(tmp_path / "exam.db")
+    db = ExamBankDB(tmp_path / "exam.db")
     cert = db.save_certification(Certification(name="Exam Cert", source_type="pptx"))
 
     topics = {
@@ -113,7 +113,7 @@ class TestSelectExamQuestions:
         assert len(questions) <= 15
 
     def test_empty_db(self, tmp_path):
-        db = QuestionBankDB(tmp_path / "empty.db")
+        db = ExamBankDB(tmp_path / "empty.db")
         cert = db.save_certification(Certification(name="Empty"))
         questions = select_exam_questions(
             db=db,

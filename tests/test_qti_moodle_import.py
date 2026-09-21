@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from question_bank.core.question_importer import (
+from exam_bank.core.question_importer import (
     import_from_qti21, import_from_moodle_xml, detect_xml_format,
 )
 

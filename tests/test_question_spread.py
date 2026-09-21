@@ -9,8 +9,8 @@ end of a course being, often, the part most worth examining.
 
 import pytest
 
-from question_bank.core import question_generation as gen
-from question_bank.core.source import SlideInfo
+from exam_bank.core import question_generation as gen
+from exam_bank.core.source import SlideInfo
 
 
 @pytest.fixture

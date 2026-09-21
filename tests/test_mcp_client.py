@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from question_bank.core.mcp_client import (
+from exam_bank.core.mcp_client import (
     check_connection, search_documentation, search_multiple_servers,
     _parse_sse_response, SearchResult,
 )
@@ -84,7 +84,7 @@ class TestSearchMultipleServers:
                 SearchResult(title=f"Doc from {url}", link=url, content="Content here"),
             ]
 
-        with patch("question_bank.core.mcp_client.search_documentation", side_effect=mock_search):
+        with patch("exam_bank.core.mcp_client.search_documentation", side_effect=mock_search):
             servers = [
                 {"name": "Server 1", "url": "http://srv1"},
                 {"name": "Server 2", "url": "http://srv2"},
@@ -98,7 +98,7 @@ class TestSearchMultipleServers:
         assert result == ""
 
     def test_all_servers_fail(self):
-        with patch("question_bank.core.mcp_client.search_documentation",
+        with patch("exam_bank.core.mcp_client.search_documentation",
                     side_effect=Exception("fail")):
             result = search_multiple_servers("test", [{"url": "http://bad"}])
             assert result == ""
@@ -109,7 +109,7 @@ class TestSearchMultipleServers:
                 SearchResult(title="Doc", link=url, content="A" * 1000),
             ]
 
-        with patch("question_bank.core.mcp_client.search_documentation", side_effect=mock_search):
+        with patch("exam_bank.core.mcp_client.search_documentation", side_effect=mock_search):
             servers = [{"name": f"S{i}", "url": f"http://s{i}"} for i in range(10)]
             result = search_multiple_servers("test", servers, max_chars=500)
             assert len(result) <= 600  # some overhead for formatting

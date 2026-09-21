@@ -12,7 +12,7 @@ import threading
 
 import pytest
 
-from question_bank.core.question_bank import Question, QuestionBankDB
+from exam_bank.core.bank import Question, ExamBankDB
 
 
 def in_another_thread(fn):
@@ -36,7 +36,7 @@ def in_another_thread(fn):
 def test_the_guard_is_on_by_default(tmp_path):
     """sqlite3's check is a real guard against concurrent use corrupting
     state. Anything that opens a database gets it unless it says otherwise."""
-    db = QuestionBankDB(tmp_path / "guarded.db")
+    db = ExamBankDB(tmp_path / "guarded.db")
     try:
         with pytest.raises(sqlite3.ProgrammingError):
             in_another_thread(lambda: db.count())
@@ -49,13 +49,13 @@ def test_the_guard_is_on_by_default(tmp_path):
 def test_a_request_scoped_handle_can_be_closed_from_another_thread(tmp_path):
     """The actual bug: closing on a different worker than the one that
     opened it."""
-    db = QuestionBankDB(tmp_path / "request.db", same_thread_only=False)
+    db = ExamBankDB(tmp_path / "request.db", same_thread_only=False)
     db.save(Question(id="q1", stem="Does it close?", key="yes", distractors=["no"]))
     in_another_thread(db.close)  # must not raise
 
 
 def test_a_request_scoped_handle_still_works_across_threads(tmp_path):
-    db = QuestionBankDB(tmp_path / "request.db", same_thread_only=False)
+    db = ExamBankDB(tmp_path / "request.db", same_thread_only=False)
     db.save(Question(id="q1", stem="Readable?", key="yes", distractors=["no"]))
     try:
         assert in_another_thread(lambda: db.count()) == 1
@@ -66,7 +66,7 @@ def test_a_request_scoped_handle_still_works_across_threads(tmp_path):
 def test_the_api_dependency_survives_a_cross_thread_teardown(tmp_path, monkeypatch):
     """Drive the real dependency the way anyio can: next() on one thread,
     exhaustion on another."""
-    from question_bank.api import deps
+    from exam_bank.api import deps
 
     monkeypatch.setattr(deps, "DB_PATH", tmp_path / "dep.db")
     generator = deps.get_db()
