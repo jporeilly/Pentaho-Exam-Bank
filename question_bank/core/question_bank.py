@@ -109,6 +109,12 @@ class Question:
     difficulty: str = "Medium"      # Easy / Medium / Hard
     bloom_level: str = "Apply"      # Bloom's taxonomy level
     certification_id: str = ""      # FK to certifications table
+    # Position this question held in its course pool when it was adopted.
+    # -1 = not part of an authored pool (a generated question). Without it a
+    # publish-back reorders the whole `questions` array — search() returns
+    # updated_at DESC — which makes an unreviewable diff, and decides which
+    # questions get asked at all in a pool that draws N with shuffle off.
+    pool_order: int = -1
     source_type: str = "pptx"       # "pptx" = slide-based, "docs" = documentation-based
     source_links: List[str] = field(default_factory=list)  # Documentation URLs (for docs-sourced questions)
     status: str = "draft"           # Lifecycle state
@@ -340,6 +346,7 @@ class QuestionBankDB:
                 difficulty TEXT DEFAULT 'Medium',
                 bloom_level TEXT DEFAULT 'Apply',
                 certification_id TEXT DEFAULT '',
+                pool_order INTEGER DEFAULT -1,
                 source_type TEXT DEFAULT 'pptx',
                 status TEXT DEFAULT 'draft',
                 created_by TEXT DEFAULT '',
@@ -393,6 +400,7 @@ class QuestionBankDB:
             "reviewed_at": "ALTER TABLE questions ADD COLUMN reviewed_at TEXT DEFAULT ''",
             "approved_at": "ALTER TABLE questions ADD COLUMN approved_at TEXT DEFAULT ''",
             "source_links": "ALTER TABLE questions ADD COLUMN source_links TEXT DEFAULT '[]'",
+            "pool_order": "ALTER TABLE questions ADD COLUMN pool_order INTEGER DEFAULT -1",
             "version_history": "ALTER TABLE questions ADD COLUMN version_history TEXT DEFAULT '[]'",
             "version": "ALTER TABLE questions ADD COLUMN version INTEGER DEFAULT 1",
             "option_order": "ALTER TABLE questions ADD COLUMN option_order TEXT DEFAULT '[]'",
@@ -456,18 +464,19 @@ class QuestionBankDB:
             INSERT OR REPLACE INTO questions
             (id, scenario, stem, question_type, key_answer, keys_json, key_source_text,
              distractors, option_order, explanation, source_file, source_slides, key_source_slide,
-             topic, tags, difficulty, bloom_level, certification_id, source_type, source_links,
+             topic, tags, difficulty, bloom_level, certification_id, pool_order,
+             source_type, source_links,
              status, created_by, assigned_sme, review_history, reject_reason,
              version_history, version,
              created_at, updated_at, submitted_at, reviewed_at, approved_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             q.id, q.scenario, q.stem, q.question_type, q.key, json.dumps(q.keys),
             q.key_source_text, json.dumps(q.distractors), json.dumps(q.option_order),
             q.explanation,
             q.source_file, json.dumps(q.source_slides), q.key_source_slide,
             q.topic, json.dumps(q.tags), q.difficulty, q.bloom_level,
-            q.certification_id, q.source_type, json.dumps(q.source_links),
+            q.certification_id, q.pool_order, q.source_type, json.dumps(q.source_links),
             q.status, q.created_by, q.assigned_sme,
             json.dumps(q.review_history), q.reject_reason,
             json.dumps(q.version_history), q.version,
@@ -813,6 +822,7 @@ class QuestionBankDB:
             difficulty=row["difficulty"],
             bloom_level=row["bloom_level"],
             certification_id=_safe("certification_id"),
+            pool_order=_safe("pool_order", -1),
             source_type=_safe("source_type", "pptx"),
             source_links=json.loads(_safe("source_links", "[]")) if "source_links" in keys else [],
             status=row["status"],

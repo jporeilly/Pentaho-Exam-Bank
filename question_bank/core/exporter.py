@@ -114,6 +114,15 @@ def export_pcm_exam_json(
     ``questions_per_attempt`` let the caller carry over a course's existing
     exam settings so regenerating questions doesn't wipe them.
     """
+    # Honour the pool's authored order when every question carries one (a
+    # pool adopted from a course). The bank returns questions newest-first,
+    # so writing them in that order would reshuffle the whole array on every
+    # publish — an unreadable diff, and in a pool that draws N questions with
+    # shuffle off it silently changes which ones get asked. A generated
+    # question has pool_order -1 and the caller's order is left alone.
+    if questions and all(getattr(q, "pool_order", -1) >= 0 for q in questions):
+        questions = sorted(questions, key=lambda q: q.pool_order)
+
     items = []
     for q in questions:
         options = list(q.all_choices)
@@ -142,8 +151,17 @@ def export_pcm_exam_json(
             item["explanation"] = q.explanation
         # Citation for the results review — a concise "where to look" location,
         # not the answer-bearing source text. Prefer course + section.
+        # A question imported from a PCM exam.json already carries the
+        # citation its author wrote ("Lab 1 — Your First Win"), held in
+        # source_file. Rebuilding it from `topic` would silently downgrade
+        # it to the bare module name, so an authored citation wins and the
+        # round-trip stays lossless. Generated questions (no authored
+        # citation) still get one built from course + section.
+        authored = q.source_file.strip() if q.source_type == "pcm" else ""
         cite = (q.topic or "").strip()
-        if source_label and cite:
+        if authored:
+            item["source"] = authored
+        elif source_label and cite:
             item["source"] = f"{source_label}: {cite}"
         elif cite:
             item["source"] = cite

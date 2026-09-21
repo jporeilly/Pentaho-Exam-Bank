@@ -72,7 +72,25 @@ out of the way. If PQB is not installed, the button says so.
 
 ## 3. Blockers — fix before any write-back
 
-### 3.1 Question ids churn on import (must fix first)
+### 3.0 Status — 3.1 is FIXED (2026-09-21), and it uncovered two more
+
+3.1 is done, along with two further losses found while proving it. All three are
+covered by `tests/test_pcm_roundtrip.py`, and the import direction now round-trips
+`pdi-2hr-lab` and `developer-di-practitioner` byte-identically:
+
+* **Ids preserved on import.** The live pools use *hand-authored* ids (`m1-q1`,
+  `q-preview`), not uuids — minting would have destroyed meaningful keys.
+* **The `source` citation preserved.** It is richer than `module` ("Lab 1 — Your
+  First Win" vs "See It Work"), and the exporter rebuilt it from `topic`,
+  downgrading it on every round-trip. An authored citation now wins.
+* **Pool order preserved** via a new `pool_order` column. `search()` returns
+  `updated_at DESC`, so a publish-back reordered the entire array — an unreadable
+  diff, and in a pool that draws N with shuffle off it changes which questions get
+  asked.
+
+**Still open: 3.4 below.**
+
+### 3.1 Question ids churn on import — FIXED
 
 `core/question_importer.py:import_from_pcm_exam_json` never passes `item["id"]` to the `Question`
 constructor, so `Question.__post_init__` mints a fresh uuid.
@@ -109,6 +127,27 @@ attempt, or pass mark — e.g. "40 questions … drawn from a pool of 48. Pass m
 **Fix:** publishing must regenerate those numerals. It recognises several phrasings
 (`pool of (\d+)`, `(\d+)-question bank`, `(\d+) questions per attempt`, …), so match the existing
 sentence shape rather than rewriting the author's prose.
+
+### 3.4 Publishing must MERGE into the existing file, never regenerate it
+
+`export_pcm_exam_json` writes a *fresh* `exam.json` from a fixed parameter list.
+It is the right tool for a brand-new pool and the wrong one for publishing back
+to a live course, because it can only carry the keys it has parameters for.
+
+Proved against `pdi-2hr-lab`: the export drops **`intake`** — the pre-exam
+candidate form config (`optional`, `consent`, `startLabel`, `trackResults`,
+`collectCandidate`) — because the exporter has no `intake` parameter. That is a
+key the Content Editor owns, and silently deleting it is exactly what the
+disjoint-key contract (§2.2) exists to prevent. `webhookSecret: ""` is likewise
+omitted rather than written back as an empty string.
+
+**Fix:** Phase 2's publish step reads the existing `exam.json`, replaces only
+`questions` (plus the description numerals, §3.3), and writes the rest back
+untouched — including keys the bank has never heard of. This is the exact mirror
+of the Content Editor's `put_exam`, which preserves `questions` "and any key this
+editor doesn't know about".
+
+**Until that exists, nothing publishes back to a course.**
 
 ---
 

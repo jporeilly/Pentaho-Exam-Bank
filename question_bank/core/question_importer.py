@@ -400,7 +400,7 @@ def import_from_pcm_exam_json(path: Path) -> List[Question]:
     exam_title = str(data.get("title") or "").strip()
 
     questions = []
-    for item in data.get("questions", []):
+    for position, item in enumerate(data.get("questions", [])):
         if not isinstance(item, dict):
             continue
         options = [str(o) for o in item.get("options", []) if isinstance(o, (str, int, float))]
@@ -420,6 +420,20 @@ def import_from_pcm_exam_json(path: Path) -> List[Question]:
         is_multi = len(keys_list) > 1
 
         q = Question(
+            # Carry the authored id through. PCM treats it as a durable
+            # external key: it goes into the results payload the webhook
+            # posts to the Sheet, and an in-progress attempt is keyed on
+            # the question ids it was dealt. Minting a fresh uuid here
+            # would orphan every result already recorded against this
+            # pool. Question.__post_init__ still mints one when the
+            # source genuinely has no id — PCM's own fallback for that
+            # case is POSITIONAL (`q1`, `q2`, ...), so an id must never
+            # be allowed to depend on a question's place in the list.
+            id=str(item.get("id") or "").strip(),
+            # Remember where it sat in the pool, so publishing back writes
+            # the array in the author's order instead of whatever order the
+            # bank happened to return.
+            pool_order=position,
             stem=item.get("prompt", ""),
             question_type="multi" if is_multi else "single",
             key=keys_list[0] if keys_list else "",
