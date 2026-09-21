@@ -315,3 +315,90 @@ describe("review and commit", () => {
     expect(screen.queryByText("Review")).not.toBeInTheDocument();
   });
 });
+
+describe("question formats", () => {
+  it("sends no formats by default, so every question is the same shape", async () => {
+    const calls = mockApi();
+    render(<GeneratePane />);
+    await chooseCourse();
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.includes("/api/generate") && c.method === "POST");
+      expect((post?.body as { formats: unknown[] }).formats).toEqual([]);
+    });
+  });
+
+  it("Mix formats is disabled until there are two to mix", async () => {
+    // Shuffling one repeated shape changes nothing. A control that silently
+    // does nothing is worse than one that is greyed out — which is what this
+    // checkbox was before formats existed.
+    mockApi();
+    render(<GeneratePane />);
+    const mix = await screen.findByRole("checkbox", { name: /Mix formats/ });
+    expect(mix).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Add a format" }));
+    expect(mix).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Add a format" }));
+    await waitFor(() => expect(mix).toBeEnabled());
+  });
+
+  it("a second row defaults to a multi-select, because that is the point", async () => {
+    mockApi();
+    render(<GeneratePane />);
+    await userEvent.click(await screen.findByRole("button", { name: "Add a format" }));
+    expect(screen.getByText("“Choose one.”")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Add a format" }));
+    expect(screen.getByText("“Choose two.”")).toBeInTheDocument();
+  });
+
+  it("the author sets TOTAL options, not distractors", async () => {
+    // "How many distractors is a five-option question" is arithmetic nobody
+    // should have to do; the conversion happens in the UI.
+    const calls = mockApi();
+    render(<GeneratePane />);
+    await chooseCourse();
+    await userEvent.click(screen.getByRole("button", { name: "Add a format" }));
+
+    const total = screen.getByLabelText("of");
+    await userEvent.clear(total);
+    await userEvent.type(total, "5");
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.includes("/api/generate") && c.method === "POST");
+      expect((post?.body as { formats: unknown[] }).formats).toEqual([
+        { keys: 1, distractors: 4 },
+      ]);
+    });
+  });
+
+  it("a row can be removed", async () => {
+    mockApi();
+    render(<GeneratePane />);
+    await userEvent.click(await screen.findByRole("button", { name: "Add a format" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove format 1" }));
+
+    expect(screen.getByText(/Add a format to mix shapes/)).toBeInTheDocument();
+  });
+
+  it("mixes shapes in one run", async () => {
+    const calls = mockApi();
+    render(<GeneratePane />);
+    await chooseCourse();
+    await userEvent.click(screen.getByRole("button", { name: "Add a format" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add a format" }));
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.includes("/api/generate") && c.method === "POST");
+      expect((post?.body as { formats: unknown[] }).formats).toEqual([
+        { keys: 1, distractors: 3 },
+        { keys: 2, distractors: 3 },
+      ]);
+    });
+  });
+});

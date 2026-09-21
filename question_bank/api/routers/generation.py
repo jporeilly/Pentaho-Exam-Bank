@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ...core.context_budget import source_budget_chars
+from ...core.generation_prompts import specs_from_rows
 from ...core.pcm_reader import list_pcm_courses, load_pcm_course
 from ...core.question_bank import BLOOM_LEVELS, DIFFICULTIES, QuestionBankDB
 from ...core.question_generation import generate_questions_batch
@@ -21,6 +22,13 @@ from .. import jobs
 from ..deps import courses_dir, get_db, question_json
 
 router = APIRouter(tags=["generation"])
+
+
+class QuestionFormat(BaseModel):
+    """One question shape: how many answers are right, and how many wrong."""
+
+    keys: int = Field(1, ge=1, le=4)
+    distractors: int = Field(3, ge=1, le=6)
 
 
 class GenerateRequest(BaseModel):
@@ -35,6 +43,12 @@ class GenerateRequest(BaseModel):
     bloom_levels: list[str] = Field(default_factory=lambda: ["Apply"])
     num_keys: int = Field(1, ge=1, le=4)
     num_distractors: int = Field(3, ge=1, le=5)
+    # Question shapes to cycle through, so one run can mix "choose one of
+    # four" with "choose two of five". Empty means every question takes the
+    # single num_keys/num_distractors shape above — which is also why
+    # shuffle_formats does nothing without this: shuffling one repeated shape
+    # changes nothing.
+    formats: list[QuestionFormat] = Field(default_factory=list)
     custom_instructions: str = ""
     shuffle_formats: bool = False
     # Empty means "whatever the configured provider is set to". Naming one
@@ -76,6 +90,15 @@ def start_generation(req: GenerateRequest) -> dict[str, Any]:
             f"{where} has no sections with enough prose to write a question from.",
         )
 
+    # Built here, not in the job, so a request asking only for shapes that
+    # make no sense is a 400 the author sees rather than a run that quietly
+    # falls back to the default shape.
+    specs = specs_from_rows([f.model_dump() for f in req.formats])
+    if req.formats and not specs:
+        raise HTTPException(
+            400, "Every question format needs at least one correct and one wrong answer."
+        )
+
     def work(job: jobs.Job) -> list:
         job.progress(0, len(sections), f"Reading {req.course_slug}…")
         return generate_questions_batch(
@@ -91,6 +114,7 @@ def start_generation(req: GenerateRequest) -> dict[str, Any]:
             custom_instructions=req.custom_instructions,
             target_total=req.total,
             shuffle_formats=req.shuffle_formats,
+            question_specs=specs or None,
             progress_callback=job.progress,
         )
 

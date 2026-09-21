@@ -9,6 +9,7 @@ import {
   type Job,
   type Lab,
   type Question,
+  type QuestionFormat,
 } from "./api";
 
 // The backend owns these and validates against them, naming the valid set in
@@ -17,6 +18,23 @@ const DIFFICULTIES = ["Easy", "Medium", "Hard"];
 const BLOOM_LEVELS = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"];
 
 const POLL_MS = 900;
+
+// Mirrors the backend's _num_word, which spells these out in the stem.
+const NUMBER_WORDS: Record<number, string> = { 1: "one", 2: "two", 3: "three", 4: "four" };
+
+/** What a format row holds while it is being edited. The author thinks in
+ *  TOTAL options; the API takes the wrong ones, so the conversion happens
+ *  once, on send, rather than on every keystroke. */
+interface FormatRow {
+  keys: number;
+  total: number;
+}
+
+function toRequestFormats(rows: FormatRow[]): QuestionFormat[] {
+  return rows
+    .map((r) => ({ keys: r.keys, distractors: r.total - r.keys }))
+    .filter((f) => f.keys >= 1 && f.distractors >= 1);
+}
 
 /**
  * Generate questions from a course, then keep the ones worth keeping.
@@ -50,6 +68,7 @@ export function GeneratePane({
     shuffle_formats: false,
   });
 
+  const [formatRows, setFormatRows] = useState<FormatRow[]>([]);
   const [job, setJob] = useState<Job | null>(null);
   const [jobId, setJobId] = useState("");
   const [keep, setKeep] = useState<Set<string>>(new Set());
@@ -149,7 +168,10 @@ export function GeneratePane({
     setKeep(new Set());
     setBusy(true);
     try {
-      const { jobId: id } = await api.generate(form);
+      const { jobId: id } = await api.generate({
+        ...form,
+        formats: toRequestFormats(formatRows),
+      });
       setJobId(id);
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : String(e));
@@ -280,41 +302,23 @@ export function GeneratePane({
             ))}
           </select>
 
-          <label className="muted" htmlFor="gen-keys">
-            Correct
-          </label>
-          <input
-            id="gen-keys"
-            type="number"
-            min={1}
-            max={4}
-            style={{ width: 62 }}
-            value={form.num_keys}
-            onChange={(e) => set("num_keys", Number(e.target.value))}
-          />
-
-          <label className="muted" htmlFor="gen-distractors">
-            Wrong
-          </label>
-          <input
-            id="gen-distractors"
-            type="number"
-            min={1}
-            max={5}
-            style={{ width: 62 }}
-            value={form.num_distractors}
-            onChange={(e) => set("num_distractors", Number(e.target.value))}
-          />
-
           <label className="muted">
             <input
               type="checkbox"
               checked={form.shuffle_formats}
               onChange={(e) => set("shuffle_formats", e.target.checked)}
+              disabled={formatRows.length < 2}
+              title={
+                formatRows.length < 2
+                  ? "Add a second format first — there is nothing to mix"
+                  : "Deal the formats out at random rather than in order"
+              }
             />{" "}
             Mix formats
           </label>
         </div>
+
+        <FormatRows rows={formatRows} onChange={setFormatRows} />
 
         <div className="toolbar">
           <span className="muted">Bloom&rsquo;s</span>
@@ -425,6 +429,94 @@ export function GeneratePane({
           The model returned nothing usable from that material.
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The shapes a run should produce.
+ *
+ * One row is one question shape and the run cycles through them, so a single
+ * run can mix "choose one of four" with "choose two of five". With no rows
+ * every question takes the same shape — which is why "Mix formats" is
+ * disabled until there are two: shuffling one repeated shape changes nothing,
+ * and a control that does nothing is worse than one that is greyed out.
+ */
+function FormatRows({
+  rows,
+  onChange,
+}: {
+  rows: FormatRow[];
+  onChange: (rows: FormatRow[]) => void;
+}) {
+  const update = (index: number, patch: Partial<FormatRow>) =>
+    onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+
+  return (
+    <div className="toolbar" style={{ alignItems: "flex-start" }}>
+      <span className="muted" style={{ paddingTop: 7 }}>
+        Formats
+      </span>
+      <div style={{ flex: 1 }}>
+        {rows.length === 0 && (
+          <div className="faint" style={{ paddingTop: 7 }}>
+            Every question: one correct answer of four. Add a format to mix shapes.
+          </div>
+        )}
+        {rows.map((row, i) => (
+          <div key={i} className="toolbar" style={{ marginBottom: 6 }}>
+            <label className="muted" htmlFor={`fmt-keys-${i}`}>
+              Choose
+            </label>
+            <input
+              id={`fmt-keys-${i}`}
+              type="number"
+              min={1}
+              max={4}
+              style={{ width: 58 }}
+              value={row.keys}
+              onChange={(e) => update(i, { keys: Number(e.target.value) })}
+            />
+            <label className="muted" htmlFor={`fmt-distractors-${i}`}>
+              of
+            </label>
+            <input
+              id={`fmt-distractors-${i}`}
+              type="number"
+              min={2}
+              max={8}
+              style={{ width: 58 }}
+              // Bound to a real field, not to `keys + distractors`. A derived
+              // value cannot be cleared: emptying it recomputed a number,
+              // which reappeared in the box, and the next keystroke appended
+              // to it — clear-then-type-5 gave 25.
+              value={row.total}
+              onChange={(e) => update(i, { total: Number(e.target.value) })}
+            />
+            <span className="faint">
+              {/* The words the generated stem will actually end with — the
+                  backend spells small numbers out, so showing "Choose 2."
+                  here would preview something it never writes. */}
+              {`“Choose ${NUMBER_WORDS[row.keys] ?? row.keys}.”`}
+            </span>
+            <button
+              className="secondary"
+              onClick={() => onChange(rows.filter((_, j) => j !== i))}
+              aria-label={`Remove format ${i + 1}`}
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        <button
+          className="secondary"
+          onClick={() =>
+            onChange([...rows, rows.length ? { keys: 2, total: 5 } : { keys: 1, total: 4 }])
+          }
+        >
+          Add a format
+        </button>
+      </div>
     </div>
   );
 }

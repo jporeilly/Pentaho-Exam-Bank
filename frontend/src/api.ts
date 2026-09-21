@@ -177,6 +177,12 @@ export interface QuestionFilters {
   offset?: number;
 }
 
+/** One question shape: how many answers are right, and how many wrong. */
+export interface QuestionFormat {
+  keys: number;
+  distractors: number;
+}
+
 export interface GenerateRequest {
   course_slug: string;
   lab_slug?: string;
@@ -186,6 +192,8 @@ export interface GenerateRequest {
   bloom_levels?: string[];
   num_keys?: number;
   num_distractors?: number;
+  /** Shapes to cycle through. Empty means every question takes the same one. */
+  formats?: QuestionFormat[];
   custom_instructions?: string;
   shuffle_formats?: boolean;
   model?: string;

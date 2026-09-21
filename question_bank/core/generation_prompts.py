@@ -111,6 +111,33 @@ def _build_question_specs(num_questions: int, num_keys: int = 1, num_distractors
     return specs
 
 
+def specs_from_rows(rows: List[dict]) -> List[dict]:
+    """Turn ``[{"keys": 1, "distractors": 3}, {"keys": 2, "distractors": 3}]``
+    into the spec dicts the generator uses.
+
+    One row is one question SHAPE, and a run cycles through them — which is
+    what makes a mixed run possible. ``_build_question_specs`` above produces
+    the same shape N times, so a run built from it is uniform however it is
+    shuffled.
+
+    Rows with nothing correct or nothing wrong are dropped rather than sent:
+    a question with no distractors has one option, and a question with no key
+    has no answer.
+    """
+    specs: List[dict] = []
+    for row in rows:
+        keys = int(row.get("keys", 1) or 0)
+        distractors = int(row.get("distractors", 3) or 0)
+        if keys < 1 or distractors < 1:
+            continue
+        total = keys + distractors
+        if keys > 1:
+            specs.append({"type": "multi", "num_correct": keys, "num_choices": total})
+        else:
+            specs.append({"type": "single", "num_choices": total})
+    return specs
+
+
 def _num_word(n: int) -> str:
     """Convert small int to word for stems: 2 -> 'two', 3 -> 'three'."""
     return {2: "two", 3: "three", 4: "four"}.get(n, str(n))
