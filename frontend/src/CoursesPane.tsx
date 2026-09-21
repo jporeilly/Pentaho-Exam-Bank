@@ -129,7 +129,7 @@ function CourseContents({ slug }: { slug: string }) {
           <option value="">All labs ({labs.length})</option>
           {labs.map((l) => (
             <option key={l.slug} value={l.slug}>
-              {l.title}
+              {l.frontMatter ? `${l.title} (not examined)` : l.title}
             </option>
           ))}
         </select>

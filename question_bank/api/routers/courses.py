@@ -56,7 +56,7 @@ def list_courses() -> list[dict[str, Any]]:
 
 
 @router.get("/api/courses/{slug}/labs")
-def list_labs(slug: str) -> list[dict[str, str]]:
+def list_labs(slug: str) -> list[dict[str, Any]]:
     _course_dir(slug)
     return list_pcm_labs(courses_dir(), slug)
 

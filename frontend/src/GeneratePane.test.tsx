@@ -55,7 +55,7 @@ function mockApi(opts: {
     });
 
     if (path.includes("/api/courses") && path.includes("/labs"))
-      return ok([{ slug: "01-lab", title: "First Lab" }]);
+      return ok([{ slug: "01-lab", title: "First Lab", frontMatter: false }]);
     if (path.includes("/api/courses"))
       return ok([{ slug: "demo", title: "Demo Course", hasExam: true, questionCount: 3 }]);
     if (path.includes("/api/certifications"))

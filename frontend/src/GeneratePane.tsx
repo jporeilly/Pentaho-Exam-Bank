@@ -253,7 +253,10 @@ export function GeneratePane({
             <option value="">Whole course</option>
             {labs.map((l) => (
               <option key={l.slug} value={l.slug}>
-                {l.title}
+                {/* Named as skipped rather than hidden: reading the whole
+                    course leaves it out, but picking it deliberately reads
+                    it, and a lab that just vanished would look like a bug. */}
+                {l.frontMatter ? `${l.title} (skipped in a whole-course run)` : l.title}
               </option>
             ))}
           </select>

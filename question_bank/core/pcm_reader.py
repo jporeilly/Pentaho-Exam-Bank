@@ -113,7 +113,15 @@ def list_pcm_labs(courses_dir, slug: str) -> List[dict]:
     out: List[dict] = []
     for lab_dir in sorted(course_dir.iterdir(), key=lambda p: p.name):
         if lab_dir.is_dir() and (lab_dir / "guide.md").is_file():
-            out.append({"slug": lab_dir.name, "title": _lab_title(lab_dir)})
+            title = _lab_title(lab_dir)
+            out.append({
+                "slug": lab_dir.name,
+                "title": title,
+                # Still listed, not hidden: reading the whole course skips it,
+                # but an author who picks it deliberately gets it, and a lab
+                # that simply disappeared would look like a bug.
+                "frontMatter": is_front_matter(title, lab_dir.name),
+            })
     return out
 
 
@@ -131,6 +139,32 @@ def _lab_title(lab_dir: Path) -> str:
 
 # Drop sections whose cleaned prose is too thin to write a question from.
 _MIN_SECTION_CHARS = 60
+
+
+# Labs that are front matter rather than subject matter: how to use the guide,
+# how to check the environment, what the course will cover. There is no
+# certification question in any of it, and asking for one produces "What is the
+# primary purpose of the Before You Start section?" — an exam about the
+# training material.
+#
+# Matched against the lab's WHOLE title or slug, never as a substring of a
+# section heading. "Navigating Report Designer — Welcome Screen" is a real
+# Report Designer feature and a loose match would have thrown it away.
+#
+# "Overview" is deliberately absent. Thirteen labs are called exactly that,
+# but thirty-five more are "Overview of Schemas", "Overview of MDX Query" and
+# so on, which are the real thing; the bare ones would need judging
+# individually rather than by name.
+_FRONT_MATTER_LABS = {"before you start", "welcome"}
+
+
+def is_front_matter(title: str, slug: str = "") -> bool:
+    """True when a lab is course furniture rather than examinable material."""
+    if (title or "").strip().lower() in _FRONT_MATTER_LABS:
+        return True
+    # Slugs carry an order prefix: "00-before-you-start".
+    bare = re.sub(r"^\d+[-_]*", "", (slug or "").strip().lower()).replace("-", " ")
+    return bare in _FRONT_MATTER_LABS
 
 
 # How deep sub-splitting will go: H3, then H4. Below that the headings stop
@@ -202,6 +236,10 @@ def load_pcm_course(
     and sections are split on H2 only, as they always were. The limit is passed
     in rather than read here so that reading a course does not depend on which
     model happens to be configured — that is the caller's business.
+
+    Front-matter labs are skipped when reading a whole course. Naming one in
+    ``lab_slug`` reads it anyway: asking for that lab specifically is a clear
+    instruction, and answering it with nothing would be obtuse.
     """
     course_dir = Path(courses_dir) / slug
     slides: List[SlideInfo] = []
@@ -217,6 +255,8 @@ def load_pcm_course(
         if not guide.is_file():
             continue
         lab_title = _lab_title(lab_dir)
+        if not lab_slug and is_front_matter(lab_title, lab_dir.name):
+            continue
         try:
             raw = guide.read_text(encoding="utf-8")
         except Exception:

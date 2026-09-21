@@ -129,6 +129,10 @@ export interface Course {
 export interface Lab {
   slug: string;
   title: string;
+  /** Course furniture — how to use the guide, checking the environment.
+   *  Skipped when generating from a whole course; picked deliberately, it
+   *  is still read. */
+  frontMatter: boolean;
 }
 
 export interface Section {

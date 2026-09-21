@@ -18,7 +18,7 @@ function mockApi(contents: CourseSections) {
     const body = path.includes("/sections")
       ? contents
       : path.includes("/labs")
-        ? [{ slug: "01-lab", title: "First Lab" }]
+        ? [{ slug: "01-lab", title: "First Lab", frontMatter: false }]
         : [{ slug: "demo", title: "Demo Course", hasExam: true, questionCount: 3 }];
     return Promise.resolve(
       new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } }),

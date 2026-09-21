@@ -13,7 +13,9 @@ import json
 
 import pytest
 
-from question_bank.core.pcm_reader import load_pcm_course
+from question_bank.core.pcm_reader import (
+    is_front_matter, list_pcm_labs, load_pcm_course,
+)
 
 
 def build(tmp_path, guide: str, *, slug: str = "demo", lab: str = "01-lab"):
@@ -141,3 +143,69 @@ class TestSplittingWhenItDoesNotFit:
         titles = [s.title for s in load_pcm_course(build(tmp_path, guide), "demo",
                                                    max_chars=800)]
         assert not any("Step one" in t for t in titles)
+
+
+class TestFrontMatterIsNotExamined:
+    """Course furniture is not subject matter.
+
+    "Before You Start" explains how to use the guide and check the
+    environment. Generating from it produced "What is the primary purpose of
+    the Before You Start section?" — an exam about the training material.
+    Twelve courses have one, and between them they carried 86 sections.
+    """
+
+    def build_course(self, tmp_path, labs: dict[str, str]):
+        course = tmp_path / "demo"
+        (course / "course.json").parent.mkdir(parents=True, exist_ok=True)
+        (course / "course.json").write_text(json.dumps({"title": "Demo"}), encoding="utf-8")
+        for slug, title in labs.items():
+            lab = course / slug
+            lab.mkdir(parents=True)
+            (lab / "manifest.json").write_text(
+                json.dumps({"title": title}), encoding="utf-8")
+            (lab / "guide.md").write_text(
+                f"## {title} matter\n\n" + prose("content", 40), encoding="utf-8")
+        return tmp_path
+
+    def test_before_you_start_is_skipped(self, tmp_path):
+        built = self.build_course(tmp_path, {
+            "00-before-you-start": "Before You Start",
+            "01-real": "Building a Transformation",
+        })
+        groups = {s.group for s in load_pcm_course(built, "demo")}
+        assert groups == {"Building a Transformation"}
+
+    def test_a_welcome_lab_is_skipped(self, tmp_path):
+        built = self.build_course(tmp_path, {
+            "00-welcome": "Welcome", "01-real": "Real Content",
+        })
+        assert {s.group for s in load_pcm_course(built, "demo")} == {"Real Content"}
+
+    def test_asking_for_it_by_name_still_reads_it(self, tmp_path):
+        """Naming that lab is a clear instruction; answering with nothing
+        would be obtuse."""
+        built = self.build_course(tmp_path, {
+            "00-before-you-start": "Before You Start", "01-real": "Real Content",
+        })
+        sections = load_pcm_course(built, "demo", lab_slug="00-before-you-start")
+        assert sections and sections[0].group == "Before You Start"
+
+    def test_it_is_still_listed_so_it_has_not_just_vanished(self, tmp_path):
+        built = self.build_course(tmp_path, {
+            "00-before-you-start": "Before You Start", "01-real": "Real Content",
+        })
+        labs = list_pcm_labs(built, "demo")
+        assert [l["title"] for l in labs] == ["Before You Start", "Real Content"]
+        assert [l["frontMatter"] for l in labs] == [True, False]
+
+    def test_overview_of_something_is_real_content(self, tmp_path):
+        """Thirteen labs are called exactly "Overview" but thirty-five more
+        are "Overview of Schemas" and the like. A loose match on the word
+        would have thrown away the real ones."""
+        assert not is_front_matter("Overview of Schemas", "05-overview-of-schemas")
+        assert not is_front_matter("Overview", "02-overview")
+
+    def test_a_welcome_screen_is_not_front_matter(self, tmp_path):
+        """Report Designer's Welcome Screen is a product feature. Matching
+        the word inside a section heading would have lost it."""
+        assert not is_front_matter("Navigating Report Designer", "03-navigating")
