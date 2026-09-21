@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from ...core.context_budget import source_budget_chars
 from ...core.pcm_reader import list_pcm_courses, load_pcm_course
 from ...core.question_bank import BLOOM_LEVELS, DIFFICULTIES, QuestionBankDB
 from ...core.question_generation import generate_questions_batch
@@ -62,7 +63,12 @@ def start_generation(req: GenerateRequest) -> dict[str, Any]:
     if unknown:
         raise HTTPException(400, f"unknown Bloom level(s) {unknown}; expected {BLOOM_LEVELS}")
 
-    sections = load_pcm_course(root, req.course_slug, lab_slug=req.lab_slug)
+    # The same split the Courses pane lists, so an author generates from
+    # exactly the sections they were shown.
+    budget = source_budget_chars(int(getattr(config, "ollama_num_ctx", 0) or 0))
+    sections = load_pcm_course(
+        root, req.course_slug, lab_slug=req.lab_slug, max_chars=budget
+    )
     if not sections:
         where = f"{req.course_slug}/{req.lab_slug}" if req.lab_slug else req.course_slug
         raise HTTPException(

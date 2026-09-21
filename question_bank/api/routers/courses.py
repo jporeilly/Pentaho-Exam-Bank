@@ -76,9 +76,11 @@ def list_sections(slug: str, lab: str = "") -> dict[str, Any]:
     material — a larger window, a smaller model, or splitting the section.
     """
     _course_dir(slug)
-    sections = load_pcm_course(courses_dir(), slug, lab_slug=lab)
     num_ctx = int(getattr(config, "ollama_num_ctx", 0) or 0)
     budget = source_budget_chars(num_ctx)
+    # Split with the same budget that is reported, so what is listed is what
+    # the generator will actually be handed.
+    sections = load_pcm_course(courses_dir(), slug, lab_slug=lab, max_chars=budget)
 
     return {
         "budget": {

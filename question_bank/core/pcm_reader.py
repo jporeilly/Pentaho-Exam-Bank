@@ -73,17 +73,22 @@ def clean_markdown(md: str) -> str:
     return md.strip()
 
 
-def _split_sections(md: str):
+def _split_sections(md: str, level: int = 2):
     """Split markdown into (heading|None, body_text) on H2 (## ) headings.
 
-    ### and deeper stay within their section. Text before the first H2 is a
-    leading section with heading None.
+    Deeper headings stay within their section. Text before the first heading
+    of that level is a leading section with heading None.
+
+    ``level`` is the number of hashes to split on — 2 for H2, 3 for H3. A
+    workshop guide often has no H2 at all, only H3s, which splitting on H2
+    alone turns into one enormous section; see ``load_pcm_course``.
     """
     sections = []
     cur_head = None
     cur: List[str] = []
+    pattern = re.compile(r"^#{%d}(?!#)\s+(.+?)\s*$" % level)
     for ln in md.splitlines():
-        m = re.match(r"^##(?!#)\s+(.+?)\s*$", ln)
+        m = pattern.match(ln)
         if m:
             if cur_head is not None or any(s.strip() for s in cur):
                 sections.append((cur_head, "\n".join(cur)))
@@ -128,13 +133,75 @@ def _lab_title(lab_dir: Path) -> str:
 _MIN_SECTION_CHARS = 60
 
 
-def load_pcm_course(courses_dir, slug: str, lab_slug: str = "") -> List[SlideInfo]:
-    """Read a PCM course into a list of SlideInfo (one per H2 section).
+# How deep sub-splitting will go: H3, then H4. Below that the headings stop
+# being sections and start being steps ("Run Python script - prompt.py"),
+# which make thin, procedural questions.
+_DEEPEST_SPLIT_LEVEL = 4
+
+
+def _pieces(heading, body: str, max_chars: int, level: int = 3):
+    """One section, or its sub-sections when it is too long for the model.
+
+    Yields ``(heading, prose)``. Splitting happens **only** when a section
+    actually overflows, so the sections across the Content Manager that
+    already fit are left exactly as they were — this cannot change what the
+    generator sees for material that was never a problem.
+
+    Workshop guides are the case this exists for. Several have **no H2 at
+    all** — one H1 title and then a dozen or more H3s — so splitting on H2
+    alone yields a single section of 100k+ characters that the model silently
+    reads the first fifth of.
+
+    Each piece is re-checked and split deeper if it is still too long, because
+    one over-long H3 inside an over-long H2 is common: a "Components" section
+    is a list of components, each its own H4.
+
+    A piece with nothing left to split on is yielded whole. Half a section is
+    worse than a long one, and the caller flags what still does not fit.
+    """
+    prose = clean_markdown(body)
+    if max_chars <= 0 or len(prose) <= max_chars:
+        yield heading, prose
+        return
+    if level > _DEEPEST_SPLIT_LEVEL:
+        yield heading, prose
+        return
+
+    subs = _split_sections(body, level=level)
+    named = [(h, b) for h, b in subs if h]
+    if not named:
+        # No headings at this level — try the next one down before giving up.
+        yield from _pieces(heading, body, max_chars, level + 1)
+        return
+
+    # Text before the first sub-heading belongs to the parent, not to a
+    # sub-section, and is kept only if there is enough of it to write from.
+    lead = clean_markdown(next((b for h, b in subs if h is None), ""))
+    if len(lead) >= _MIN_SECTION_CHARS:
+        yield heading, lead
+
+    for sub_heading, sub_body in named:
+        # Keep the parent in the title so a question's topic still says which
+        # part of the course it came from.
+        combined = f"{heading} — {sub_heading}" if heading else sub_heading
+        yield from _pieces(combined, sub_body, max_chars, level + 1)
+
+
+def load_pcm_course(
+    courses_dir, slug: str, lab_slug: str = "", max_chars: int = 0
+) -> List[SlideInfo]:
+    """Read a PCM course into a list of SlideInfo (one per section).
 
     Lab directories (any subdir of the course containing ``guide.md``) are read
     in sorted order; each guide is split into sections and cleaned. Sections
     with too little prose are skipped. When ``lab_slug`` is given, only that one
     lab/module is read (the rest of the course is skipped).
+
+    ``max_chars`` is how much source the model can take in one go. Give it and
+    any section longer than that is split again on its H3 headings; leave it 0
+    and sections are split on H2 only, as they always were. The limit is passed
+    in rather than read here so that reading a course does not depend on which
+    model happens to be configured — that is the caller's business.
     """
     course_dir = Path(courses_dir) / slug
     slides: List[SlideInfo] = []
@@ -155,12 +222,12 @@ def load_pcm_course(courses_dir, slug: str, lab_slug: str = "") -> List[SlideInf
         except Exception:
             continue
         for heading, body in _split_sections(raw):
-            prose = clean_markdown(body)
-            if len(prose) < _MIN_SECTION_CHARS:
-                continue
-            title = f"{lab_title} — {heading}" if heading else lab_title
-            # Prepend the heading so the model sees the section topic in-context.
-            notes = f"{heading}\n\n{prose}" if heading else prose
-            slides.append(SlideInfo(index=idx, speaker_notes=notes, title=title))
-            idx += 1
+            for piece_heading, prose in _pieces(heading, body, max_chars):
+                if len(prose) < _MIN_SECTION_CHARS:
+                    continue
+                title = f"{lab_title} — {piece_heading}" if piece_heading else lab_title
+                # Prepend the heading so the model sees the section topic in-context.
+                notes = f"{piece_heading}\n\n{prose}" if piece_heading else prose
+                slides.append(SlideInfo(index=idx, speaker_notes=notes, title=title))
+                idx += 1
     return slides
