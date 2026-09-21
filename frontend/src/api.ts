@@ -58,11 +58,24 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 
 // ── Shapes ──────────────────────────────────────────────────────────
 
+/** What the app was opened for, when something launched it with a course in
+ *  mind (the Content Editor's Questions button). Both parts are hints. */
+export interface LaunchContext {
+  /** The requested course slug; "" when nothing was handed over. */
+  course: string;
+  /** Whether that slug resolves against the courses directory right now. */
+  courseKnown: boolean;
+  courseTitle: string;
+  /** Present only when the handed-over checkout is not the configured one. */
+  repoDisagreement: { handedOver: string; configured: string; using: string } | null;
+}
+
 export interface Health {
   version: string;
   database: { path: string; exists: boolean; questions: number; certifications: number };
   provider: { provider: string; ok: boolean; model: string; detail: string; models?: string[] };
   courses: { path: string; configured: boolean };
+  launch: LaunchContext;
 }
 
 export interface Question {

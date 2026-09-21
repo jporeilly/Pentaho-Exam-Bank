@@ -18,7 +18,14 @@ const PAGE = 25;
  * deliberately refuses to touch `questions`. This is the first screen that
  * shows them.
  */
-export function BankPane({ onChanged }: { onChanged?: () => void }) {
+export function BankPane({
+  openCourse = "",
+  onChanged,
+}: {
+  /** A course slug the app was opened for; its questions are shown first. */
+  openCourse?: string;
+  onChanged?: () => void;
+}) {
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -65,9 +72,29 @@ export function BankPane({ onChanged }: { onChanged?: () => void }) {
 
   useEffect(load, [load]);
 
+  // A certification records the course it was adopted from in sourceRef, so
+  // "open on this course" is "filter to the certification that came from it".
+  // Applied once, so clearing the filter afterwards sticks rather than
+  // snapping back on the next render.
+  const applied = useRef(false);
   useEffect(() => {
-    api.certifications().then(setCertifications).catch(() => setCertifications([]));
-  }, []);
+    api
+      .certifications()
+      .then((list) => {
+        setCertifications(list);
+        if (applied.current || !openCourse) return;
+        applied.current = true;
+        const match = list.find((c) => c.sourceRef === openCourse);
+        if (match) setCertification(match.id);
+      })
+      .catch(() => setCertifications([]));
+  }, [openCourse]);
+
+  // Opened for a course the bank has never adopted. Saying so beats showing
+  // an unexplained empty table, and the questions do exist — in the course's
+  // exam.json, which nothing has brought in yet.
+  const adopted = certifications.some((c) => c.sourceRef === openCourse);
+  const notAdopted = Boolean(openCourse) && certifications.length > 0 && !adopted;
 
   // Any filter change puts us back on the first page: staying on page 4 of a
   // result set that now has one page shows an empty table and looks broken.
@@ -122,6 +149,20 @@ export function BankPane({ onChanged }: { onChanged?: () => void }) {
           <button className="secondary">Export CSV</button>
         </a>
       </div>
+
+      {notAdopted && (
+        <div className="banner warn">
+          <strong>
+            <code>{openCourse}</code> has not been adopted into the bank yet.
+          </strong>{" "}
+          Its questions are still only in the course&rsquo;s{" "}
+          <code>exam.json</code>. Bring them in with{" "}
+          <code className="mono">
+            venv\Scripts\python.exe scripts\migrate_pcm_exams.py {openCourse}
+          </code>
+          , which preserves their ids and order.
+        </div>
+      )}
 
       {error && <div className="banner">{error}</div>}
 

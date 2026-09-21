@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api, ApiError, type Health } from "./api";
 import { BankPane } from "./BankPane";
@@ -32,6 +32,20 @@ export function App() {
   }, []);
 
   useEffect(loadHealth, [loadHealth]);
+
+  // Opened for a course — the Content Editor's Questions button — so show
+  // that course's questions rather than making the author find them again.
+  // Applied once: health is refetched after a save, and snapping back to the
+  // launch course every time would fight whatever the author moved to.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || !health?.launch.courseKnown) return;
+    opened.current = true;
+    setTab("bank");
+  }, [health]);
+
+  const launch = health?.launch;
+  const openCourse = launch?.courseKnown ? launch.course : "";
 
   return (
     <div className="app">
@@ -95,9 +109,32 @@ export function App() {
           </div>
         )}
 
+        {launch?.repoDisagreement && (
+          // Two checkouts on one machine. Editing one course's questions
+          // while believing they came from another is only noticed much
+          // later, so say which one is actually being read.
+          <div className="banner warn">
+            <strong>Two Content Manager checkouts disagree.</strong> This app
+            was opened from <code>{launch.repoDisagreement.handedOver}</code>{" "}
+            but is configured to read{" "}
+            <code>{launch.repoDisagreement.configured}</code>. Showing
+            questions from the configured one.
+          </div>
+        )}
+
+        {launch && launch.course && !launch.courseKnown && (
+          <div className="banner warn">
+            Opened for the course <code>{launch.course}</code>, which is not in{" "}
+            {health?.courses.path || "the courses directory"}. It may have been
+            renamed — check the Courses tab for the current list.
+          </div>
+        )}
+
         {tab === "courses" && <CoursesPane />}
-        {tab === "generate" && <GeneratePane onCommitted={loadHealth} />}
-        {tab === "bank" && <BankPane onChanged={loadHealth} />}
+        {tab === "generate" && (
+          <GeneratePane initialCourse={openCourse} onCommitted={loadHealth} />
+        )}
+        {tab === "bank" && <BankPane openCourse={openCourse} onChanged={loadHealth} />}
       </main>
     </div>
   );

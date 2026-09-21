@@ -118,8 +118,16 @@ class AppConfig:
     mermaid_enabled: bool = False            # include Mermaid diagrams in AI responses
 
     def save(self):
-        """Save config to disk."""
-        CONFIG_FILE.write_text(json.dumps(asdict(self), indent=2))
+        """Save config to disk.
+
+        UTF-8 explicitly, both here and in ``load``. Windows' default text
+        encoding is cp1252, so an SME name or course title outside Latin-1
+        would raise on write and mojibake on read. ``json.dumps`` escapes
+        non-ASCII by default, which hides the problem today — right up until
+        someone passes ``ensure_ascii=False`` to get readable names in the
+        file, or the file is written by hand as UTF-8.
+        """
+        CONFIG_FILE.write_text(json.dumps(asdict(self), indent=2), encoding="utf-8")
 
     @classmethod
     def defaults(cls) -> "AppConfig":
@@ -131,7 +139,7 @@ class AppConfig:
         """Load config from disk, or return defaults."""
         if CONFIG_FILE.exists():
             try:
-                data = json.loads(CONFIG_FILE.read_text())
+                data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
                 # Filter to only known fields
                 known = {f.name for f in cls.__dataclass_fields__.values()}
                 filtered = {k: v for k, v in data.items() if k in known}

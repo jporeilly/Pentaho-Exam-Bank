@@ -10,6 +10,7 @@ from ... import __version__
 from ...core import providers
 from ...core.question_bank import QuestionBankDB
 from ...utils.config import DB_PATH, config
+from .. import launch
 from ..deps import get_db
 
 router = APIRouter(tags=["system"])
@@ -41,6 +42,10 @@ def health(db: QuestionBankDB = Depends(get_db)) -> dict[str, Any]:
             "path": config.pcm_courses_dir,
             "configured": bool(config.pcm_courses_dir),
         },
+        # What the process was opened for, when something launched it with a
+        # course in mind. Reported here because the client already asks for
+        # health at startup, and this never changes while the process runs.
+        "launch": launch.launch_context(),
     }
 
 

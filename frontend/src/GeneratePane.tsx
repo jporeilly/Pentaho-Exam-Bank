@@ -25,13 +25,20 @@ const POLL_MS = 900;
  * a proposal: the job holds its questions until they have been looked at, and
  * generating a hundred must not put a hundred in the bank.
  */
-export function GeneratePane({ onCommitted }: { onCommitted?: () => void }) {
+export function GeneratePane({
+  initialCourse = "",
+  onCommitted,
+}: {
+  /** A course slug the app was opened for; chosen before anything is picked. */
+  initialCourse?: string;
+  onCommitted?: () => void;
+}) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [labs, setLabs] = useState<Lab[]>([]);
   const [certifications, setCertifications] = useState<Certification[]>([]);
 
   const [form, setForm] = useState<GenerateRequest>({
-    course_slug: "",
+    course_slug: initialCourse,
     lab_slug: "",
     certification_id: "",
     total: 20,
