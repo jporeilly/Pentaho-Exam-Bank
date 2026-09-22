@@ -136,8 +136,16 @@ def stale_blocks(document: dict[str, Any]) -> list[str]:
 # "N-question bank", and a pattern that never matches fixes nothing silently.
 # `\s+` because the verifier collapses whitespace before matching, so a claim
 # split across two lines counts there and has to count here.
+#
+# The leading `(\d+)-` in the second one is LOAD-BEARING, not decoration. These
+# run over authored prose, and one live description reads "review and refine in
+# the Question Bank app" — this app's own former name. Loosened to
+# `(question\s+bank)`, a publish would silently rewrite the product name inside
+# a sentence an author wrote, and nothing would connect the two. Hence the name
+# below, and `test_publishing_never_rewrites_the_app_name_in_prose`, which pins
+# that real sentence.
 _POOL_OF = re.compile(r"(?i)(pool\s+of\s+)(\d+)")
-_QUESTION_BANK = re.compile(r"(?i)(\d+)(-question\s+bank)")
+_N_QUESTION_BANK = re.compile(r"(?i)(\d+)(-question\s+bank)")
 
 
 def update_pool_numerals(description: str, pool_size: int) -> str:
@@ -154,7 +162,7 @@ def update_pool_numerals(description: str, pool_size: int) -> str:
     real one for the author to resolve rather than something to paper over.
     """
     out = _POOL_OF.sub(lambda m: f"{m.group(1)}{pool_size}", description)
-    return _QUESTION_BANK.sub(lambda m: f"{pool_size}{m.group(2)}", out)
+    return _N_QUESTION_BANK.sub(lambda m: f"{pool_size}{m.group(2)}", out)
 
 
 def _load(path: Path) -> tuple[dict[str, Any], str, str]:

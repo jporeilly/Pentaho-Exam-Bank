@@ -444,6 +444,31 @@ def test_other_claims_are_left_to_the_author(text):
     assert update_pool_numerals(text, 7) == text
 
 
+def test_publishing_never_rewrites_the_app_name_in_prose():
+    """A real description, pinned verbatim.
+
+    `_N_QUESTION_BANK` is run over authored prose, and this sentence contains
+    this app's own former name. The leading `(\\d+)-` is the only thing keeping
+    the pattern off it: loosened to `(question\\s+bank)`, a publish would
+    rewrite the product name inside an author's sentence and nothing would
+    connect the two changes. The pool numeral moves; every other word stays.
+    """
+    authored = (
+        "DRAFT for review - generated from the course content; review and "
+        "refine in the Question Bank app before a real workshop. 15 questions "
+        "per attempt from a pool of 18, pass mark 80%."
+    )
+
+    assert update_pool_numerals(authored, 18) == authored
+    grown = update_pool_numerals(authored, 25)
+    assert grown == authored.replace("pool of 18", "pool of 25")
+
+    # Said directly, so the failure names the thing that went wrong.
+    for untouched in ("DRAFT for review", "Question Bank app",
+                      "15 questions per attempt", "pass mark 80%"):
+        assert untouched in grown, f"publishing rewrote {untouched!r}"
+
+
 def test_publishing_updates_the_pool_size_the_build_checks(tmp_path, pool):
     document = dict(EXAM, description="Drawn from a pool of 2. Pass mark is 60%.")
     document = {k: v for k, v in document.items() if k != "questionsPerAttempt"}
