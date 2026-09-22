@@ -103,6 +103,17 @@ export interface Question {
   updated_at: string;
 }
 
+/** The question lifecycle, as core/bank.py defines it.
+ *
+ * Fetched rather than restated here: STATUS_TRANSITIONS is enforced by
+ * Question.transition, and a second copy in the UI would offer moves the
+ * model refuses - a 409 arriving from a button that should not exist.
+ */
+export interface Lifecycle {
+  statuses: string[];
+  transitions: Record<string, string[]>;
+}
+
 export interface QuestionPage {
   items: Question[];
   total: number;
@@ -226,6 +237,8 @@ export const api = {
     }),
   deleteQuestion: (id: string) =>
     request<{ ok: boolean }>(`/api/questions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  lifecycle: () => request<Lifecycle>("/api/lifecycle"),
 
   certifications: () => request<Certification[]>("/api/certifications"),
 

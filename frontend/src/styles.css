@@ -155,3 +155,53 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--tex
 .faint { color: var(--text-faint); }
 .empty { padding: 34px; text-align: center; color: var(--text-dim); }
 .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+
+/* ── the question editor ─────────────────────────────────────────── */
+/* Sits above the list rather than in a modal: the row you came from
+   stays visible, which is what tells you which question you are
+   editing when several read alike. */
+.editor { margin-bottom: 14px; }
+
+.field { display: block; margin: 10px 0; }
+.field-label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  opacity: 0.75;
+}
+.field-hint { display: block; font-size: 12px; margin-top: 3px; }
+.field input,
+.field textarea,
+.field select { width: 100%; }
+.field textarea { resize: vertical; font: inherit; }
+
+/* Named `field-row`, not `row`: `.row` was also on every <tr> in the
+   bank table, so `display: flex` collapsed the table into a column of
+   cells with its headers stranded beside them. */
+.field-row { display: flex; gap: 12px; }
+.field-row .field { flex: 1; }
+
+.options { display: flex; flex-direction: column; gap: 6px; }
+.option-row { display: flex; gap: 8px; align-items: center; }
+.option-row input { flex: 1; }
+
+/* A problem is stated where it happened. Saving is blocked while any
+   remain, so this is the only thing standing between the editor and a
+   400 from the API - it has to be legible, not decorative. */
+.problem {
+  font-size: 13px;
+  padding: 6px 10px;
+  margin: 4px 0 8px;
+  border-left: 3px solid #b91c1c;
+  background: rgba(185, 28, 28, 0.08);
+}
+
+.editor-actions { margin-top: 16px; align-items: center; gap: 10px; }
+button.danger { color: #b91c1c; }
+
+/* The list rows are clickable now. */
+tbody tr.q-row { cursor: pointer; }
+tbody tr.q-row:hover { background: rgba(0, 0, 0, 0.03); }
+tbody tr.selected { background: rgba(185, 28, 28, 0.07); }

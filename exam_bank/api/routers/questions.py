@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ...core.bank import STATUSES, ExamBankDB
+from ...core.bank import STATUS_TRANSITIONS, STATUSES, ExamBankDB
 from ..deps import get_db, question_json
 
 router = APIRouter(tags=["questions"])
@@ -20,6 +20,21 @@ _EDITABLE = (
     "distractors", "option_order", "explanation", "topic", "tags",
     "difficulty", "bloom_level", "assigned_sme",
 )
+
+
+@router.get("/api/lifecycle")
+def lifecycle() -> dict[str, Any]:
+    """The question lifecycle, as the model defines it.
+
+    Served rather than restated in the front end. The transitions are
+    enforced by `Question.transition`, which raises on an illegal move;
+    a UI holding its own copy of the table would offer buttons the model
+    refuses, and the user would meet a 409 they cannot do anything with.
+    One table, asked at run time.
+    """
+    return {"statuses": list(STATUSES), "transitions": {
+        status: list(moves) for status, moves in STATUS_TRANSITIONS.items()
+    }}
 
 
 @router.get("/api/questions")

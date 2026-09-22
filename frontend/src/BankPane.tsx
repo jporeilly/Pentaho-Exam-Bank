@@ -7,6 +7,7 @@ import {
   type Question,
   type QuestionFilters,
 } from "./api";
+import { QuestionEditor } from "./QuestionEditor";
 
 const PAGE = 25;
 
@@ -31,6 +32,11 @@ export function BankPane({
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState("");
+
+  // The question open in the editor. Held as the OBJECT rather than an id
+  // so the editor can render immediately from the row already on screen -
+  // fetching by id would blank the panel for a round trip on every click.
+  const [editing, setEditing] = useState<Question | null>(null);
 
   // Guards against an out-of-order response overwriting a newer one.
   const latest = useRef(0);
@@ -166,6 +172,27 @@ export function BankPane({
 
       {error && <div className="banner">{error}</div>}
 
+      {editing && (
+        <QuestionEditor
+          question={editing}
+          onSaved={(q) => {
+            // Patch the row in place rather than reloading: a reload
+            // re-sorts by updated_at and the question the user is
+            // editing jumps somewhere else on the page.
+            setQuestions((rows) => rows?.map((r) => (r.id === q.id ? q : r)) ?? rows);
+            setEditing(q);
+            onChanged?.();
+          }}
+          onDeleted={(id) => {
+            setQuestions((rows) => rows?.filter((r) => r.id !== id) ?? rows);
+            setTotal((n) => Math.max(0, n - 1));
+            setEditing(null);
+            onChanged?.();
+          }}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
       <div className="card">
         {!questions ? (
           <div className="empty">Loading…</div>
@@ -185,7 +212,11 @@ export function BankPane({
             </thead>
             <tbody>
               {questions.map((q) => (
-                <tr key={q.id}>
+                <tr
+                  key={q.id}
+                  className={editing?.id === q.id ? "q-row selected" : "q-row"}
+                  onClick={() => setEditing(q)}
+                >
                   <td className="mono faint">{q.id.slice(0, 12)}</td>
                   <td>
                     {q.stem}
@@ -205,7 +236,15 @@ export function BankPane({
                     {q.pool_order >= 0 ? q.pool_order : <span className="faint">—</span>}
                   </td>
                   <td>
-                    <button className="secondary" onClick={() => remove(q)}>
+                    <button
+                      className="secondary"
+                      onClick={(e) => {
+                        // The row opens the editor; this button must not
+                        // also open it behind the confirm dialog.
+                        e.stopPropagation();
+                        remove(q);
+                      }}
+                    >
                       Delete
                     </button>
                   </td>
