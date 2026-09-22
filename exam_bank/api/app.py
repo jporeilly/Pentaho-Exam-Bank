@@ -10,9 +10,12 @@ translation of ``core``. Nothing here holds state between requests.
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
 from ..core.providers import ProviderError
@@ -51,3 +54,51 @@ app.include_router(certifications.router)
 app.include_router(courses.router)
 app.include_router(generation.router)
 app.include_router(export.router)
+
+
+# ── the built front end ─────────────────────────────────────────
+#
+# Mounted only when `frontend/dist` exists, so the dev flow is
+# unchanged: Vite serves 7789 and proxies /api here. A build makes
+# the API one process on one port, which is what the installer will
+# ship.
+#
+# AFTER the routers, deliberately. Starlette matches in registration
+# order and a catch-all registered first swallows every /api route -
+# the Content Editor's mount_ui carries the same warning, learned the
+# same way: the page renders blank with a 200 and no error anywhere.
+_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+def mount_ui() -> bool:
+    """Serve `frontend/dist` at the site root. False when unbuilt."""
+    index = _DIST / "index.html"
+    if not index.is_file():
+        return False
+
+    # Hashed assets first, then a catch-all that hands every other
+    # path to index.html so a reload deep in the app still works.
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(_DIST / "assets")),
+        name="assets",
+    )
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str) -> FileResponse:
+        # NEVER answer for /api. Registering after the routers stops
+        # the catch-all shadowing routes that EXIST; it does nothing
+        # for a route that exists and REFUSES. A rejected path
+        # traversal came back 200 with index.html, which reads as the
+        # traversal having worked.
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="No such endpoint")
+        candidate = _DIST / path
+        if path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)
+
+    return True
+
+
+UI_MOUNTED = mount_ui()
