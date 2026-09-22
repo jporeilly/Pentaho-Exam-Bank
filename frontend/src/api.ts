@@ -216,6 +216,40 @@ export interface GenerateRequest {
   model?: string;
 }
 
+/** One question that exists in both the bank and the course, but differs. */
+export interface QuestionChange {
+  id: string;
+  fields: string[];
+}
+
+/** What publishing would do to a course's exam.json — or, after a write,
+ *  what it did. The server computes this; nothing here is inferred. */
+export interface PublishPlan {
+  courseId: string;
+  path: string;
+  /** The hash of the file this plan was made against. Passed back on the
+   *  write, so a publish cannot land on a file somebody else has since
+   *  saved — the Content Editor writes this same file in whole. */
+  sourceSha: string;
+  isNoop: boolean;
+  beforeCount: number;
+  afterCount: number;
+  added: string[];
+  removed: string[];
+  changed: QuestionChange[];
+  unchanged: number;
+  reordered: boolean;
+  /** Key NAMES the merge left alone. Several hold credentials, so the server
+   *  sends names only — the point is to show they survived. */
+  preservedKeys: string[];
+  /** Both empty unless the description's pool-size numeral has to move. The
+   *  Content Manager's build check fails when the prose misstates the pool,
+   *  so this is the one piece of authored text a publish may touch. */
+  descriptionBefore: string;
+  descriptionAfter: string;
+  written?: boolean;
+}
+
 // ── Calls ───────────────────────────────────────────────────────────
 
 export const api = {
@@ -261,6 +295,25 @@ export const api = {
     request<{ saved: number }>(`/api/jobs/${encodeURIComponent(id)}/commit`, {
       method: "POST",
       body: JSON.stringify({ question_ids, certification_id }),
+    }),
+
+  /** What publishing would change in the course's exam.json. Writes nothing. */
+  planPublish: (slug: string, certification_id: string, status = "approved") =>
+    request<PublishPlan>(
+      `/api/courses/${encodeURIComponent(slug)}/exam/questions/plan`,
+      { method: "POST", body: JSON.stringify({ certification_id, status }) },
+    ),
+  /** Replace the course's questions. `expect_sha` comes from a plan, and the
+   *  server refuses the write without it — so this cannot be called first. */
+  publish: (
+    slug: string,
+    certification_id: string,
+    expect_sha: string,
+    status = "approved",
+  ) =>
+    request<PublishPlan>(`/api/courses/${encodeURIComponent(slug)}/exam/questions`, {
+      method: "POST",
+      body: JSON.stringify({ certification_id, status, expect_sha }),
     }),
 
   /** Export is a file download, so it is a URL the browser fetches, not JSON. */

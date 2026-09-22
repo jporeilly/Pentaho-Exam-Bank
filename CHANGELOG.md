@@ -32,6 +32,30 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- **Publish back into a course** (`core/publisher.py`, the Publish pane,
+  `POST /api/courses/{slug}/exam/questions{,/plan}`). A **merge**, not a
+  write: the course's `exam.json` is read, its `questions` array replaced, and
+  every other key handed back untouched and in its original order — `intake`
+  above all, which the whole-document exporter has no parameter for and would
+  have dropped. The file's own line endings are preserved, because the Content
+  Manager repo has `core.autocrlf=true` and imposing either turns a
+  two-question edit into a whole-file diff.
+
+  The write **requires the hash from a plan**, so it cannot be issued by a
+  client that never asked what it was about to change, and it closes the race
+  with the Content Editor, which writes this same file in whole. Publishing is
+  refused — never quietly adjusted — when the pool would be empty, smaller
+  than `questionsPerAttempt`, carry duplicate ids, or be published into a
+  course the certification was not adopted from.
+
+- **A refusal for stale `intake.contact` blocks.** Five published `exam.json`
+  turned out to carry the contact relay's secret inside a block that moved to
+  `course.json` months ago, which is how one credential came to be published
+  in eight files instead of three. Publishing over one would re-commit it, so
+  the merge refuses and names the key path. Deliberately not stripped:
+  dropping an authored key silently is the same failure in the other
+  direction, and silence is what let the copies sit there.
+
 - **An app icon** (`icons/icon.ico`, plus the browser tab's
   `frontend/public/favicon.ico`): the suite's black P tile with a violet
   ticked-answer-box badge. Drawn by the Content Manager's `make-icons.py`,
@@ -54,6 +78,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   reader so that reading a course no longer drags in `python-pptx`.
 
 ### Fixed
+
+- **A corrected answer was published alongside the typo it replaced.**
+  `Question.all_choices` returned the stored `option_order` verbatim, and the
+  editor never sends that field — so once an author fixed a key, the export
+  saw the pre-edit option list, failed to find the corrected key in it, and
+  appended it as an extra choice. The question shipped with the typo still
+  selectable and two near-identical options in front of the learner, which is
+  the one defect a reviewer cannot answer their way out of. The order is now
+  applied rather than believed: surviving options keep their slot, an
+  edited-away entry leaves a hole that the new text fills in place, and
+  anything left over goes on the end — so a stale order can cost position,
+  never correctness. `tests/test_pcm_roundtrip.py` covers the edit cases; five
+  of the six fail against the old property.
 
 - **The launchers now call the venv's interpreter by explicit path.** They
   activated the venv and trusted `python`, which on a machine with the Windows

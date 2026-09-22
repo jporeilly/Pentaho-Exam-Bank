@@ -169,3 +169,108 @@ def test_round_trip_preserves_the_settings_the_editor_owns(exam_path, tmp_path):
 
     for key in ("title", "description", "passMark", "questionsPerAttempt", "shuffle"):
         assert after[key] == EXAM[key], f"{key} changed across the round-trip"
+
+
+# --- an edit between import and export ------------------------------------
+#
+# Everything above round-trips losslessly because nothing changed in between.
+# The whole point of the bank is that something does: an author fixes a typo
+# in a key, or swaps a distractor. `option_order` holds the authored display
+# order and the editor never sends it back, so from the first edit onwards it
+# describes text that no longer exists.
+
+
+def test_editing_a_key_does_not_republish_the_old_text(exam_path, tmp_path):
+    """The defect this guards: a corrected key published ALONGSIDE the typo.
+
+    `all_choices` used to return `option_order` verbatim, so the exporter saw
+    the pre-edit text as the option list, failed to find the corrected key in
+    it, and appended it as a fifth choice. The result reads as a plausible
+    question with the typo still selectable and two near-identical options in
+    front of the learner.
+    """
+    questions = import_from_pcm_exam_json(exam_path)
+    q = questions[0]
+    assert q.option_order == ["CSV file input", "Table output", "Sort rows", "Dummy"]
+
+    q.key = "CSV file input step"          # the author fixes the wording
+
+    out = tmp_path / "out.json"
+    export_pcm_exam_json(questions, out, title=EXAM["title"])
+    item = json.loads(out.read_text(encoding="utf-8"))["questions"][0]
+
+    assert "CSV file input" not in item["options"], "the pre-edit text was republished"
+    assert len(item["options"]) == 4, "the edit added an option instead of replacing one"
+    assert item["options"][item["correct"]] == "CSV file input step"
+
+
+def test_an_edited_key_keeps_its_authored_slot(exam_path, tmp_path):
+    """Position is not cosmetic: with `shuffle` off the learner sees the
+    authored order, so a corrected answer must not migrate to the end."""
+    questions = import_from_pcm_exam_json(exam_path)
+    questions[0].key = "CSV file input step"
+
+    out = tmp_path / "out.json"
+    export_pcm_exam_json(questions, out, title=EXAM["title"])
+    item = json.loads(out.read_text(encoding="utf-8"))["questions"][0]
+
+    assert item["options"] == [
+        "CSV file input step", "Table output", "Sort rows", "Dummy",
+    ]
+    assert item["correct"] == 0
+
+
+def test_editing_one_key_of_a_multi_select(exam_path, tmp_path):
+    """`correctIndices` indexes into the same list, so a stale order changes
+    which answers grade as correct rather than merely how they read."""
+    questions = import_from_pcm_exam_json(exam_path)
+    q = questions[1]
+    assert q.keys == ["Table output", "Insert / Update"]
+
+    q.keys = ["Table output", "Insert/Update"]      # spacing fixed
+
+    out = tmp_path / "out.json"
+    export_pcm_exam_json(questions, out, title=EXAM["title"])
+    item = json.loads(out.read_text(encoding="utf-8"))["questions"][1]
+
+    assert item["options"] == ["Table output", "Insert/Update", "Sort rows", "Dummy"]
+    assert item["correctIndices"] == [0, 1]
+
+
+def test_a_new_distractor_is_appended_not_substituted(exam_path, tmp_path):
+    """An option that is genuinely new has no slot to return to, so it goes
+    on the end and disturbs nothing that was already placed."""
+    questions = import_from_pcm_exam_json(exam_path)
+    questions[0].distractors.append("Text file output")
+
+    out = tmp_path / "out.json"
+    export_pcm_exam_json(questions, out, title=EXAM["title"])
+    item = json.loads(out.read_text(encoding="utf-8"))["questions"][0]
+
+    assert item["options"] == [
+        "CSV file input", "Table output", "Sort rows", "Dummy", "Text file output",
+    ]
+    assert item["correct"] == 0
+
+
+def test_a_removed_distractor_leaves_the_rest_in_place(exam_path, tmp_path):
+    questions = import_from_pcm_exam_json(exam_path)
+    questions[0].distractors.remove("Sort rows")
+
+    out = tmp_path / "out.json"
+    export_pcm_exam_json(questions, out, title=EXAM["title"])
+    item = json.loads(out.read_text(encoding="utf-8"))["questions"][0]
+
+    assert item["options"] == ["CSV file input", "Table output", "Dummy"]
+    assert item["correct"] == 0
+
+
+def test_an_untouched_pool_still_round_trips_byte_for_byte(exam_path, tmp_path):
+    """The reconciliation must be inert when nothing was edited - otherwise
+    every publish would produce a diff nobody asked for."""
+    questions = import_from_pcm_exam_json(exam_path)
+    out = tmp_path / "out.json"
+    export_pcm_exam_json(questions, out, title=EXAM["title"])
+
+    after = json.loads(out.read_text(encoding="utf-8"))["questions"]
+    assert [q["options"] for q in after] == [q["options"] for q in EXAM["questions"]]

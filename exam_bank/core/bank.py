@@ -161,10 +161,44 @@ class Question:
 
     @property
     def all_choices(self) -> List[str]:
-        """Return all options in original display order (or keys+distractors if no order stored)."""
-        if self.option_order:
-            return list(self.option_order)
-        return self.correct_answers + self.distractors
+        """Every option, in the order a learner should see them.
+
+        ``option_order`` is a DISPLAY ORDER, not a second copy of the options.
+        The options themselves are ``correct_answers`` + ``distractors``, and
+        editing either changes them without touching the stored order — the
+        editor sends `key`/`distractors`, not `option_order`. Returning the
+        stored order verbatim therefore publishes the text as it was BEFORE
+        the edit and leaves the correction to be appended as an extra choice:
+        a fixed typo ships as two near-identical options with the old one
+        still selectable, which is the one defect a reviewer cannot answer.
+
+        So the order is applied, not believed. Options that still exist keep
+        their slot; one whose text was edited away leaves a hole that the new
+        text fills in its place, so a corrected answer stays where the author
+        put it; anything left over goes on the end. A stale order can cost
+        position, never correctness.
+        """
+        live = self.correct_answers + self.distractors
+        if not self.option_order:
+            return live
+
+        remaining = list(live)
+        slots = []
+        for text in self.option_order:
+            if text in remaining:
+                remaining.remove(text)
+                slots.append(text)
+            else:
+                slots.append(None)          # edited away, or no longer an option
+
+        out: List[str] = []
+        for slot in slots:
+            if slot is not None:
+                out.append(slot)
+            elif remaining:
+                out.append(remaining.pop(0))   # the edit, back in its own slot
+        out.extend(remaining)                  # genuinely new options
+        return out
 
     @property
     def format_label(self) -> str:

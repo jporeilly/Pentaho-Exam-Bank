@@ -205,3 +205,69 @@ button.danger { color: #b91c1c; }
 tbody tr.q-row { cursor: pointer; }
 tbody tr.q-row:hover { background: rgba(0, 0, 0, 0.03); }
 tbody tr.selected { background: rgba(185, 28, 28, 0.07); }
+
+/* ── Publish ───────────────────────────────────────────────────────── */
+/* The only pane that writes into a file another application owns, so the
+   plan is styled as something to read rather than as a confirmation to
+   dismiss: full width, generous line height, and the destructive item
+   (a removal) given the same weight as the rest rather than hidden. */
+.publish .lede {
+  margin: 0 0 16px;
+  color: var(--text-dim);
+  max-width: 62ch;
+}
+.plan {
+  margin-top: 18px;
+  background: var(--bg);
+}
+.plan h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.plan h3 .mono { font-weight: 400; color: var(--text-dim); }
+.plan p { margin: 0 0 10px; }
+.plan-summary {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.plan-summary > li {
+  padding: 7px 0 7px 12px;
+  border-left: 3px solid var(--line);
+  line-height: 1.55;
+}
+.plan-summary > li + li { margin-top: 4px; }
+.plan-summary ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  list-style: none;
+}
+.plan-summary ul li { padding: 2px 0; }
+.plan-summary .added { border-left-color: var(--ok); }
+.plan-summary .removed { border-left-color: var(--bad); }
+.plan-summary .changed { border-left-color: var(--accent); }
+.plan-summary .removed .faint { margin-top: 4px; font-size: 12px; max-width: 58ch; }
+.preserved { margin: 0 0 14px; line-height: 1.9; }
+.preserved .mono {
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-right: 5px;
+}
+.prose-diff {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.prose-diff del,
+.prose-diff ins {
+  display: block;
+  padding: 3px 7px;
+  border-radius: 3px;
+  text-decoration: none;
+}
+.prose-diff del { background: #f3dcd7; color: #6b2018; }
+.prose-diff del::before { content: "− "; opacity: 0.7; }
+.prose-diff ins { background: #ddebd2; color: #2f5219; margin-top: 3px; }
+.prose-diff ins::before { content: "+ "; opacity: 0.7; }

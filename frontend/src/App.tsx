@@ -4,13 +4,15 @@ import { api, ApiError, type Health } from "./api";
 import { BankPane } from "./BankPane";
 import { CoursesPane } from "./CoursesPane";
 import { GeneratePane } from "./GeneratePane";
+import { PublishPane } from "./PublishPane";
 
-type Tab = "courses" | "generate" | "bank";
+type Tab = "courses" | "generate" | "bank" | "publish";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "courses", label: "Courses" },
   { id: "generate", label: "Generate" },
   { id: "bank", label: "Bank" },
+  { id: "publish", label: "Publish" },
 ];
 
 export function App() {
@@ -135,6 +137,7 @@ export function App() {
           <GeneratePane initialCourse={openCourse} onCommitted={loadHealth} />
         )}
         {tab === "bank" && <BankPane openCourse={openCourse} onChanged={loadHealth} />}
+        {tab === "publish" && <PublishPane openCourse={openCourse} />}
       </main>
     </div>
   );

@@ -13,12 +13,15 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
+from ...core.bank import ExamBankDB
 from ...core.context_budget import source_budget_chars
 from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course
+from ...core.publisher import PublishRefused, apply as apply_publish, plan as plan_publish
 from ...utils.config import config
-from ..deps import courses_dir
+from ..deps import courses_dir, get_db
 
 router = APIRouter(tags=["courses"])
 
@@ -131,3 +134,123 @@ def get_course_exam(slug: str) -> dict[str, Any]:
         "questionCount": len(questions),
         "questions": questions,
     }
+
+
+class PublishRequest(BaseModel):
+    """Which questions to put into a course's exam, and what the caller
+    believes the file currently is."""
+
+    certification_id: str = ""
+    status: str = "approved"
+    # The hash the caller was shown a plan for. Required on the write, so a
+    # publish cannot happen without somebody having looked at one first.
+    expect_sha: str = ""
+
+
+def _publish_plan(slug: str, body: PublishRequest, db: ExamBankDB):
+    """The shared half of plan-and-apply: select, check the pairing, plan.
+
+    Written once because the plan the author reviews and the plan that gets
+    written must be produced the same way. Two code paths here would mean the
+    reviewed diff and the applied diff could differ, which is the one thing a
+    dry run exists to rule out.
+    """
+    # Resolve the slug FIRST. A course that has been renamed away must say so
+    # and name the ones that exist — otherwise the pairing check below answers
+    # instead, and "adopted from demo-course, not renamed-away" reads as a
+    # mismatched pair when the real problem is that the target is gone.
+    exam_path = _course_dir(slug) / "exam.json"
+
+    if not body.certification_id:
+        raise HTTPException(
+            400,
+            "An exam.json belongs to one course, so publishing needs a "
+            "certification to take the questions from.",
+        )
+
+    certification = db.get_certification(body.certification_id)
+    if certification is None:
+        raise HTTPException(404, f"No certification '{body.certification_id}'.")
+
+    # A certification adopted from a course remembers which one. Publishing it
+    # into a different course would overwrite a pool that has nothing to do
+    # with it, and the ids would not collide, so the result would look like a
+    # successful publish of the wrong questions.
+    linked = (certification.source_ref or "").strip()
+    if linked and linked != slug:
+        raise HTTPException(
+            409,
+            f"'{certification.name}' was adopted from '{linked}', not '{slug}'. "
+            "Publishing it here would replace a different course's pool.",
+        )
+
+    questions = db.search(
+        certification_id=body.certification_id, status=body.status, limit=5000
+    )
+    try:
+        return plan_publish(exam_path, questions, source_label=certification.name)
+    except PublishRefused as e:
+        # 409, not 400: the request is well formed and the caller is not wrong
+        # to have made it - the course or the selection is in a state that
+        # makes writing the wrong thing to do.
+        raise HTTPException(409, str(e)) from e
+
+
+def _plan_json(slug: str, made) -> dict[str, Any]:
+    return {
+        "courseId": slug,
+        "path": str(made.path),
+        # The caller hands this back on the write. See publisher.apply.
+        "sourceSha": made.source_sha,
+        "isNoop": made.is_noop,
+        "beforeCount": made.before_count,
+        "afterCount": made.after_count,
+        "added": made.added,
+        "removed": made.removed,
+        "changed": [{"id": c.id, "fields": c.fields} for c in made.changed],
+        "unchanged": made.unchanged,
+        "reordered": made.reordered,
+        # Key NAMES only. Several of these hold credentials, and the point is
+        # to show the author they survived, not to show their values.
+        "preservedKeys": made.preserved_keys,
+        # Both empty unless the pool-size numeral in the description has to
+        # move. Sent as before/after prose so the author reads the actual
+        # sentence rather than being told a number changed somewhere.
+        "descriptionBefore": made.description_before,
+        "descriptionAfter": made.description_after,
+    }
+
+
+@router.post("/api/courses/{slug}/exam/questions/plan")
+def plan_course_exam_questions(
+    slug: str, body: PublishRequest, db: ExamBankDB = Depends(get_db)
+) -> dict[str, Any]:
+    """What publishing would change in the course's exam.json. Writes nothing."""
+    return _plan_json(slug, _publish_plan(slug, body, db))
+
+
+@router.post("/api/courses/{slug}/exam/questions")
+def publish_course_exam_questions(
+    slug: str, body: PublishRequest, db: ExamBankDB = Depends(get_db)
+) -> dict[str, Any]:
+    """Replace the course's ``questions`` array with the bank's.
+
+    ``expect_sha`` is required rather than optional: it is the hash returned
+    by the plan endpoint, so a write cannot be issued by a client that never
+    asked what it was about to change. It also closes the race with the
+    Content Editor, which writes this same file in whole.
+    """
+    if not body.expect_sha:
+        raise HTTPException(
+            400,
+            "Publishing needs the sourceSha from a plan. Ask "
+            f"/api/courses/{slug}/exam/questions/plan first, and pass back the "
+            "sourceSha it returned.",
+        )
+
+    made = _publish_plan(slug, body, db)
+    try:
+        apply_publish(made, expect_sha=body.expect_sha)
+    except PublishRefused as e:
+        raise HTTPException(409, str(e)) from e
+    return {**_plan_json(slug, made), "written": True}

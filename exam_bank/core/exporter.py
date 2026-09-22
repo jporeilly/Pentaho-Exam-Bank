@@ -86,33 +86,21 @@ def export_json(questions: List[Question], path: Path):
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def export_pcm_exam_json(
-    questions: List[Question],
-    path: Path,
-    *,
-    title: str = "Practitioner Exam",
-    pass_mark: int = 80,
-    questions_per_attempt: int = None,
-    shuffle: bool = True,
-    description: str = "",
-    webhook_url: str = "",
-    webhook_secret: str = "",
-    source_label: str = "",
-):
-    """Export questions as a Pentaho Content Manager ``exam.json``.
+def pcm_exam_items(
+    questions: List[Question], *, source_label: str = ""
+) -> List[dict]:
+    """The ``questions`` array of a PCM ``exam.json``, and nothing else.
+
+    Separated from :func:`export_pcm_exam_json` because there are two callers
+    with different jobs. The exporter builds a whole document for download;
+    publishing back replaces this one key inside the course's existing file
+    and must not touch the settings around it. Shaping a question is the part
+    they genuinely share, and shaped twice it would be shaped differently the
+    first time either changed.
 
     PCM's renderer expects each question as ``{ prompt, options[],
-    correct | correctIndices, ... }``. Single-select emits ``correct``
-    (one index); multi-select emits ``correctIndices`` (graded
-    all-or-nothing). Drop the result straight into a course dir.
-
-    ``source`` is the citation shown in the post-submission review
-    ("Source: ..."). It is set to a concise location — ``source_label``
-    (the course) plus the question's section/module — rather than the raw
-    grounding passage, so it reads as a citation. ``description``,
-    ``webhook_url``/``webhook_secret``, ``pass_mark`` and
-    ``questions_per_attempt`` let the caller carry over a course's existing
-    exam settings so regenerating questions doesn't wipe them.
+    correct | correctIndices, ... }``. Single-select emits ``correct`` (one
+    index); multi-select emits ``correctIndices`` (graded all-or-nothing).
     """
     # Honour the pool's authored order when every question carries one (a
     # pool adopted from a course). The bank returns questions newest-first,
@@ -168,6 +156,36 @@ def export_pcm_exam_json(
         elif q.source_file:
             item["source"] = q.source_file
         items.append(item)
+
+    return items
+
+
+def export_pcm_exam_json(
+    questions: List[Question],
+    path: Path,
+    *,
+    title: str = "Practitioner Exam",
+    pass_mark: int = 80,
+    questions_per_attempt: int = None,
+    shuffle: bool = True,
+    description: str = "",
+    webhook_url: str = "",
+    webhook_secret: str = "",
+    source_label: str = "",
+):
+    """Export questions as a complete Pentaho Content Manager ``exam.json``.
+
+    A whole document, for the author to download and place. It carries only
+    the settings named here, so it is **not** how an existing course gets
+    updated — anything the Content Editor owns that has no parameter above
+    would be dropped. See :mod:`exam_bank.core.publisher` for the in-place
+    merge that a live course needs.
+
+    ``description``, ``webhook_url``/``webhook_secret``, ``pass_mark`` and
+    ``questions_per_attempt`` let the caller carry over a course's existing
+    exam settings so regenerating questions doesn't wipe them.
+    """
+    items = pcm_exam_items(questions, source_label=source_label)
 
     # Field order mirrors a hand-authored exam.json for readable diffs.
     exam = {"title": title}

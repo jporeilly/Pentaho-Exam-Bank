@@ -88,7 +88,7 @@ covered by `tests/test_pcm_roundtrip.py`, and the import direction now round-tri
   diff, and in a pool that draws N with shuffle off it changes which questions get
   asked.
 
-**Still open: 3.4 below.**
+**3.3 and 3.4 are now done too — see below. The round trip is closed.**
 
 ### 3.1 Question ids churn on import — FIXED
 
@@ -119,16 +119,27 @@ stopped resolving: `load_pcm_course` returns `[]` with no error.
 stored slug no longer resolves, say so in the UI and offer the current course list — do not fail
 silently and do not guess.
 
-### 3.3 `verify-course.mjs` enforces description ↔ numbers
+### 3.3 `verify-course.mjs` enforces description ↔ numbers — FIXED
 
 `checkExamDescriptionClaims` fails the build when the prose misstates the pool size, questions per
 attempt, or pass mark — e.g. "40 questions … drawn from a pool of 48. Pass mark is 80%."
 
-**Fix:** publishing must regenerate those numerals. It recognises several phrasings
-(`pool of (\d+)`, `(\d+)-exam bank`, `(\d+) questions per attempt`, …), so match the existing
-sentence shape rather than rewriting the author's prose.
+**Done** in `publisher.update_pool_numerals`, which rewrites only the pool-size
+numeral and only in the two phrasings the check actually recognises. Those were
+read out of `checkExamDescriptionClaims` rather than taken from this section,
+which said `(\d+)-exam bank` where the check says `(\d+)-question bank` — a
+pattern that never matches fixes nothing and says so nowhere. Verified against
+all 12 real courses: 9 carry a pool-size claim and all 9 rewrite correctly,
+with `40-question exam` (questionsPerAttempt) left alone beside a
+`50-question bank` that moves.
 
-### 3.4 Publishing must MERGE into the existing file, never regenerate it
+Claims about `questionsPerAttempt` and `passMark` are deliberately left alone:
+publishing changes neither, so a disagreement there is a real one for the
+author rather than something to paper over. The plan shows the sentence before
+and after, because "the description will be updated" is not something anyone
+can agree or disagree with.
+
+### 3.4 Publishing must MERGE into the existing file, never regenerate it - FIXED
 
 `export_pcm_exam_json` writes a *fresh* `exam.json` from a fixed parameter list.
 It is the right tool for a brand-new pool and the wrong one for publishing back
@@ -147,7 +158,12 @@ untouched — including keys the bank has never heard of. This is the exact mirr
 of the Content Editor's `put_exam`, which preserves `questions` "and any key this
 editor doesn't know about".
 
-**Until that exists, nothing publishes back to a course.**
+**Done** in `core/publisher.py`: `plan()` reads the course's file and
+replaces only `questions` (plus 3.3's numerals); `apply()` writes it back
+atomically, preserving key order, the file's own line endings and every key
+this app has never heard of. The write REQUIRES the hash from a plan, so it
+cannot be issued by a client that never asked what it would change, and that
+closes the race with the Content Editor writing the same file.
 
 ---
 
