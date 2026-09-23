@@ -1,0 +1,42 @@
+[package]
+# The binary name is a CONTRACT, not a label. The Content Editor looks for
+# "pentaho-exam-bank.exe" or "exam-bank.exe" inside an install
+# (Pentaho-Content-Editor/api/peb.py, _INSTALL_SHAPES); anything else and
+# its Questions button finds the registry key, looks inside, and reports
+# the bank as not installed. "-desktop" was the first name here and
+# matched neither.
+name = "pentaho-exam-bank"
+version = "0.1.0"
+description = "Desktop shell for the Pentaho Exam Bank"
+edition = "2021"
+rust-version = "1.77"
+
+# The installer already carries a vendored Python runtime and the bank's
+# dependency set; keep our own contribution small.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = [] }
+tauri-plugin-opener = "2.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Job objects, so a crashed shell cannot leave uvicorn holding the port and
+# the SQLite lock. See src/server.rs.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    # CreateJobObjectW takes a SECURITY_ATTRIBUTES pointer, so it is gated
+    # behind this even though we pass None for it.
+    "Win32_Security",
+] }

@@ -9,6 +9,35 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- **The Tauri desktop shell** (`desktop/src-tauri/`). Starts the vendored
+  Python on a free port, shows a startup page while it comes up, then
+  navigates the window to it — so the packaged app serves the same interface
+  a checkout does, which is what stops the two builds drifting.
+
+  A **kill-on-close job object** means a crashed or Task-Managered shell
+  cannot leave uvicorn holding the port and the SQLite lock. Readiness is
+  asked of Rust, never fetched from the startup page: that page is on a
+  `tauri://` origin, so a cross-origin fetch to `127.0.0.1` can never be read
+  back and the page would spin forever in front of a working server.
+
+  The **binary is named `pentaho-exam-bank.exe`** because that is a contract,
+  not a label: the Content Editor looks for exactly that name inside an
+  install. Cargo's default would have been `pentaho-exam-bank-desktop.exe`,
+  which matches neither of the two shapes it accepts.
+
+  The installer uses Tauri's NSIS **hooks** rather than overriding its
+  template — twenty lines instead of owning eleven hundred. They write
+  `HKLM\SOFTWARE\Pentaho\ExamBank` in **both registry views** (an NSIS
+  installer is 32-bit; the Content Editor's Python is 64-bit and reads the
+  64-bit view first), clear `app\` and `python\` before an upgrade so a
+  removed module cannot linger and stay importable, and remove the key on
+  uninstall. The user's bank in `%APPDATA%` is never touched.
+
+  Verified by assembling the install layout by hand and running it, which
+  needs no elevation: vendored Python, a free port, `GET /` 200, the database
+  at `%APPDATA%\com.pentaho.exam-bank\db` rather than inside the install, a
+  visible window, and no orphaned uvicorn after the shell was killed.
+
 - **Desktop packaging, started** (`desktop/`). The vendored-Python recipe from
   the Content Editor, adapted: `fetch-python.ps1` builds a self-contained
   Python 3.12.8 with the bank's runtime dependencies (148 MB), and

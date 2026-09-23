@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pentaho Exam Bank</title>
+<!--
+  The startup screen.
+
+  This page is the Tauri "frontend" and it exists for about two seconds: the
+  shell starts the bundled Python server on a free port, this page polls until
+  it answers, then navigates the window to it. Everything after that is the
+  real app, served over http by uvicorn - the same interface run.bat serves
+  from a checkout, which is what stops the two builds drifting.
+
+  It matters most when that does NOT happen. A window that stays blank is the
+  worst possible failure report, so this page shows the backend's own output
+  while it waits, and on failure shows what the shell resolved and what Python
+  said.
+
+  Readiness is asked of RUST (invoke('server_ready')), never fetched from
+  here: this page is on a tauri:// origin, so a fetch to http://127.0.0.1 is
+  cross-origin and the webview refuses to hand back the response even though
+  the server answered. Polling from here would spin forever in front of a
+  working app.
+-->
+<style>
+  :root {
+    --bg: #f5efe3;
+    --bg-raised: #fffdf7;
+    --line: #ded2bd;
+    --text: #2e2618;
+    --text-dim: #6a5c45;
+    --accent: #8a5a12;
+    --bad: #a32b1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1713; --bg-raised: #221e18; --line: #3a3229;
+      --text: #ece4d6; --text-dim: #a89680; --accent: #d9a14a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center;
+    justify-content: center; background: var(--bg); color: var(--text);
+    font: 14px/1.6 "Segoe UI", system-ui, sans-serif; padding: 24px;
+  }
+  .card { width: 100%; max-width: 640px; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .tile {
+    width: 34px; height: 34px; border-radius: 7px; background: #111;
+    color: #fff; display: grid; place-items: center; font-weight: 700;
+    font-size: 19px;
+  }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  .status { color: var(--text-dim); margin-bottom: 14px; }
+  .bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .bar i {
+    display: block; height: 100%; width: 35%; background: var(--accent);
+    border-radius: 2px; animation: slide 1.4s ease-in-out infinite;
+  }
+  @keyframes slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(340%); }
+  }
+  pre {
+    margin: 18px 0 0; padding: 12px 14px; background: var(--bg-raised);
+    border: 1px solid var(--line); border-radius: 6px; max-height: 240px;
+    overflow: auto; font: 12px/1.5 "Cascadia Mono", Consolas, monospace;
+    color: var(--text-dim); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .failed h1, .failed .status strong { color: var(--bad); }
+  .failed .bar { display: none; }
+  button {
+    font: inherit; padding: 7px 14px; margin: 14px 8px 0 0; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg-raised); color: var(--text);
+  }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="brand">
+      <span class="tile" aria-hidden="true">P</span>
+      <h1>Pentaho Exam Bank</h1>
+    </div>
+    <p class="status" id="status">Starting the application&hellip;</p>
+    <div class="bar"><i></i></div>
+    <pre id="log" class="hidden"></pre>
+    <div id="actions" class="hidden">
+      <button id="folder">Open the data folder</button>
+      <button id="details">Show what the shell found</button>
+    </div>
+  </div>
+
+<script>
+  const invoke = window.__TAURI__.core.invoke;
+  const statusEl = document.getElementById("status");
+  const logEl = document.getElementById("log");
+  const card = document.getElementById("card");
+  const actions = document.getElementById("actions");
+
+  // Long enough for a cold start on a slow disk with an antivirus watching
+  // every file of a 148 MB runtime; short enough that a genuine failure is
+  // not mistaken for patience.
+  const TIMEOUT_MS = 90000;
+  const started = Date.now();
+
+  function showLog(lines) {
+    if (!lines || !lines.length) return;
+    logEl.textContent = lines.join("\n");
+    logEl.classList.remove("hidden");
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  async function fail(reason) {
+    card.classList.add("failed");
+    statusEl.innerHTML = "<strong>The application did not start.</strong> " + reason;
+    actions.classList.remove("hidden");
+    try { showLog(await invoke("server_log")); } catch (e) { /* nothing to add */ }
+  }
+
+  document.getElementById("folder").onclick = () => invoke("open_state_dir");
+  document.getElementById("details").onclick = async () => {
+    const d = await invoke("diagnostics");
+    logEl.textContent = JSON.stringify(d, null, 2);
+    logEl.classList.remove("hidden");
+  };
+
+  async function poll() {
+    // Dead beats slow: a process that has exited is never going to answer,
+    // and waiting out the timeout wastes the user's time.
+    let alive = true;
+    try { alive = await invoke("server_alive"); } catch (e) { /* keep waiting */ }
+    if (!alive) {
+      return fail("The backend stopped. Its last output is below.");
+    }
+
+    let ready = false;
+    try { ready = await invoke("server_ready"); } catch (e) { /* keep waiting */ }
+    if (ready) {
+      const url = await invoke("server_url");
+      if (url) {
+        statusEl.textContent = "Ready.";
+        window.location.replace(url);
+        return;
+      }
+    }
+
+    try { showLog(await invoke("server_log")); } catch (e) { /* nothing yet */ }
+
+    if (Date.now() - started > TIMEOUT_MS) {
+      return fail("It is still not answering after 90 seconds.");
+    }
+    setTimeout(poll, 350);
+  }
+
+  // Show the window only once this page has painted, so a failure is never a
+  // bare white rectangle. The shell reveals it anyway after a few seconds, in
+  // case this script never runs at all.
+  invoke("reveal").catch(() => {});
+  poll();
+</script>
+</body>
+</html>
