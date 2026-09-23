@@ -224,6 +224,45 @@ export interface GenerateRequest {
   model?: string;
 }
 
+export interface BackupFile {
+  name: string;
+  sizeKb: number;
+  created: string;
+}
+
+export interface DatabaseStatus {
+  database: {
+    exists: boolean;
+    path: string;
+    questions?: number;
+    certifications?: number;
+    size_kb?: number;
+  };
+  backups: BackupFile[];
+}
+
+/** What a bulk deletion would remove.
+ *
+ *  `everything` is true when no filter narrows the set — the server refuses
+ *  that unless it is asked for explicitly, because an empty filter is far
+ *  more often a cleared one than a request to empty the bank. */
+export interface DeletionPlan {
+  total: number;
+  everything: boolean;
+  byStatus: Record<string, number>;
+  byCertification: Array<{ id: string; name: string; count: number }>;
+  /** A few stems, so the set is recognisable rather than just a number. */
+  sample: string[];
+}
+
+export interface DeletionFilters {
+  status?: string;
+  topic?: string;
+  certification_id?: string;
+  difficulty?: string;
+  bloom_level?: string;
+}
+
 /** The settings an author may change. Deliberately not the whole config:
  *  the app also stores state it manages for itself, and the server refuses
  *  to write anything outside this set. */
@@ -430,6 +469,43 @@ export const api = {
     request<{ saved: number }>(`/api/jobs/${encodeURIComponent(id)}/commit`, {
       method: "POST",
       body: JSON.stringify({ question_ids, certification_id }),
+    }),
+
+  databaseStatus: () => request<DatabaseStatus>("/api/admin/database"),
+  createBackup: (label = "") =>
+    request<{ name: string; backups: BackupFile[] }>("/api/admin/backups", {
+      method: "POST",
+      body: JSON.stringify({ label }),
+    }),
+  /** Replace the live database. The current one is backed up first and that
+   *  backup's name comes back, so the restore itself can be undone. */
+  restoreBackup: (name: string) =>
+    request<{ restored: string; safetyBackup: string } & DatabaseStatus>(
+      `/api/admin/backups/${encodeURIComponent(name)}/restore`,
+      { method: "POST" },
+    ),
+  deleteBackup: (name: string) =>
+    request<{ deleted: string; backups: BackupFile[] }>(
+      `/api/admin/backups/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+    ),
+
+  /** What a bulk deletion would remove. Deletes nothing. */
+  previewDeletion: (filters: DeletionFilters) =>
+    request<DeletionPlan>("/api/admin/questions/delete/preview", {
+      method: "POST",
+      body: JSON.stringify(filters),
+    }),
+  /** `expect_count` comes from the preview: a mismatch means the bank changed
+   *  in between, and the server refuses rather than deleting a different set. */
+  deleteQuestions: (
+    filters: DeletionFilters,
+    expect_count: number,
+    everything = false,
+  ) =>
+    request<{ deleted: number }>("/api/admin/questions/delete", {
+      method: "POST",
+      body: JSON.stringify({ ...filters, expect_count, everything }),
     }),
 
   settings: () => request<SettingsResponse>("/api/settings"),

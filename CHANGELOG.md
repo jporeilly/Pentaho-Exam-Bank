@@ -32,6 +32,28 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- **Admin, as a React pane** (`core/admin.py`, `exam_bank/api/routers/admin.py`,
+  the Admin pane). Backups and bulk deletion, deliberately in one place: this
+  is the only part of the app with no undo, and somebody about to delete four
+  hundred questions should be able to see the backup list while they decide.
+
+  Deleting is **count-first**. The filters are the same ones the bank list
+  uses, so it is genuinely easy to press delete against a view believed to
+  show four questions and have it match four hundred. The count, a breakdown
+  by status and certification, and a few of the actual stems all come back
+  before anything goes — and the count is carried on the button rather than
+  hidden behind "Are you sure?".
+
+  The delete then **passes that count back**, and is refused if the bank has
+  changed since. An **empty filter set matches everything**, so an unfiltered
+  deletion has to be asked for explicitly rather than arrived at by clearing
+  fields.
+
+  Backups are addressed **by name, never by path** — a client that could hand
+  over a path could restore the bank from, or delete, any file on the machine.
+  Restoring reports the name of the backup taken of what it replaced, so the
+  restore itself can be undone.
+
 - **Settings, as a React pane** (`exam_bank/api/routers/settings.py`,
   `GET`/`PUT /api/settings`). Identity, provider and model, the courses and
   export directories, the quality thresholds, and the list defaults.
@@ -138,6 +160,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   reader so that reading a course no longer drags in `python-pptx`.
 
 ### Fixed
+
+- **Two backups in the same second were one backup.** The name carries a
+  timestamp with one-second resolution and `sqlite3.connect` on an existing
+  path overwrites it, so an author who took a backup, changed something and
+  took another was left with a single file holding the later state.
+
+  The restore path made that worse than wasteful: `restore_backup` writes a
+  `pre_restore` copy *before* reading its source, so restoring a backup that
+  was itself a `pre_restore` generated the same name in the same second — the
+  safety copy landed on the very file being restored from, replacing the old
+  bank with the current one. The restore then "succeeded" while changing
+  nothing, and the backup it read no longer existed. Names are now made unique
+  before anything is written; all three new tests fail against the old naming.
 
 - **The import tab told authors the opposite of what the code does.** It said
   a plain-text file imports "all options as distractors". `import_from_text`

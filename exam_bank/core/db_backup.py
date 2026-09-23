@@ -30,14 +30,30 @@ def create_backup(label: str = "") -> Path:
     """Create a timestamped backup of the current database.
 
     Returns the path to the backup file.
+
+    The name is made unique before anything is written. The timestamp has
+    one-second resolution, so two backups taken in the same second used to
+    resolve to the same filename and the second silently overwrote the first —
+    an author who took a backup, changed something and took another was left
+    with one file holding the later state.
+
+    The restore path made that worse rather than merely wasteful:
+    ``restore_backup`` takes a ``pre_restore`` backup before reading its
+    source, so restoring two backups in quick succession could have the safety
+    copy land on the very file being restored from, replacing it with the
+    current database. The bank was then "restored" to what it already was, and
+    the backup was gone.
     """
     if not DB_PATH.exists():
         raise FileNotFoundError("No database to back up.")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     suffix = f"_{label}" if label else ""
-    backup_name = f"exam_bank_{timestamp}{suffix}.db"
-    backup_path = BACKUP_DIR / backup_name
+    backup_path = BACKUP_DIR / f"exam_bank_{timestamp}{suffix}.db"
+    attempt = 2
+    while backup_path.exists():
+        backup_path = BACKUP_DIR / f"exam_bank_{timestamp}{suffix}-{attempt}.db"
+        attempt += 1
 
     # Use SQLite online backup API for a safe, consistent copy
     src = sqlite3.connect(str(DB_PATH))
