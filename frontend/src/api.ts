@@ -224,6 +224,41 @@ export interface GenerateRequest {
   model?: string;
 }
 
+export interface DocSection {
+  document: string;
+  heading: string;
+  snippet: string;
+  score: number;
+}
+
+export interface DocSearchResult {
+  query: string;
+  /** How many sections were looked through. Lets an empty result read as
+   *  "not in the docs" rather than "docs not loaded", which otherwise look
+   *  identical. */
+  sectionsSearched: number;
+  results: DocSection[];
+}
+
+export interface DocDocument {
+  document: string;
+  sections: Array<{ heading: string; text: string }>;
+}
+
+/** An answer, and what it was built from.
+ *
+ *  `answered` is false when nothing in the documentation matched — in that
+ *  case the model was never called, because asked with nothing to read it
+ *  answers from what it knows about apps of this kind, which reads exactly
+ *  like an answer about this one. */
+export interface DocAnswer {
+  answered: boolean;
+  answer: string;
+  sources: DocSection[];
+  provider?: string;
+  model?: string;
+}
+
 export interface BackupFile {
   name: string;
   sizeKb: number;
@@ -469,6 +504,15 @@ export const api = {
     request<{ saved: number }>(`/api/jobs/${encodeURIComponent(id)}/commit`, {
       method: "POST",
       body: JSON.stringify({ question_ids, certification_id }),
+    }),
+
+  documents: () => request<DocDocument[]>("/api/docs"),
+  searchDocs: (q: string, limit = 8) =>
+    request<DocSearchResult>(`/api/docs/search${query({ q, limit })}`),
+  askDocs: (question: string) =>
+    request<DocAnswer>("/api/docs/ask", {
+      method: "POST",
+      body: JSON.stringify({ question }),
     }),
 
   databaseStatus: () => request<DatabaseStatus>("/api/admin/database"),

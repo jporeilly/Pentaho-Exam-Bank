@@ -9,28 +9,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 
-- **Renamed to Pentaho Exam Bank.** The product, the Python package
-  (`question_bank` -> `exam_bank`), the module that was the same name as its
-  own package (`core/question_bank.py` -> `core/bank.py`), the class
-  (`QuestionBankDB` -> `ExamBankDB`), the launch handover (`PQB_COURSE` ->
-  `PEB_COURSE`) and every string an author reads. The Content Editor's
-  Questions button opened a window titled "Question Bank Generator" - a
-  third name for the same app, and the one that made this worth doing.
+- **Documentation search finds what it is asked for.** Two problems, both
+  measurable against this repo's own guide.
 
-- **The database moved with it**, `assets/db/question_bank.db` ->
-  `exam_bank.db`, by a rename at startup rather than a copy: two databases
-  that both look live is the worse failure, because a later session edits one
-  and reads the other. An `exam_bank.db` that already exists always wins.
-  `tests/test_config_migration.py` pins the old name literally - a sweep over
-  the repo silently rewrote that migration to `exam_bank.db -> exam_bank.db`
-  while it was being written, which read fine and did nothing.
+  Words kept whatever punctuation and markdown were attached, because the
+  matcher split on whitespace: "certification" appears 88 times as text and
+  only **34** times as a bare whitespace token, so two thirds of its
+  occurrences were invisible. Tokenising on word characters recovers them.
 
-- **`PQB_COURSE` is still read** when `PEB_COURSE` is absent. A Content Editor
-  installed before the rename sends the old name, and the alternative is a
-  button that opens the bank on no course until two apps are reinstalled in
-  the right order. Drop it once no shipped editor sends it.
-
-### Added
+  And ranking was dominated by the common words of the question. "How do I
+  import a CSV?" was ranked mostly on *do*, *a* and *I*, and returned "Two
+  Independent Checks" — a section containing those words and nothing about
+  importing. It now returns "CSV Format", "Import Steps" and "Importing
+  Existing Questions". Stop words are dropped, headings weigh more than
+  bodies, and scoring counts distinct query terms rather than total hits, so a
+  section repeating one word cannot outrank one covering the whole question.
 
 - **Admin, as a React pane** (`core/admin.py`, `exam_bank/api/routers/admin.py`,
   the Admin pane). Backups and bulk deletion, deliberately in one place: this
@@ -113,6 +106,48 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   `tests/fixtures/question_problems.json`, and both suites assert against it
   message for message and in order. Reword a rule in one language and the
   other language's suite goes red; watched it fail from both sides.
+
+- **Renamed to Pentaho Exam Bank.** The product, the Python package
+  (`question_bank` -> `exam_bank`), the module that was the same name as its
+  own package (`core/question_bank.py` -> `core/bank.py`), the class
+  (`QuestionBankDB` -> `ExamBankDB`), the launch handover (`PQB_COURSE` ->
+  `PEB_COURSE`) and every string an author reads. The Content Editor's
+  Questions button opened a window titled "Question Bank Generator" - a
+  third name for the same app, and the one that made this worth doing.
+
+- **The database moved with it**, `assets/db/question_bank.db` ->
+  `exam_bank.db`, by a rename at startup rather than a copy: two databases
+  that both look live is the worse failure, because a later session edits one
+  and reads the other. An `exam_bank.db` that already exists always wins.
+  `tests/test_config_migration.py` pins the old name literally - a sweep over
+  the repo silently rewrote that migration to `exam_bank.db -> exam_bank.db`
+  while it was being written, which read fine and did nothing.
+
+- **`PQB_COURSE` is still read** when `PEB_COURSE` is absent. A Content Editor
+  installed before the rename sends the old name, and the alternative is a
+  button that opens the bank on no course until two apps are reinstalled in
+  the right order. Drop it once no shipped editor sends it.
+
+### Added
+
+- **AI & Docs, as a React pane** (`core/docs.py`,
+  `exam_bank/api/routers/docs.py`). Ask the app's own guide a question, search
+  it, or read it — the last of the NiceGUI panes.
+
+  **Retrieval decides whether the model is called at all.** A model asked "how
+  do I publish back to a course?" answers *something* whether or not it was
+  given anything to read, and a confident invention about a tool somebody is
+  about to use is worse than no answer. If nothing in the documentation
+  matches, this says so and never calls the model.
+
+  An answer comes back with **the sections it was built from**, shown beneath
+  it. An answer about your own app is only worth anything if you can check
+  what it read — and when retrieval matches weakly, seeing the sources is what
+  reveals that.
+
+  It asks through `core/providers`, so it honours the configured provider. The
+  NiceGUI version called Ollama directly, and answered nothing at all if you
+  had picked Anthropic or OpenAI in Settings.
 
 - **Publish back into a course** (`core/publisher.py`, the Publish pane,
   `POST /api/courses/{slug}/exam/questions{,/plan}`). A **merge**, not a

@@ -4,6 +4,7 @@ import { api, ApiError, type Health } from "./api";
 import { BankPane } from "./BankPane";
 import { CoursesPane } from "./CoursesPane";
 import { AdminPane } from "./AdminPane";
+import { DocsPane } from "./DocsPane";
 import { ExamPane } from "./ExamPane";
 import { GeneratePane } from "./GeneratePane";
 import { ImportPane } from "./ImportPane";
@@ -18,7 +19,8 @@ type Tab =
   | "exam"
   | "publish"
   | "settings"
-  | "admin";
+  | "admin"
+  | "docs";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "courses", label: "Courses" },
@@ -29,6 +31,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "publish", label: "Publish" },
   { id: "settings", label: "Settings" },
   { id: "admin", label: "Admin" },
+  { id: "docs", label: "AI & Docs" },
 ];
 
 export function App() {
@@ -158,6 +161,7 @@ export function App() {
         {tab === "publish" && <PublishPane openCourse={openCourse} />}
         {tab === "settings" && <SettingsPane onSaved={loadHealth} />}
         {tab === "admin" && <AdminPane onChanged={loadHealth} />}
+        {tab === "docs" && <DocsPane />}
       </main>
     </div>
   );
