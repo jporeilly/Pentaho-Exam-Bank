@@ -31,3 +31,10 @@ desktop/node_modules/
 desktop/src-tauri/vendor/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+
+# ── Built installers ─────────────────────────────────────────────────
+# Collected by desktop/scripts/collect-installer.ps1, one per version.
+# ROOT-ANCHORED: a bare "dist/" would also match desktop/dist/, which is
+# the Tauri startup page and IS tracked, and frontend/dist/, which is
+# already ignored above for its own reasons.
+/dist/

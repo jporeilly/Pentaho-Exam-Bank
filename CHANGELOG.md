@@ -9,6 +9,24 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- **`dist/` holds the built installers, one per version**
+  (`desktop/scripts/collect-installer.ps1`). Tauri leaves its output four
+  directories deep inside `target/`, where `cargo clean` will delete it. This
+  copies it to `dist/` at the repo root with its version in the name, so
+  builds accumulate side by side, and writes a `.sha256` beside each — an
+  installer is 38 MB of executable people are asked to run as administrator.
+  It refuses to collect a build whose filename disagrees with the version in
+  `tauri.conf.json`.
+
+- **`desktop/scripts/verify-install.ps1`**, to run after installing. Read-only
+  and unelevated. It checks the registry key in **both views**, that the
+  launcher carries a name the Content Editor accepts, that no database or
+  config was shipped inside the install, that the app starts and keeps its
+  data in `%APPDATA%` rather than under Program Files, that closing it takes
+  the backend with it — and finally asks the **Content Editor's own code**
+  whether it can find the install, rather than reimplementing that judgement.
+  `-InstallDir` mirrors the editor's `PEB_INSTALL_DIR` override.
+
 - **The Tauri desktop shell** (`desktop/src-tauri/`). Starts the vendored
   Python on a free port, shows a startup page while it comes up, then
   navigates the window to it — so the packaged app serves the same interface
