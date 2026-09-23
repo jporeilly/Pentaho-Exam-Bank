@@ -1,17 +1,44 @@
 """Settings management for the Exam Bank app."""
 
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional
 
-# The repo root, two levels above this package (exam_bank/utils/config.py).
-# Everything that needs a path off the repo root imports PROJECT_ROOT or
-# ASSETS_DIR from here rather than re-deriving its own `parent.parent...`
+# Where the CODE is: the repo root, two levels above this package
+# (exam_bank/utils/config.py). Everything that needs a path off it imports
+# PROJECT_ROOT from here rather than re-deriving its own `parent.parent...`
 # walk — four modules used to do that, and each one was a separate thing to
 # get wrong the next time the tree moved.
+#
+# Read-only inside an install. Use it for things that SHIP (the guide the
+# AI & Docs pane reads); never for anything the app writes.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ASSETS_DIR = PROJECT_ROOT / "assets"
+
+
+def state_dir() -> Path:
+    """Where the bank keeps its database, its config and its backups.
+
+    Separate from PROJECT_ROOT because in an install they are not the same
+    place. The code lives under Program Files, which a normal user cannot
+    write to — and this module creates its directories at IMPORT, so a
+    read-only root does not degrade gracefully: it raises
+    ``PermissionError: [WinError 5] Access is denied`` three frames into
+    pathlib before the app can say anything useful. Proved by staging the
+    package under a read-only directory and importing it.
+
+    ``PEB_STATE_DIR`` is how the installed shell points this at
+    ``%LOCALAPPDATA%``. Unset — which is every checkout — it is the repo's
+    own ``assets/``, exactly as before, so development is unchanged.
+    """
+    override = os.environ.get("PEB_STATE_DIR", "").strip()
+    if override:
+        return Path(override).expanduser()
+    return PROJECT_ROOT / "assets"
+
+
+ASSETS_DIR = state_dir()
 DB_DIR = ASSETS_DIR / "db"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_DIR = ASSETS_DIR / "config"
@@ -134,7 +161,9 @@ class AppConfig:
     file_certifications: dict = field(default_factory=dict)
 
     # Export
-    output_folder: str = str(PROJECT_ROOT / "assets" / "questions")
+    # Off the STATE directory, not the code root: an install writes its
+    # exports beside its database, where the user can reach them.
+    output_folder: str = str(ASSETS_DIR / "questions")
 
     # PCM course source — folder holding Pentaho Content Manager courses
     # (each subdir a course with course.json + lab guide.md files).

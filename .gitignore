@@ -21,3 +21,13 @@ assets/
 # Front end (0.4.0 restack)
 node_modules/
 frontend/dist/
+
+# ── Desktop packaging (Phase 4) ──────────────────────────────
+# The vendored Python runtime (~148 MB), the staged app tree, the Rust
+# build output and Tauri's generated files. All of them are BUILD
+# ARTEFACTS produced by desktop/scripts - what gets committed is the
+# recipe, never its output.
+desktop/node_modules/
+desktop/src-tauri/vendor/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

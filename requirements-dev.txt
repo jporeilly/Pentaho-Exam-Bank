@@ -1,0 +1,6 @@
+# Development-only dependencies.
+#
+# Kept out of requirements.txt because that file is what the installer
+# vendors: pytest cannot run inside a shipped app and would be dead weight
+# in every install. install.bat and _venv.bat install both files.
+pytest>=8.0.0

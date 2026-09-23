@@ -84,6 +84,7 @@ if errorlevel 1 (
 echo Installing dependencies from requirements.txt...
 "%VENV_PY%" -m pip install --upgrade pip >nul 2>&1
 "%VENV_PY%" -m pip install -r "%~dp0requirements.txt"
+if exist "%~dp0requirements-dev.txt" "%VENV_PY%" -m pip install -r "%~dp0requirements-dev.txt"
 if errorlevel 1 (
     echo ERROR: Failed to install dependencies.
     goto :eof

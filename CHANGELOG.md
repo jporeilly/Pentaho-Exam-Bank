@@ -7,6 +7,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **Desktop packaging, started** (`desktop/`). The vendored-Python recipe from
+  the Content Editor, adapted: `fetch-python.ps1` builds a self-contained
+  Python 3.12.8 with the bank's runtime dependencies (148 MB), and
+  `stage-app.ps1` assembles `exam_bank/` + `frontend/dist` + `boot.py` into the
+  tree the installer bundles. Both verified end to end; the Tauri shell and
+  NSIS installer are still to come.
+
+  `requirements-dev.txt` splits `pytest` out, because the installer vendors
+  `requirements.txt` and a test framework cannot run inside a shipped app.
+
 ### Changed
 
 - **The NiceGUI layer is gone, and `run.bat` starts one server.** The API
@@ -45,7 +57,35 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   button that opens the bank on no course until two apps are reinstalled in
   the right order. Drop it once no shipped editor sends it.
 
-### Added
+- **The app's state directory is now separate from its code.** `config.py`
+  creates `assets/db`, `assets/config` and `assets/db/backups` at IMPORT, off
+  the package root. That is correct for a checkout and fatal for an install:
+  the code lives under Program Files, which a normal user cannot write, so the
+  import raises `PermissionError: [WinError 5]` three frames into pathlib
+  before the app can say anything at all — reproduced by staging the package
+  under a read-only directory.
+
+  `PEB_STATE_DIR` moves everything the app writes; unset, it is the repo's own
+  `assets/` exactly as before, so development is unchanged. `PROJECT_ROOT`
+  stays where the code is, because `core/docs.py` reads the shipped guide from
+  it.
+
+### Fixed
+
+- **The staging script leaked the build machine's own configuration.**
+  Importing the staged tree to verify it runs `config.py`, which creates its
+  directories *and* migrates `~/.question_bank/` into them — so the first run
+  of `stage-app.ps1` put a `config.json` naming this machine's Ollama model and
+  MCP servers, plus a database, inside the installer staging tree. The import
+  check now redirects state to a scratch directory, and the "nothing private"
+  assertion runs both before and after it: asserting only beforehand could
+  never have caught a file the check itself created.
+
+- **`pytest` from the repo root crashed the interpreter.** Collection walked
+  into the vendored runtime, found pywin32's own test modules, and
+  `win32comext	askscheduler	est	est_addtask.py` took the process down with
+  an access violation before any test of this app ran. `pytest.ini` scopes
+  collection to `tests/`.
 
 - **AI & Docs, as a React pane** (`core/docs.py`,
   `exam_bank/api/routers/docs.py`). Ask the app's own guide a question, search
@@ -110,8 +150,6 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 - **`core/source.py`** — the generation input type, moved out of the PPTX
   reader so that reading a course no longer drags in `python-pptx`.
-
-### Fixed
 
 - **`python-multipart` was undeclared.** FastAPI needs it for the Import
   pane's file upload, and nothing here imports it directly — so it was present

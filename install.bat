@@ -34,6 +34,8 @@ call venv\Scripts\activate.bat
 echo Installing dependencies...
 pip install --upgrade pip
 pip install -r requirements.txt
+:: The dev set is separate so the installer does not vendor pytest.
+if exist "requirements-dev.txt" pip install -r requirements-dev.txt
 
 if errorlevel 1 (
     echo ERROR: Failed to install dependencies.

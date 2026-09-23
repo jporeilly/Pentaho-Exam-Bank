@@ -1,0 +1,19 @@
+{
+  "name": "pentaho-exam-bank-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows desktop shell for the Pentaho Exam Bank",
+  "scripts": {
+    "build:ui": "npm --prefix ../frontend run build",
+    "fetch:python": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-python.ps1",
+    "stage:app": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stage-app.ps1",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "collect": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/collect-installer.ps1",
+    "dist": "npm run build:ui && npm run fetch:python && npm run stage:app && npm run tauri:build && npm run collect"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
