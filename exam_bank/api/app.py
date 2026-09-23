@@ -19,7 +19,9 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
 from ..core.providers import ProviderError
-from .routers import certifications, courses, export, generation, questions, system
+from .routers import (
+    certifications, courses, export, generation, importing, questions, system,
+)
 
 app = FastAPI(
     title="Pentaho Exam Bank",
@@ -54,6 +56,7 @@ app.include_router(certifications.router)
 app.include_router(courses.router)
 app.include_router(generation.router)
 app.include_router(export.router)
+app.include_router(importing.router)
 
 
 # ── the built front end ─────────────────────────────────────────

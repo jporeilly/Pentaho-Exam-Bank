@@ -32,6 +32,27 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- **Import, as a React pane** (`core/importing.py`, `core/validation.py`, the
+  Import pane, `POST /api/import/preview` and `/commit`). Look-then-save, like
+  publishing: a file of questions is parsed and reported on, and nothing is
+  saved until the author chooses it. The preview says which questions cannot
+  be graded and which the bank already has — the two things invisible in the
+  file itself. A duplicate stays selectable but unticked, because "we reworded
+  it" is a real answer and a pre-ticked decision is not one.
+
+  Files are recognised by **content**, not extension: `.csv` covers both real
+  CSV and the plain-text format, `.json` covers a Content Manager `exam.json`
+  and this bank's own export, `.xml` covers QTI and Moodle. Guessing from the
+  extension imports a plausible wrong shape rather than failing.
+
+- **One definition of what makes a question gradeable.** The rules existed
+  only in `QuestionEditor.tsx`; import needs them server-side, and neither
+  copy can do the other's job — the browser answers while an author types, the
+  server validates four hundred rows at once. Both are now driven from
+  `tests/fixtures/question_problems.json`, and both suites assert against it
+  message for message and in order. Reword a rule in one language and the
+  other language's suite goes red; watched it fail from both sides.
+
 - **Publish back into a course** (`core/publisher.py`, the Publish pane,
   `POST /api/courses/{slug}/exam/questions{,/plan}`). A **merge**, not a
   write: the course's `exam.json` is read, its `questions` array replaced, and
@@ -78,6 +99,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   reader so that reading a course no longer drags in `python-pptx`.
 
 ### Fixed
+
+- **The import tab told authors the opposite of what the code does.** It said
+  a plain-text file imports "all options as distractors". `import_from_text`
+  in fact takes the **first option as the key**, positionally and silently —
+  so the question is perfectly gradeable and nothing flags it. The format note
+  now says the key was guessed and that every one needs checking, which is the
+  only warning there is.
+
+- **`request` forced `application/json` onto multipart uploads.** A `FormData`
+  body has to carry its own boundary, and the header could not be removed by
+  merging one in from `init.headers` — the upload arrived unparseable and the
+  server answered with a missing-field 422 rather than naming the header.
 
 - **A corrected answer was published alongside the typo it replaced.**
   `Question.all_choices` returned the stored `option_order` verbatim, and the

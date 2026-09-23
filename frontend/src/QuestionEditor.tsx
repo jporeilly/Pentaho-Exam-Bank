@@ -14,13 +14,12 @@
  * are exactly the moves that will be accepted.
  */
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, type Lifecycle, type Question } from "./api";
+import { api, ApiError, type Lifecycle, type Problem, type Question } from "./api";
 
-/** A field-level problem, shown inline and blocking save. */
-export interface Problem {
-  field: string;
-  message: string;
-}
+// `Problem` is defined in api.ts and re-exported here. Import reports the same
+// shape from the server, computed by `core/validation.py` from the same rules,
+// so two declarations would be two names for one contract.
+export type { Problem };
 
 /**
  * Everything wrong with a question, as the grader would see it.

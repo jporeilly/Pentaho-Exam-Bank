@@ -1,0 +1,257 @@
+{
+  "$comment": [
+    "The one definition of what makes a question gradeable.",
+    "",
+    "The rules are implemented twice - exam_bank/core/validation.py for import",
+    "and frontend/src/QuestionEditor.tsx for live typing feedback - because",
+    "neither copy can do the other's job. This file is what stops them",
+    "drifting: tests/test_validation.py and frontend/src/questionProblems.test.ts",
+    "both read it and assert the SAME messages in the SAME order.",
+    "",
+    "So the messages here are the contract. Rewording one means changing it in",
+    "three places, and the two suites make that impossible to forget rather",
+    "than merely inadvisable.",
+    "",
+    "A case with an empty `problems` array is as important as one with a",
+    "problem: without it, a rule that fires on everything still passes."
+  ],
+  "cases": [
+    {
+      "name": "a complete single-select question",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["Table output", "Sort rows"]
+      },
+      "problems": []
+    },
+    {
+      "name": "a complete select-all question",
+      "question": {
+        "stem": "Which two steps write to a database?",
+        "question_type": "multi",
+        "key": "",
+        "keys": ["Table output", "Insert / Update"],
+        "distractors": ["Sort rows", "Dummy"]
+      },
+      "problems": []
+    },
+    {
+      "name": "no stem",
+      "question": {
+        "stem": "",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["Table output"]
+      },
+      "problems": [{ "field": "stem", "message": "A question needs a stem." }]
+    },
+    {
+      "name": "a stem of only whitespace is no stem",
+      "question": {
+        "stem": "   \n  ",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["Table output"]
+      },
+      "problems": [{ "field": "stem", "message": "A question needs a stem." }]
+    },
+    {
+      "name": "nothing marked correct",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "",
+        "keys": [],
+        "distractors": ["Table output", "Sort rows"]
+      },
+      "problems": [
+        {
+          "field": "keys",
+          "message": "Nothing is marked correct, so the question cannot be graded."
+        }
+      ]
+    },
+    {
+      "name": "a select-all with one correct answer",
+      "question": {
+        "stem": "Which two steps write to a database?",
+        "question_type": "multi",
+        "key": "",
+        "keys": ["Table output"],
+        "distractors": ["Sort rows", "Dummy"]
+      },
+      "problems": [
+        {
+          "field": "keys",
+          "message": "A select-all question with one correct answer grades the same as a single-select one. Add another, or switch the type."
+        }
+      ]
+    },
+    {
+      "name": "a select-all with no correct answers reports only the first rule",
+      "question": {
+        "stem": "Which two steps write to a database?",
+        "question_type": "multi",
+        "key": "",
+        "keys": [],
+        "distractors": ["Sort rows", "Dummy"]
+      },
+      "problems": [
+        {
+          "field": "keys",
+          "message": "Nothing is marked correct, so the question cannot be graded."
+        }
+      ]
+    },
+    {
+      "name": "an empty distractor",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["Table output", ""]
+      },
+      "problems": [
+        { "field": "distractors", "message": "An empty option cannot be chosen." }
+      ]
+    },
+    {
+      "name": "no distractors at all",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": []
+      },
+      "problems": [
+        {
+          "field": "distractors",
+          "message": "With no distractors the correct answer is the only option."
+        }
+      ]
+    },
+    {
+      "name": "a distractor identical to the key",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["Table output", "CSV file input"]
+      },
+      "problems": [
+        {
+          "field": "distractors",
+          "message": "\"CSV file input\" is both correct and a distractor."
+        }
+      ]
+    },
+    {
+      "name": "a distractor matching the key in a different case",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["Table output", "csv FILE input"]
+      },
+      "problems": [
+        {
+          "field": "distractors",
+          "message": "\"csv FILE input\" is both correct and a distractor."
+        }
+      ]
+    },
+    {
+      "name": "a duplicated distractor, reported in lower case",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["Table Output", "table output"]
+      },
+      "problems": [
+        { "field": "distractors", "message": "\"table output\" appears 2 times." }
+      ]
+    },
+    {
+      "name": "one distractor repeated three times",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["Sort rows", "Sort rows", "Sort rows"]
+      },
+      "problems": [
+        { "field": "distractors", "message": "\"sort rows\" appears 3 times." }
+      ]
+    },
+    {
+      "name": "a clash is reported once however many times it appears",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["CSV file input", "CSV file input"]
+      },
+      "problems": [
+        {
+          "field": "distractors",
+          "message": "\"CSV file input\" is both correct and a distractor."
+        },
+        {
+          "field": "distractors",
+          "message": "\"csv file input\" appears 2 times."
+        }
+      ]
+    },
+    {
+      "name": "everything wrong at once, in reading order",
+      "question": {
+        "stem": "",
+        "question_type": "single",
+        "key": "",
+        "keys": [],
+        "distractors": [""]
+      },
+      "problems": [
+        { "field": "stem", "message": "A question needs a stem." },
+        {
+          "field": "keys",
+          "message": "Nothing is marked correct, so the question cannot be graded."
+        },
+        { "field": "distractors", "message": "An empty option cannot be chosen." },
+        {
+          "field": "distractors",
+          "message": "With no distractors the correct answer is the only option."
+        }
+      ]
+    },
+    {
+      "name": "surrounding whitespace is not a difference",
+      "question": {
+        "stem": "Which step reads a delimited file?",
+        "question_type": "single",
+        "key": "CSV file input",
+        "keys": [],
+        "distractors": ["  CSV file input  ", "Sort rows"]
+      },
+      "problems": [
+        {
+          "field": "distractors",
+          "message": "\"CSV file input\" is both correct and a distractor."
+        }
+      ]
+    }
+  ]
+}

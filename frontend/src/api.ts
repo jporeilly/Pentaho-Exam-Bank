@@ -22,10 +22,18 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
+  // A FormData body must carry its own multipart Content-Type, including the
+  // boundary the browser generates. Setting application/json over it produces
+  // a request the server cannot parse and a 422 that names a missing field
+  // rather than the wrong header, so the default is skipped rather than
+  // overridden — an override merged from `init.headers` could not remove it.
+  const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
   try {
     response = await fetch(`${BASE}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      headers: isForm
+        ? { ...(init?.headers ?? {}) }
+        : { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     });
   } catch {
     // A refused connection is the usual case here and has one cause worth
@@ -216,6 +224,49 @@ export interface GenerateRequest {
   model?: string;
 }
 
+/** A field-level problem with a question: what stops it being gradeable.
+ *
+ *  Defined once here because both halves of the app produce these. The editor
+ *  computes them in the browser while an author types (`problemsWith`); import
+ *  gets them from the server, computed by `core/validation.py`. Both are held
+ *  to `tests/fixtures/question_problems.json`, so the messages are identical
+ *  wherever they appear. */
+export interface Problem {
+  field: string;
+  message: string;
+}
+
+/** One question read out of an uploaded file, with everything known against
+ *  it: whether it can be graded, and whether the bank already has it. */
+export interface ImportedQuestion {
+  question: Question;
+  problems: Problem[];
+  duplicate_of: string;
+  duplicate_stem: string;
+  duplicate_score: number;
+}
+
+/** What a file turned out to hold. Nothing has been saved at this point. */
+export interface ImportPreview {
+  filename: string;
+  format: string;
+  formatLabel: string;
+  /** Something true about this format that changes what the author must do
+   *  next — the plain-text reader guessing a key from position, most of all.
+   *  Empty for formats that carry everything a question needs. */
+  formatNote: string;
+  count: number;
+  gradeable: number;
+  duplicates: number;
+  questions: ImportedQuestion[];
+}
+
+export interface ImportResult {
+  saved: number;
+  ids: string[];
+  refused: Array<{ stem: string; reason: string }>;
+}
+
 /** One question that exists in both the bank and the course, but differs. */
 export interface QuestionChange {
   id: string;
@@ -295,6 +346,30 @@ export const api = {
     request<{ saved: number }>(`/api/jobs/${encodeURIComponent(id)}/commit`, {
       method: "POST",
       body: JSON.stringify({ question_ids, certification_id }),
+    }),
+
+  /** Parse an uploaded file and report what is in it. Writes nothing.
+   *
+   *  No Content-Type is set: the browser has to supply the multipart boundary
+   *  itself, and `request` would otherwise force application/json and the
+   *  upload would arrive unparseable. */
+  previewImport: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<ImportPreview>("/api/import/preview", {
+      method: "POST",
+      body: form,
+    });
+  },
+  /** Save the chosen questions. They land as drafts whatever the file said. */
+  commitImport: (
+    questions: Question[],
+    certification_id = "",
+    topic = "",
+  ) =>
+    request<ImportResult>("/api/import/commit", {
+      method: "POST",
+      body: JSON.stringify({ questions, certification_id, topic }),
     }),
 
   /** What publishing would change in the course's exam.json. Writes nothing. */
