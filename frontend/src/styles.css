@@ -313,3 +313,21 @@ tbody tr.selected { background: rgba(185, 28, 28, 0.07); }
    they redistribute is worse than one that says where they are. */
 .unbalanced { color: var(--bad); font-weight: 600; }
 .thin { color: var(--bad); }
+
+/* ── Settings ──────────────────────────────────────────────────────── */
+.settings .lede { margin: 0 0 4px; color: var(--text-dim); max-width: 66ch; }
+.settings-section {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 18px;
+}
+.settings-section h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.section-hint { margin: 0 0 10px; max-width: 66ch; font-size: 12px; }
+.key-status { display: inline-flex; align-items: center; gap: 7px; padding: 7px 0; }
+/* A disabled field still has to be readable — it is showing a real value that
+   is simply set elsewhere, not an empty one waiting for input. */
+.settings input:disabled,
+.settings select:disabled { opacity: 0.85; cursor: not-allowed; }
+.paths { margin: 12px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; }
+.paths dt { color: var(--text-dim); font-size: 12px; }
+.paths dd { margin: 0; overflow-wrap: anywhere; }

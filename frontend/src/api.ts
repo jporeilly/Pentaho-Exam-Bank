@@ -224,6 +224,46 @@ export interface GenerateRequest {
   model?: string;
 }
 
+/** The settings an author may change. Deliberately not the whole config:
+ *  the app also stores state it manages for itself, and the server refuses
+ *  to write anything outside this set. */
+export interface Settings {
+  sme_name: string;
+  ai_provider: string;
+  anthropic_model: string;
+  openai_model: string;
+  ollama_url: string;
+  ollama_model: string;
+  ollama_enabled: boolean;
+  ollama_num_ctx: number;
+  pcm_courses_dir: string;
+  output_folder: string;
+  duplicate_threshold: number;
+  validation_threshold: number;
+  questions_per_page: number;
+  default_difficulty: string;
+  default_bloom_level: string;
+  auto_export_on_save: boolean;
+}
+
+export interface SettingsResponse {
+  settings: Settings;
+  /** Whether each provider's key is present in the environment. Booleans
+   *  only — this app has never stored a key and never sends one. */
+  providerKeys: Record<string, boolean>;
+  /** Fields an environment variable governs. Changing one here does not
+   *  last: it is saved and then overridden again on the next start. */
+  envOverridden: string[];
+  envNames: Record<string, string>;
+  choices: {
+    providers: string[];
+    difficulties: string[];
+    bloomLevels: string[];
+    pageSizes: number[];
+  };
+  paths: { database: string; config: string };
+}
+
 /** One topic's share of a weighted exam: what it was owed, what it had, and
  *  what it ended up contributing. */
 export interface TopicOutcome {
@@ -390,6 +430,15 @@ export const api = {
     request<{ saved: number }>(`/api/jobs/${encodeURIComponent(id)}/commit`, {
       method: "POST",
       body: JSON.stringify({ question_ids, certification_id }),
+    }),
+
+  settings: () => request<SettingsResponse>("/api/settings"),
+  /** Change the named settings. Anything not sent is left alone, and one bad
+   *  value changes none of the others. */
+  saveSettings: (settings: Partial<Settings>) =>
+    request<SettingsResponse>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ settings }),
     }),
 
   /** Topics with questions, for the certifications being drawn from. */

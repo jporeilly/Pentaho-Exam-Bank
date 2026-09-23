@@ -32,6 +32,30 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- **Settings, as a React pane** (`exam_bank/api/routers/settings.py`,
+  `GET`/`PUT /api/settings`). Identity, provider and model, the courses and
+  export directories, the quality thresholds, and the list defaults.
+
+  It **never handles an API key**. Keys are read from the environment at call
+  time and this app has never stored one, so the pane is told only *whether* a
+  key is present, as a boolean — a form that accepted one would write it into
+  `config.json`, a plain file in the project directory.
+
+  It **writes only an allowlist**, and the allowlist and the validation are
+  one table, so a field cannot be made writable without saying what a valid
+  value is. `config.save()` writes the whole dataclass, and the config also
+  holds state the app manages for itself — the recent-files list, the map from
+  a source file to its certification — which a browser able to PUT arbitrary
+  keys could quietly break with nothing reporting it.
+
+  A setting an environment variable governs (`OLLAMA_MODEL` and friends) is
+  shown but not editable, naming the variable. Left editable it would save,
+  appear to work, and revert on the next start.
+
+  One bad value changes none of the others, and a courses directory that does
+  not exist is refused rather than saved — saved silently it would list no
+  courses and look like an empty Content Manager rather than a typo.
+
 - **Exam paper, as a React pane** (`core/exam_builder.plan_exam`, the Exam
   paper pane, `POST /api/exam/plan` and `/pdf`, `GET /api/exam/topics`). Draws
   a paper in the proportions an author sets, and **says when it cannot**.

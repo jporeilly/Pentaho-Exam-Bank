@@ -7,8 +7,16 @@ import { ExamPane } from "./ExamPane";
 import { GeneratePane } from "./GeneratePane";
 import { ImportPane } from "./ImportPane";
 import { PublishPane } from "./PublishPane";
+import { SettingsPane } from "./SettingsPane";
 
-type Tab = "courses" | "generate" | "bank" | "import" | "exam" | "publish";
+type Tab =
+  | "courses"
+  | "generate"
+  | "bank"
+  | "import"
+  | "exam"
+  | "publish"
+  | "settings";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "courses", label: "Courses" },
@@ -17,6 +25,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "import", label: "Import" },
   { id: "exam", label: "Exam paper" },
   { id: "publish", label: "Publish" },
+  { id: "settings", label: "Settings" },
 ];
 
 export function App() {
@@ -144,6 +153,7 @@ export function App() {
         {tab === "import" && <ImportPane onImported={loadHealth} />}
         {tab === "exam" && <ExamPane />}
         {tab === "publish" && <PublishPane openCourse={openCourse} />}
+        {tab === "settings" && <SettingsPane onSaved={loadHealth} />}
       </main>
     </div>
   );
