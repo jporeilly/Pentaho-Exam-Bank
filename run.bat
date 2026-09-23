@@ -1,12 +1,13 @@
 @echo off
-:: Start the Exam Bank: the API, and the NiceGUI interface on top of it.
+:: Start the Pentaho Exam Bank.
 ::
-:: Both are started because the app is mid-restack. The NiceGUI layer still
-:: calls core directly and does not need the API, but the API is what the
-:: React front end will use in 0.4.0, and having it up means it can be driven
-:: and developed against while the old interface is still the one in use.
-:: When the NiceGUI layer goes, this file stops starting it and nothing else
-:: about the launch changes.
+:: One server now. The API serves the React front end from frontend\dist at
+:: its own root, so there is a single port and a single window - the NiceGUI
+:: layer that used to run alongside it on 7777 is gone.
+::
+:: The Content Editor's Questions button launches THIS FILE with PEB_COURSE
+:: set, and does not know or care which port anything listens on. Keep the
+:: name and keep loading .env, and that button keeps working.
 ::
 :: ASCII only - a .bat is read in the console codepage, and anything else
 :: turns into mojibake in the window the user is reading.
@@ -20,45 +21,85 @@ if exist ".env" (
     )
 )
 
-set "PORT_FILE=%TEMP%\exam_bank_port.txt"
 set "API_PORT_FILE=%TEMP%\exam_bank_api_port.txt"
+set "UI_PORT_FILE=%TEMP%\exam_bank_port.txt"
 
-set "UI_PORT=7777"
 set "API_PORT=%QB_API_PORT%"
 if "%API_PORT%"=="" set "API_PORT=7788"
 
-:: Release ports a previous run left behind
-if exist "%PORT_FILE%" call :kill_port_from_file "%PORT_FILE%"
+:: Release ports a previous run left behind. The second file is the old
+:: NiceGUI port: a machine that ran the previous version still has one
+:: sitting in TEMP, and the process it names may still be holding 7777.
 if exist "%API_PORT_FILE%" call :kill_port_from_file "%API_PORT_FILE%"
-call :kill_port %UI_PORT%
+if exist "%UI_PORT_FILE%" call :cleanup_port_file "%UI_PORT_FILE%"
 call :kill_port %API_PORT%
 
-:: Verify the environment once, for both servers.
+:: Verify the environment. _venv.bat checks fastapi when given no module.
 :: %~dp0 is this script's own directory. Calling a sibling by bare name fails
 :: outright where NoDefaultCurrentDirectoryInExePath=1 is set, which stops cmd
 :: resolving an executable from the current directory.
-call "%~dp0_venv.bat" nicegui
+call "%~dp0_venv.bat"
 if errorlevel 1 (
     pause
     exit /b 1
 )
 
-:: The API goes to its own window so its log stays readable and closing it
-:: does not take the interface down with it.
-echo Starting the API on port %API_PORT%...
-start "Pentaho Exam Bank - API" /min "%VENV_PY%" -m exam_bank.api --port %API_PORT%
+:: The front end is served from a BUILD, not from Vite, so the build has to be
+:: current. It is rebuilt every start rather than only when missing: a build
+:: takes about five seconds, and "only if missing" means every git pull leaves
+:: the old interface in place with nothing on screen saying so.
+::
+:: npm install is the slow one, so that runs only when node_modules is absent.
+where npm >nul 2>&1
+if errorlevel 1 goto :no_npm
 
-echo Starting the interface on port %UI_PORT%...
-"%VENV_PY%" main.py
+cd /d "%~dp0frontend"
+if not exist "node_modules" (
+    echo Installing front-end dependencies - this happens once.
+    call npm install
+    if errorlevel 1 goto :no_build
+)
+echo Building the interface...
+call npm run build
+if errorlevel 1 goto :no_build
+cd /d "%~dp0"
 
-:: The interface has exited - take the API down with it rather than leaving
-:: an orphan holding the port until someone notices.
-echo Stopping the API...
+:check_build
+:: Without a build the API answers on /api and the root is a 404, which reads
+:: as "the app is broken" rather than "the interface was never built".
+if not exist "%~dp0frontend\dist\index.html" goto :no_build
+
+echo Starting the Exam Bank on port %API_PORT%...
+"%VENV_PY%" -m exam_bank.api --port %API_PORT% --open
+
+:: The server has exited - clean up after it.
 call :kill_port %API_PORT%
-if exist "%PORT_FILE%" call :cleanup_port_file "%PORT_FILE%"
 if exist "%API_PORT_FILE%" call :cleanup_port_file "%API_PORT_FILE%"
+exit /b 0
 
-exit
+:no_npm
+cd /d "%~dp0"
+if exist "%~dp0frontend\dist\index.html" (
+    echo Node.js was not found, so the interface was not rebuilt.
+    echo Using the build that is already there.
+    goto :check_build
+)
+goto :no_build
+
+:no_build
+cd /d "%~dp0"
+echo.
+echo ERROR: The interface could not be built.
+echo.
+echo   Node.js is required to build it. Install it from https://nodejs.org
+echo   and run this file again, or build it by hand:
+echo.
+echo       cd frontend
+echo       npm install
+echo       npm run build
+echo.
+pause
+exit /b 1
 
 :kill_port_from_file
 set /p PREV_PORT=<%~1

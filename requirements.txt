@@ -1,4 +1,3 @@
-nicegui>=2.0.0
 python-pptx>=1.0.0
 python-dotenv>=1.0.0
 pywin32>=306
@@ -9,10 +8,16 @@ openpyxl>=3.1.0
 pytest>=8.0.0
 httpx>=0.27.0
 
-# HTTP layer. Replaces NiceGUI as the app's surface once the React front end
-# lands in 0.4.0; both run against the same core until then.
+# HTTP layer. This IS the app's surface: the API serves the React front end
+# from frontend/dist at its own root, and there is nothing else.
 fastapi>=0.110
 uvicorn[standard]>=0.29
+
+# Multipart form parsing, which FastAPI needs for the Import pane's file
+# upload. Not a direct import anywhere here, which is exactly why it was
+# missing: it was installed on this machine as somebody else's dependency and
+# the feature worked, while a fresh venv would have had the upload fail.
+python-multipart>=0.0.9
 
 # Optional — only needed to use the cloud providers in Settings. Ollama needs
 # neither: it is a local HTTP server called over the standard library.

@@ -334,3 +334,54 @@ def test_the_api_never_imports_the_nicegui_layer():
             if any("gui" in n.split(".") or n == "nicegui" for n in names):
                 offenders.append(f"{path.name}: {names}")
     assert not offenders, f"the API imports the UI: {offenders}"
+
+
+def test_the_nicegui_layer_is_gone():
+    """Phase 3's exit criterion, and the reason the test above can relax.
+
+    The API not importing the UI mattered while both existed. Now there is one
+    surface, and what is worth pinning is that the old one has not crept back
+    - as a stray module, an import, or a dependency that a fresh venv would
+    reinstall.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+
+    assert not (root / "exam_bank" / "gui").exists(), "the gui package is back"
+    assert not (root / "main.py").exists(), "the NiceGUI entry point is back"
+
+    requirements = (root / "requirements.txt").read_text(encoding="utf-8").lower()
+    assert "nicegui" not in requirements, "nicegui is a dependency again"
+
+    # IMPORTS, not mentions. `core/importing.py` explains that its dispatch
+    # used to live in a NiceGUI tab, and that history is worth keeping - a
+    # test that forbids the word deletes the explanation along with the
+    # dependency.
+    import ast
+
+    offenders = []
+    for path in (root / "exam_bank").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.ImportFrom):
+                names = [node.module or ""]
+            elif isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            for name in names:
+                parts = name.split(".")
+                if parts[0] == "nicegui" or parts[:2] == ["exam_bank", "gui"]:
+                    offenders.append(f"{path.relative_to(root)}: {name}")
+    assert not offenders, f"the NiceGUI layer is imported again: {offenders}"
+
+
+def test_the_front_end_build_is_what_gets_served():
+    """`run.bat` starts one server and the interface comes out of
+    `frontend/dist`. If that mount ever stops existing, the app starts, the
+    API answers, and the root 404s - which reads as a broken install."""
+    from exam_bank.api import app as app_module
+
+    assert hasattr(app_module, "mount_ui")
+    assert app_module._DIST.name == "dist"
+    assert app_module._DIST.parent.name == "frontend"

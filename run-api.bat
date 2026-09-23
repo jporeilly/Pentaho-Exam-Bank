@@ -1,8 +1,8 @@
 @echo off
 :: Start the Exam Bank API on its own.
-:: run.bat starts this alongside the UI; use this when you want only the API
-:: - driving it from a REST client, or developing the React front end that
-:: replaces the NiceGUI layer in 0.4.0.
+:: run.bat starts the same server WITH the built interface and opens a browser.
+:: Use this one when you want the API alone - driving it from a REST client, or
+:: running Vite against it while developing the front end.
 :: ASCII only - a .bat is read in the console codepage.
 title Pentaho Exam Bank - API
 cd /d "%~dp0"

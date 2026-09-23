@@ -7,10 +7,10 @@ Manager `exam.json`, a QTI or Moodle import, or a printed exam paper.
 An **authoring tool that runs on your machine only.** It is never shipped to a
 learner VM: the questions it produces are, the app is not.
 
-> **The restack is in progress.** Today this is a NiceGUI web app started from
-> a checkout. It is moving to the same stack as the other Pentaho apps —
-> FastAPI backend, Tauri + React front end, Windows installer — and PPTX and
-> vision-model generation are being dropped along the way. See
+> **The restack is in progress.** The interface is now React over a FastAPI
+> backend, served as one app on one port from a checkout. What remains is the
+> Tauri packaging and a Windows installer, and PPTX and vision-model
+> generation are being dropped along the way. See
 > [`PLAN.md`](PLAN.md) for the phases and [`VERSION.md`](VERSION.md) for where
 > it is on the road to 1.0.
 
@@ -107,10 +107,9 @@ All three survive adoption and export, covered by `tests/test_pcm_roundtrip.py`.
 
 ```
 Pentaho-Exam-Bank/
-├── main.py                      # Interface entry point (NiceGUI, port 7777)
 ├── install.bat                  # One-click install
-├── run.bat                      # Launch: interface + API
-├── run-api.bat                  # Launch: API alone
+├── run.bat                      # Launch the app (API + built front end, port 7788)
+├── run-api.bat                  # Launch: API alone, without opening a browser
 ├── _venv.bat                    # Shared venv check/repair for both launchers
 │
 ├── exam_bank/               # The package (the repo root is the source root)
@@ -125,14 +124,16 @@ Pentaho-Exam-Bank/
 │   │   ├── pcm_reader.py        #     reads a course's guide.md as sections
 │   │   ├── ollama_client.py, mcp_client.py
 │   │   └── pptx_*.py            #     slated for removal in 0.2.0
-│   ├── api/                     #   FastAPI over core — the surface React will use
-│   │   ├── __main__.py          #     `python -m exam_bank.api`
+│   ├── api/                     #   FastAPI over core, and the app's only surface
+│   │   ├── __main__.py          #     `python -m exam_bank.api [--open]`
 │   │   ├── jobs.py              #     background jobs; generation takes minutes
 │   │   └── routers/             #     system, questions, certifications, courses,
-│   │                            #     generation, export
-│   ├── gui/                     #   NiceGUI layer — replaced by React in 0.4.0
-│   │   └── components/          #     one module per tab
+│   │                            #     generation, export, import, exam, publish,
+│   │                            #     settings, admin, docs
 │   └── utils/config.py          #   settings, and PROJECT_ROOT for everything else
+│
+├── frontend/                    # React + Vite; `npm run build` produces dist/,
+│   └── src/                     #   which the API serves at its own root
 │
 ├── icons/                       # The app icon; see "The icon" below
 ├── scripts/migrate_pcm_exams.py # Adopt a course's exam into the bank

@@ -9,6 +9,116 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 
+- **The NiceGUI layer is gone, and `run.bat` starts one server.** The API
+  serves the built React front end from `frontend/dist` at its own root, so
+  the interface and the API are one process on **port 7788**; the 7777 the
+  old interface used is retired. `exam_bank/gui/` (22 components, ~9,500
+  lines), `main.py` and the `nicegui` dependency are all removed.
+
+  The Content Editor's Questions button launches `run.bat` and never knew
+  which port anything listened on, so it is unaffected — but it now gets a
+  bank that *can* publish back, which its tooltip still hedges about.
+
+  **The front end is rebuilt on every start.** A build is about five seconds,
+  and building "only when missing" means a `git pull` leaves the old interface
+  in place with nothing on screen saying so. A machine with no Node.js and an
+  existing build starts on that build and says it did not rebuild.
+
+- **Renamed to Pentaho Exam Bank.** The product, the Python package
+  (`question_bank` -> `exam_bank`), the module that was the same name as its
+  own package (`core/question_bank.py` -> `core/bank.py`), the class
+  (`QuestionBankDB` -> `ExamBankDB`), the launch handover (`PQB_COURSE` ->
+  `PEB_COURSE`) and every string an author reads. The Content Editor's
+  Questions button opened a window titled "Question Bank Generator" - a
+  third name for the same app, and the one that made this worth doing.
+
+- **The database moved with it**, `assets/db/question_bank.db` ->
+  `exam_bank.db`, by a rename at startup rather than a copy: two databases
+  that both look live is the worse failure, because a later session edits one
+  and reads the other. An `exam_bank.db` that already exists always wins.
+  `tests/test_config_migration.py` pins the old name literally - a sweep over
+  the repo silently rewrote that migration to `exam_bank.db -> exam_bank.db`
+  while it was being written, which read fine and did nothing.
+
+- **`PQB_COURSE` is still read** when `PEB_COURSE` is absent. A Content Editor
+  installed before the rename sends the old name, and the alternative is a
+  button that opens the bank on no course until two apps are reinstalled in
+  the right order. Drop it once no shipped editor sends it.
+
+### Added
+
+- **AI & Docs, as a React pane** (`core/docs.py`,
+  `exam_bank/api/routers/docs.py`). Ask the app's own guide a question, search
+  it, or read it — the last of the NiceGUI panes.
+
+  **Retrieval decides whether the model is called at all.** A model asked "how
+  do I publish back to a course?" answers *something* whether or not it was
+  given anything to read, and a confident invention about a tool somebody is
+  about to use is worse than no answer. If nothing in the documentation
+  matches, this says so and never calls the model.
+
+  An answer comes back with **the sections it was built from**, shown beneath
+  it. An answer about your own app is only worth anything if you can check
+  what it read — and when retrieval matches weakly, seeing the sources is what
+  reveals that.
+
+  It asks through `core/providers`, so it honours the configured provider. The
+  NiceGUI version called Ollama directly, and answered nothing at all if you
+  had picked Anthropic or OpenAI in Settings.
+
+- **Publish back into a course** (`core/publisher.py`, the Publish pane,
+  `POST /api/courses/{slug}/exam/questions{,/plan}`). A **merge**, not a
+  write: the course's `exam.json` is read, its `questions` array replaced, and
+  every other key handed back untouched and in its original order — `intake`
+  above all, which the whole-document exporter has no parameter for and would
+  have dropped. The file's own line endings are preserved, because the Content
+  Manager repo has `core.autocrlf=true` and imposing either turns a
+  two-question edit into a whole-file diff.
+
+  The write **requires the hash from a plan**, so it cannot be issued by a
+  client that never asked what it was about to change, and it closes the race
+  with the Content Editor, which writes this same file in whole. Publishing is
+  refused — never quietly adjusted — when the pool would be empty, smaller
+  than `questionsPerAttempt`, carry duplicate ids, or be published into a
+  course the certification was not adopted from.
+
+- **A refusal for stale `intake.contact` blocks.** Five published `exam.json`
+  turned out to carry the contact relay's secret inside a block that moved to
+  `course.json` months ago, which is how one credential came to be published
+  in eight files instead of three. Publishing over one would re-commit it, so
+  the merge refuses and names the key path. Deliberately not stripped:
+  dropping an authored key silently is the same failure in the other
+  direction, and silence is what let the copies sit there.
+
+- **An app icon** (`icons/icon.ico`, plus the browser tab's
+  `frontend/public/favicon.ico`): the suite's black P tile with a violet
+  ticked-answer-box badge. Drawn by the Content Manager's `make-icons.py`,
+  which gained the `check` badge for it, and committed here as an artifact -
+  see **The icon** in the README for the regeneration recipe.
+
+- **An HTTP API** (`exam_bank/api`) over the existing core — system,
+  questions, certifications, courses, generation and export. Generation runs as
+  a background job, because a course is dozens of model calls and minutes of
+  work. Started by `run.bat` alongside the interface, or alone with
+  `run-api.bat` / `python -m exam_bank.api`. It binds loopback only: there
+  is no authentication, so anything that can reach it can read and change the
+  bank.
+
+- **One provider module** (`core/providers.py`). Sixteen call sites named
+  Ollama directly; they now dispatch to Ollama, Anthropic or OpenAI, with keys
+  read from the environment at call time and never stored.
+
+- **`core/source.py`** — the generation input type, moved out of the PPTX
+  reader so that reading a course no longer drags in `python-pptx`.
+
+### Fixed
+
+- **`python-multipart` was undeclared.** FastAPI needs it for the Import
+  pane's file upload, and nothing here imports it directly — so it was present
+  on this machine as somebody else's dependency, the feature worked, and a
+  fresh venv (which `_venv.bat` builds automatically on repair) would have had
+  the upload fail.
+
 - **Documentation search finds what it is asked for.** Two problems, both
   measurable against this repo's own guide.
 
@@ -106,95 +216,6 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   `tests/fixtures/question_problems.json`, and both suites assert against it
   message for message and in order. Reword a rule in one language and the
   other language's suite goes red; watched it fail from both sides.
-
-- **Renamed to Pentaho Exam Bank.** The product, the Python package
-  (`question_bank` -> `exam_bank`), the module that was the same name as its
-  own package (`core/question_bank.py` -> `core/bank.py`), the class
-  (`QuestionBankDB` -> `ExamBankDB`), the launch handover (`PQB_COURSE` ->
-  `PEB_COURSE`) and every string an author reads. The Content Editor's
-  Questions button opened a window titled "Question Bank Generator" - a
-  third name for the same app, and the one that made this worth doing.
-
-- **The database moved with it**, `assets/db/question_bank.db` ->
-  `exam_bank.db`, by a rename at startup rather than a copy: two databases
-  that both look live is the worse failure, because a later session edits one
-  and reads the other. An `exam_bank.db` that already exists always wins.
-  `tests/test_config_migration.py` pins the old name literally - a sweep over
-  the repo silently rewrote that migration to `exam_bank.db -> exam_bank.db`
-  while it was being written, which read fine and did nothing.
-
-- **`PQB_COURSE` is still read** when `PEB_COURSE` is absent. A Content Editor
-  installed before the rename sends the old name, and the alternative is a
-  button that opens the bank on no course until two apps are reinstalled in
-  the right order. Drop it once no shipped editor sends it.
-
-### Added
-
-- **AI & Docs, as a React pane** (`core/docs.py`,
-  `exam_bank/api/routers/docs.py`). Ask the app's own guide a question, search
-  it, or read it — the last of the NiceGUI panes.
-
-  **Retrieval decides whether the model is called at all.** A model asked "how
-  do I publish back to a course?" answers *something* whether or not it was
-  given anything to read, and a confident invention about a tool somebody is
-  about to use is worse than no answer. If nothing in the documentation
-  matches, this says so and never calls the model.
-
-  An answer comes back with **the sections it was built from**, shown beneath
-  it. An answer about your own app is only worth anything if you can check
-  what it read — and when retrieval matches weakly, seeing the sources is what
-  reveals that.
-
-  It asks through `core/providers`, so it honours the configured provider. The
-  NiceGUI version called Ollama directly, and answered nothing at all if you
-  had picked Anthropic or OpenAI in Settings.
-
-- **Publish back into a course** (`core/publisher.py`, the Publish pane,
-  `POST /api/courses/{slug}/exam/questions{,/plan}`). A **merge**, not a
-  write: the course's `exam.json` is read, its `questions` array replaced, and
-  every other key handed back untouched and in its original order — `intake`
-  above all, which the whole-document exporter has no parameter for and would
-  have dropped. The file's own line endings are preserved, because the Content
-  Manager repo has `core.autocrlf=true` and imposing either turns a
-  two-question edit into a whole-file diff.
-
-  The write **requires the hash from a plan**, so it cannot be issued by a
-  client that never asked what it was about to change, and it closes the race
-  with the Content Editor, which writes this same file in whole. Publishing is
-  refused — never quietly adjusted — when the pool would be empty, smaller
-  than `questionsPerAttempt`, carry duplicate ids, or be published into a
-  course the certification was not adopted from.
-
-- **A refusal for stale `intake.contact` blocks.** Five published `exam.json`
-  turned out to carry the contact relay's secret inside a block that moved to
-  `course.json` months ago, which is how one credential came to be published
-  in eight files instead of three. Publishing over one would re-commit it, so
-  the merge refuses and names the key path. Deliberately not stripped:
-  dropping an authored key silently is the same failure in the other
-  direction, and silence is what let the copies sit there.
-
-- **An app icon** (`icons/icon.ico`, plus the browser tab's
-  `frontend/public/favicon.ico`): the suite's black P tile with a violet
-  ticked-answer-box badge. Drawn by the Content Manager's `make-icons.py`,
-  which gained the `check` badge for it, and committed here as an artifact -
-  see **The icon** in the README for the regeneration recipe.
-
-- **An HTTP API** (`exam_bank/api`) over the existing core — system,
-  questions, certifications, courses, generation and export. Generation runs as
-  a background job, because a course is dozens of model calls and minutes of
-  work. Started by `run.bat` alongside the interface, or alone with
-  `run-api.bat` / `python -m exam_bank.api`. It binds loopback only: there
-  is no authentication, so anything that can reach it can read and change the
-  bank.
-
-- **One provider module** (`core/providers.py`). Sixteen call sites named
-  Ollama directly; they now dispatch to Ollama, Anthropic or OpenAI, with keys
-  read from the environment at call time and never stored.
-
-- **`core/source.py`** — the generation input type, moved out of the PPTX
-  reader so that reading a course no longer drags in `python-pptx`.
-
-### Fixed
 
 - **Two backups in the same second were one backup.** The name carries a
   timestamp with one-second resolution and `sqlite3.connect` on an existing

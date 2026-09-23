@@ -298,9 +298,10 @@ This is deliberately *before* the UI rewrite, so the integration works against t
 **Exit:** a course's pool round-trips byte-identically; `verify-course.mjs` passes on all 11 courses;
 the bank's DB holds the real 395.
 
-### Phase 3 — Tauri + React UI, sequenced by value
+### Phase 3 — React UI, sequenced by value — DONE (2026-09-23)
 
-Not a 22-component big bang. The existing app has seven tabs; port them in value order:
+All nine panes are React, `run.bat` starts one server on one port, and `exam_bank/gui/` is
+deleted. Not a 22-component big bang — ported in value order:
 
 | Order | Tab | Notes |
 |---|---|---|
@@ -315,8 +316,16 @@ Not a 22-component big bang. The existing app has seven tabs; port them in value
 | 9 | AI & Docs | MCP docs grounding |
 
 **Exit after 4:** the app is usable end to end for course questions without the long tail.
+**Done:** all nine, plus the launcher switch. The API serves `frontend/dist` at its own root, so
+the interface and the API are one process on port 7788; the NiceGUI 7777 is gone along with
+~9,500 lines. `run.bat` rebuilds the front end on every start — a build is five seconds, and
+"only when missing" means a `git pull` leaves the old interface in place saying nothing.
 
-### Phase 4 — installer
+**What each pane learned** is in the CHANGELOG; the pattern worth keeping is **look-then-act**:
+a plan/preview endpoint that writes nothing, then an apply carrying a token proving what was
+seen (publish's file hash, import's chosen rows, the exam mix, the deletion count).
+
+### Phase 4 — Tauri packaging and installer
 
 - Reuse PCE's `desktop/` recipe: `fetch-python.ps1`, `stage-app.ps1`, `collect-installer.ps1`,
   `sign.ps1`, and the NSIS hooks that clear `app\` and `python\` on PREINSTALL/POSTUNINSTALL.

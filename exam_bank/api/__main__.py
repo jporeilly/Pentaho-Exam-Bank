@@ -17,6 +17,9 @@ import os
 import socket
 import sys
 import tempfile
+import threading
+import time
+import webbrowser
 from pathlib import Path
 
 DEFAULT_PORT = 7788
@@ -45,6 +48,39 @@ def _port_is_free(host: str, port: int) -> bool:
             return False
 
 
+def _wait_until_serving(host: str, port: int, timeout: float = 20.0) -> bool:
+    """Block until something accepts a connection on ``port``.
+
+    Opening the browser at the same moment the server is told to start shows
+    the person a connection error and makes them reload — uvicorn takes a
+    second or two to bind. Polling is crude but it is the only thing that is
+    true from outside the server: the port either accepts or it does not.
+    """
+    target = "127.0.0.1" if host in ("localhost", "") else host
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.5)
+            if probe.connect_ex((target, port)) == 0:
+                return True
+        time.sleep(0.25)
+    return False
+
+
+def _open_browser_when_ready(host: str, port: int, timeout: float = 20.0) -> None:
+    """Open the app in a browser once it is actually answering.
+
+    Gives up silently on a machine with no browser to open — the server is
+    running either way, and the console has already printed the URL.
+    """
+    if not _wait_until_serving(host, port, timeout):
+        return
+    try:
+        webbrowser.open(f"http://{host}:{port}/")
+    except Exception:
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m exam_bank.api",
@@ -58,6 +94,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--allow-remote", action="store_true",
         help="permit binding a non-loopback address (see the warning below)",
+    )
+    parser.add_argument(
+        "--open", action="store_true", dest="open_browser",
+        help="open the app in a browser once the server is answering",
     )
     args = parser.parse_args(argv)
 
@@ -101,8 +141,17 @@ def main(argv: list[str] | None = None) -> int:
     except OSError:
         pass  # Only a convenience for launchers; never worth failing to start.
 
-    print(f"Exam Bank API on http://{args.host}:{args.port}")
-    print(f"Interactive docs at http://{args.host}:{args.port}/docs")
+    print(f"Exam Bank on http://{args.host}:{args.port}")
+    print(f"Interactive API docs at http://{args.host}:{args.port}/docs")
+
+    if args.open_browser:
+        # A daemon thread: uvicorn.run() blocks below and owns the process,
+        # and a browser that never opened must not keep it alive.
+        threading.Thread(
+            target=_open_browser_when_ready,
+            args=(args.host, args.port),
+            daemon=True,
+        ).start()
     try:
         uvicorn.run(
             "exam_bank.api.app:app",

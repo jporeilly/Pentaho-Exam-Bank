@@ -29,21 +29,21 @@ install.bat
 run.bat
 ```
 
-That starts two things:
+That starts one thing:
 
 | | Port | What |
 | --- | ---- | ---- |
-| **Interface** | 7777 | The NiceGUI app, which opens in a browser |
-| **API** | 7788 | The HTTP API, in its own minimised window |
+| **Exam Bank** | 7788 | The app, which opens in a browser |
 
-Both are started because the app is mid-restack. The interface still calls the
-core directly and does not need the API — but the API is what the React front
-end will use in 0.4.0, so having it up means it can be driven while the old
-interface is still the one in use. Closing the interface takes the API down
-with it. When the NiceGUI layer goes, `run.bat` stops starting it and nothing
-else about the launch changes.
+One server. The API serves the React interface from `frontend/dist` at its own
+root, so the interface and the API are the same process on the same port. The
+NiceGUI layer that used to run alongside it on 7777 has been removed.
 
-`run.bat` releases both ports from any previous run first, and repairs the venv
+The first run builds the interface if it has never been built — that needs
+[Node.js](https://nodejs.org) and takes about a minute. After that it starts
+immediately.
+
+`run.bat` releases the port from any previous run first, and repairs the venv
 if dependencies have gone missing.
 
 ### Just the API
@@ -139,7 +139,7 @@ reasonable CPU-sized starting point.
 
 ## Troubleshooting
 
-**The browser shows a stale UI after an update.** NiceGUI's service worker
+**The browser shows a stale UI after an update.** The front end's service worker
 caches aggressively. Hard-reload (Ctrl+F5), or start on a different port.
 
 **`run.bat` says dependencies are missing.** It repairs the venv itself. If it
