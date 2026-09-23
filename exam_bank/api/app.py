@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import __version__
 from ..core.providers import ProviderError
 from .routers import (
-    certifications, courses, export, generation, importing, questions, system,
+    certifications, courses, exam, export, generation, importing, questions, system,
 )
 
 app = FastAPI(
@@ -57,6 +57,7 @@ app.include_router(courses.router)
 app.include_router(generation.router)
 app.include_router(export.router)
 app.include_router(importing.router)
+app.include_router(exam.router)
 
 
 # ── the built front end ─────────────────────────────────────────

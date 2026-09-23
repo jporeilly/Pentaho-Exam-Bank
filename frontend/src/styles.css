@@ -293,3 +293,23 @@ tbody tr.selected { background: rgba(185, 28, 28, 0.07); }
 .duplicate { color: var(--warn); font-size: 12px; margin-top: 3px; max-width: 70ch; }
 .refused { list-style: none; margin: 0; padding: 0; }
 .refused li { padding: 5px 0 5px 11px; border-left: 3px solid var(--bad); margin-bottom: 4px; }
+
+/* ── Exam paper ────────────────────────────────────────────────────── */
+.exam .lede { margin: 0 0 16px; color: var(--text-dim); max-width: 66ch; }
+.exam select[multiple] { padding: 4px; }
+.checks { border: 0; margin: 10px 0; padding: 0; }
+.checks legend { padding: 0; }
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 14px;
+  padding: 3px 0;
+}
+.weights { margin: 6px 0 18px; }
+.weights input[type="number"] { width: 80px; }
+/* The total, when it is not 100. Red rather than a blocked field: an author
+   mid-edit is legitimately unbalanced, and a field that refuses input while
+   they redistribute is worse than one that says where they are. */
+.unbalanced { color: var(--bad); font-weight: 600; }
+.thin { color: var(--bad); }

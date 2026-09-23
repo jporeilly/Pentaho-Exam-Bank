@@ -3,17 +3,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type Health } from "./api";
 import { BankPane } from "./BankPane";
 import { CoursesPane } from "./CoursesPane";
+import { ExamPane } from "./ExamPane";
 import { GeneratePane } from "./GeneratePane";
 import { ImportPane } from "./ImportPane";
 import { PublishPane } from "./PublishPane";
 
-type Tab = "courses" | "generate" | "bank" | "import" | "publish";
+type Tab = "courses" | "generate" | "bank" | "import" | "exam" | "publish";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "courses", label: "Courses" },
   { id: "generate", label: "Generate" },
   { id: "bank", label: "Bank" },
   { id: "import", label: "Import" },
+  { id: "exam", label: "Exam paper" },
   { id: "publish", label: "Publish" },
 ];
 
@@ -140,6 +142,7 @@ export function App() {
         )}
         {tab === "bank" && <BankPane openCourse={openCourse} onChanged={loadHealth} />}
         {tab === "import" && <ImportPane onImported={loadHealth} />}
+        {tab === "exam" && <ExamPane />}
         {tab === "publish" && <PublishPane openCourse={openCourse} />}
       </main>
     </div>

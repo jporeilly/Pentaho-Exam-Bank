@@ -224,6 +224,50 @@ export interface GenerateRequest {
   model?: string;
 }
 
+/** One topic's share of a weighted exam: what it was owed, what it had, and
+ *  what it ended up contributing. */
+export interface TopicOutcome {
+  topic: string;
+  weight: number;
+  wanted: number;
+  available: number;
+  selected: number;
+  /** Questions it could not supply. */
+  short: number;
+  /** Questions it supplied on another topic's behalf. */
+  lent: number;
+}
+
+/** What the paper would actually contain.
+ *
+ *  `honoured` is the one an author needs: the selection redistributes
+ *  silently, so a 40/30/30 exam can come back 40/45/15 and the only place
+ *  that is visible is here, before it is printed. */
+export interface ExamPlan {
+  requested: number;
+  selected: number;
+  shortfall: number;
+  redistributed: number;
+  honoured: boolean;
+  topics: TopicOutcome[];
+}
+
+export interface ExamTopic {
+  topic: string;
+  questionCount: number;
+}
+
+/** The shape of the paper, before the bank has had a say in it. */
+export interface ExamRequest {
+  certification_ids: string[];
+  total_questions: number;
+  topic_weights: Record<string, number>;
+  difficulties?: string[];
+  statuses?: string[];
+  randomize?: boolean;
+  seed?: number | null;
+}
+
 /** A field-level problem with a question: what stops it being gradeable.
  *
  *  Defined once here because both halves of the app produce these. The editor
@@ -347,6 +391,47 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ question_ids, certification_id }),
     }),
+
+  /** Topics with questions, for the certifications being drawn from. */
+  examTopics: (certification_ids: string[], statuses = "approved") =>
+    request<ExamTopic[]>(
+      `/api/exam/topics${query({
+        certification_ids: certification_ids.join(","),
+        statuses,
+      })}`,
+    ),
+  /** What the paper would contain. Builds no PDF. */
+  planExam: (body: ExamRequest) =>
+    request<ExamPlan>("/api/exam/plan", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** The printable paper.
+   *
+   *  Fetched here rather than pointed at with a link, because the request is
+   *  a POST carrying a weighting that does not fit in a URL — and because a
+   *  failure has to surface as the server's message rather than as a browser
+   *  tab showing raw JSON. */
+  examPdf: async (body: ExamRequest & Record<string, unknown>): Promise<Blob> => {
+    const response = await fetch(`${BASE}/api/exam/pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => {
+      throw new ApiError(0, "Can't reach the Exam Bank API. Is it running?");
+    });
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const parsed = await response.json();
+        if (typeof parsed?.detail === "string") detail = parsed.detail;
+      } catch {
+        /* a non-JSON error body leaves the status line as the message */
+      }
+      throw new ApiError(response.status, detail);
+    }
+    return response.blob();
+  },
 
   /** Parse an uploaded file and report what is in it. Writes nothing.
    *

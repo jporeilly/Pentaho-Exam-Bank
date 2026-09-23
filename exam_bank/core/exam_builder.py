@@ -2,6 +2,7 @@
 
 import random
 import string
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -9,6 +10,63 @@ from typing import Dict, List, Optional
 from fpdf import FPDF
 
 from .bank import Question, ExamBankDB
+
+
+@dataclass(frozen=True)
+class TopicOutcome:
+    """What one topic was asked for, and what it could actually supply."""
+
+    topic: str
+    weight: float
+    #: Questions this topic's weight entitled it to.
+    wanted: int
+    #: Questions the bank has for it, under the chosen filters.
+    available: int
+    #: Questions it ended up contributing — below ``wanted`` when its pool is
+    #: too small, above when it covered another topic's shortfall.
+    selected: int
+
+    @property
+    def short(self) -> int:
+        """How many of its own it could not supply."""
+        return max(0, self.wanted - self.available)
+
+    @property
+    def lent(self) -> int:
+        """How many it contributed on another topic's behalf."""
+        return max(0, self.selected - self.wanted)
+
+
+@dataclass(frozen=True)
+class Selection:
+    """The questions chosen, and an account of how the weighting worked out.
+
+    The account exists because the selection quietly does not always honour
+    the weights. A topic with too small a pool contributes what it has and the
+    difference is taken from topics with spare questions — so a 40/30/30 exam
+    can come back 40/45/15 with nothing anywhere saying so, and the author
+    finds out by reading the paper. Asking for the questions alone is still
+    supported; asking for this says what the mix really is.
+    """
+
+    questions: List[Question]
+    topics: List[TopicOutcome] = field(default_factory=list)
+    requested: int = 0
+
+    @property
+    def shortfall(self) -> int:
+        """Questions asked for that the bank could not supply at all."""
+        return max(0, self.requested - len(self.questions))
+
+    @property
+    def redistributed(self) -> int:
+        """Questions taken from a topic other than the one entitled to them."""
+        return sum(t.lent for t in self.topics)
+
+    @property
+    def honoured(self) -> bool:
+        """True when every topic supplied exactly what its weight asked for."""
+        return self.shortfall == 0 and self.redistributed == 0
 
 
 def select_exam_questions(
@@ -23,6 +81,28 @@ def select_exam_questions(
 ) -> List[Question]:
     """Select questions from the bank according to topic weighting.
 
+    The questions alone. :func:`plan_exam` does the work and also reports how
+    the weighting actually worked out; this wrapper is what callers use when
+    they only want the paper.
+    """
+    return plan_exam(
+        db, certification_ids, total_questions, difficulties, topic_weights,
+        statuses=statuses, randomize=randomize, seed=seed,
+    ).questions
+
+
+def plan_exam(
+    db: ExamBankDB,
+    certification_ids: List[str],
+    total_questions: int,
+    difficulties: List[str],
+    topic_weights: Dict[str, float],
+    statuses: List[str] = None,
+    randomize: bool = True,
+    seed: Optional[int] = None,
+) -> Selection:
+    """Select questions by topic weighting, and say how the weighting went.
+
     Args:
         db: exam bank database
         certification_ids: certifications to draw from
@@ -34,7 +114,8 @@ def select_exam_questions(
         seed: optional random seed for reproducibility
 
     Returns:
-        Ordered list of selected questions, grouped by topic.
+        A :class:`Selection`: the ordered questions, grouped by topic, plus a
+        per-topic account of wanted / available / selected.
     """
     if statuses is None:
         statuses = ["approved"]
@@ -115,7 +196,17 @@ def select_exam_questions(
             rng.shuffle(group)
         result.extend(group)
 
-    return result
+    outcomes = [
+        TopicOutcome(
+            topic=topic,
+            weight=topic_weights[topic],
+            wanted=targets.get(topic, 0),
+            available=len(pools.get(topic, [])),
+            selected=len(selected.get(topic, [])),
+        )
+        for topic in topic_weights
+    ]
+    return Selection(questions=result, topics=outcomes, requested=total_questions)
 
 
 class ExamPDF(FPDF):

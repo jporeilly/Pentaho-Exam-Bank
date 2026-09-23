@@ -12,7 +12,6 @@ effect of pressing Export. See PLAN.md §3.4.
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -23,6 +22,7 @@ from ...core import exporter
 from ...core.exam_builder import generate_exam_pdf
 from ...core.bank import Question, ExamBankDB
 from ..deps import get_db
+from ..tempfiles import cleanup as _cleanup, temp_path as _temp_path
 
 router = APIRouter(tags=["export"])
 
@@ -47,26 +47,6 @@ def _selection(
     if not questions:
         raise HTTPException(404, "No questions match that selection.")
     return questions
-
-
-def _temp_path(suffix: str) -> Path:
-    handle = tempfile.NamedTemporaryFile(prefix="qb-export-", suffix=f".{suffix}", delete=False)
-    handle.close()
-    return Path(handle.name)
-
-
-def _cleanup(path: Path) -> Callable[[], None]:
-    """Delete the temp file once the response has been sent. Without this,
-    every export leaks a file into the temp directory for the life of the
-    machine."""
-
-    def remove() -> None:
-        try:
-            path.unlink(missing_ok=True)
-        except OSError:
-            pass
-
-    return remove
 
 
 @router.get("/api/export/formats")

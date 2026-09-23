@@ -2,9 +2,10 @@
 
 import pytest
 
-from exam_bank.core.bank import Question, Certification, ExamBankDB
+from exam_bank.core.bank import DIFFICULTIES, Question, Certification, ExamBankDB
 from exam_bank.core.exam_builder import (
     select_exam_questions, generate_exam_pdf, get_available_topics, ExamPDF,
+    plan_exam,
 )
 
 
@@ -216,3 +217,107 @@ class TestExamPDF:
             output_path=output,
         )
         assert result.exists()
+
+
+class TestPlanExam:
+    """What the weighting actually did, as opposed to what was asked for.
+
+    The selection redistributes silently: a topic whose pool is too small
+    contributes what it has, and the difference is taken from topics with
+    spare questions. So a 40/30/30 exam can come back 40/45/15 with nothing
+    anywhere saying so, and the author finds out by reading the paper.
+    """
+
+    def test_a_weighting_the_bank_can_meet_is_reported_as_honoured(self, exam_db):
+        db, cert = exam_db
+        plan = plan_exam(
+            db, [cert.id], total_questions=9, difficulties=DIFFICULTIES,
+            topic_weights={"Networking": 34, "Security": 33, "Cloud": 33},
+        )
+
+        assert plan.honoured
+        assert plan.shortfall == 0
+        assert plan.redistributed == 0
+        assert len(plan.questions) == 9
+
+    def test_a_topic_too_small_for_its_weight_is_named(self, exam_db):
+        """Cloud has 5 questions. Asking it for 10 is a fact about the bank,
+        and the author needs it before printing rather than after."""
+        db, cert = exam_db
+        plan = plan_exam(
+            db, [cert.id], total_questions=20, difficulties=DIFFICULTIES,
+            topic_weights={"Networking": 25, "Security": 25, "Cloud": 50},
+        )
+
+        cloud = next(t for t in plan.topics if t.topic == "Cloud")
+        assert cloud.wanted == 10
+        assert cloud.available == 5
+        assert cloud.short == 5
+        assert not plan.honoured
+
+    def test_the_topics_that_covered_the_shortfall_are_named(self, exam_db):
+        """Knowing the mix is wrong is half of it; the other half is which
+        topic the learner will now see more of."""
+        db, cert = exam_db
+        plan = plan_exam(
+            db, [cert.id], total_questions=20, difficulties=DIFFICULTIES,
+            topic_weights={"Networking": 25, "Security": 25, "Cloud": 50},
+        )
+
+        lenders = {t.topic: t.lent for t in plan.topics if t.lent}
+        assert lenders, "nothing reported as covering Cloud's shortfall"
+        assert set(lenders) <= {"Networking", "Security"}
+        assert sum(lenders.values()) == plan.redistributed
+
+    def test_a_bank_too_small_overall_reports_a_shortfall(self, exam_db):
+        """23 questions exist. Asking for 40 cannot be redistributed away."""
+        db, cert = exam_db
+        plan = plan_exam(
+            db, [cert.id], total_questions=40, difficulties=DIFFICULTIES,
+            topic_weights={"Networking": 34, "Security": 33, "Cloud": 33},
+        )
+
+        assert plan.requested == 40
+        assert len(plan.questions) == 23
+        assert plan.shortfall == 17
+        assert not plan.honoured
+
+    def test_every_weighted_topic_appears_in_the_account(self, exam_db):
+        """Including one the bank has nothing for — a topic silently missing
+        from the report reads as a topic that was fine."""
+        db, cert = exam_db
+        plan = plan_exam(
+            db, [cert.id], total_questions=10, difficulties=DIFFICULTIES,
+            topic_weights={"Networking": 50, "Nonexistent": 50},
+        )
+
+        reported = {t.topic for t in plan.topics}
+        assert reported == {"Networking", "Nonexistent"}
+        missing = next(t for t in plan.topics if t.topic == "Nonexistent")
+        assert missing.available == 0
+        assert missing.selected == 0
+
+    def test_selected_counts_add_up_to_the_questions_returned(self, exam_db):
+        """The account has to describe the paper that was actually built."""
+        db, cert = exam_db
+        plan = plan_exam(
+            db, [cert.id], total_questions=20, difficulties=DIFFICULTIES,
+            topic_weights={"Networking": 25, "Security": 25, "Cloud": 50},
+        )
+
+        assert sum(t.selected for t in plan.topics) == len(plan.questions)
+
+    def test_the_wrapper_returns_exactly_the_planned_questions(self, exam_db):
+        """`select_exam_questions` delegates here, so the two cannot diverge
+        — but only if the same seed produces the same paper."""
+        db, cert = exam_db
+        args = dict(
+            certification_ids=[cert.id], total_questions=9,
+            difficulties=DIFFICULTIES,
+            topic_weights={"Networking": 34, "Security": 33, "Cloud": 33},
+            seed=7,
+        )
+        planned = plan_exam(db, **args).questions
+        direct = select_exam_questions(db, **args)
+
+        assert [q.id for q in planned] == [q.id for q in direct]

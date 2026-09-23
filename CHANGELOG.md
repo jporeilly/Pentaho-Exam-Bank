@@ -32,6 +32,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- **Exam paper, as a React pane** (`core/exam_builder.plan_exam`, the Exam
+  paper pane, `POST /api/exam/plan` and `/pdf`, `GET /api/exam/topics`). Draws
+  a paper in the proportions an author sets, and **says when it cannot**.
+
+  That last part is the reason it is two endpoints. The selection redistributes
+  silently: a topic whose pool is too small contributes what it has and the
+  difference is taken from topics with spare questions, so a 40/30/30 exam can
+  come back 40/45/15 at the right length. The printed cover lists what the
+  paper IS but never what was asked for, so telling the two apart meant
+  remembering the weights you typed. `/plan` states the discrepancy outright,
+  naming both the topic that fell short and the one covering for it.
+
+  `select_exam_questions` is unchanged and now delegates to `plan_exam`, so
+  the account and the paper cannot describe different selections.
+
 - **Import, as a React pane** (`core/importing.py`, `core/validation.py`, the
   Import pane, `POST /api/import/preview` and `/commit`). Look-then-save, like
   publishing: a file of questions is parsed and reported on, and nothing is
