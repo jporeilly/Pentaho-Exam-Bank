@@ -7,7 +7,32 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-24
+
 ### Added
+
+- **`scripts/bump.py` moves every version carrier at once.** There are now
+  **eleven** of them across seven files — Phase 4 brought both
+  `package.json`s, both npm lockfiles (which carry the version *twice*
+  each, at the top level and in `packages[""]`), `tauri.conf.json`,
+  `Cargo.toml` and `Cargo.lock`. VERSION.md described the bump as five
+  manual steps across three files, which stopped being a process and
+  became a list of chances to miss one.
+
+  It refuses to write anything if a carrier has already drifted, so a
+  half-bumped tree is not a state it can reach, and it cuts
+  `## [Unreleased]` into a dated release heading with a fresh Unreleased
+  above it.
+
+  `tests/test_version.py` now checks all eleven, reading the carrier table
+  **from `bump.py`** rather than restating it: two copies of "where the
+  version lives" is the same decision in two places, and the first change
+  to either would make one of them wrong — which is the exact failure the
+  test exists to catch. Watched failing with a hand-drifted `Cargo.lock`
+  before being committed.
+
+  The npm lockfiles are the ones to watch: npm rewrites both keys on
+  install, silently. The Content Manager's sat six releases behind.
 
 - **Pentaho branding on the installer wizard.** It was shipping NSIS's
   stock blue sidebar and default artwork. `nsis-header.bmp` and

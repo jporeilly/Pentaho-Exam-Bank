@@ -1,21 +1,24 @@
 # Version
 
-**Current: 0.1.0** (development)
+**Current: 1.0.0**
 
-**Status:** 0.x, restack in progress. The app works today as a NiceGUI desktop
-web app: it generates certification questions from PCM course content or the
-Pentaho docs, holds them in a SQLite bank with a review lifecycle, and exports
-to a PCM `exam.json`, QTI 2.1, Moodle XML, CSV, DOCX and PDF exam papers.
+**Status:** released. The app is a Tauri desktop shell over a FastAPI backend
+and a React UI, shipping as a per-machine Windows installer with its own
+vendored Python. It generates certification questions from PCM course content
+or the Pentaho docs, holds them in a SQLite bank with a review lifecycle,
+publishes back into a live course's `exam.json` as a merge, and exports to QTI
+2.1, Moodle XML, CSV, DOCX and PDF exam papers.
 
-What 0.1.0 marks is the *first tracked* version, not a first release — the code
-predates it. It is the point at which the repo took its Pentaho name, the
-package stopped being the repo directory, and adopting a live course exam
-became lossless. See [`CHANGELOG.md`](CHANGELOG.md).
+1.0.0 is the condition this file set out in advance and did not move: *one
+minor per phase, 1.0.0 when it installs and publishes back to a course*.
+Publish-back landed in Phase 2 and the installer in Phase 4. The intervening
+minors were never cut — the repo stayed on 0.1.0 through three phases — so this
+is 0.1.0 to 1.0.0 in one step rather than a run of releases. The phases were
+done; the tags were not.
 
-The road to 1.0 is the restack in [`PLAN.md`](PLAN.md): the backend lifts onto
-FastAPI, the NiceGUI layer is replaced by Tauri + React, and the app ships as a
-Windows installer like the other Pentaho apps. Rough intent — one minor per
-phase, 1.0.0 when it installs and publishes back to a course:
+What 0.1.0 marked was the *first tracked* version, not a first release: the
+point at which the repo took its Pentaho name, the package stopped being the
+repo directory, and adopting a live course exam became lossless.
 
 | Version | Phase |
 | ------- | ----- |
@@ -27,26 +30,40 @@ phase, 1.0.0 when it installs and publishes back to a course:
 
 ## Where the version string lives
 
-Hand-kept, and `tests/test_version.py` fails when any carrier disagrees with
-the source of truth.
+Eleven sites across seven files. The table below is the human-readable copy;
+the machine-readable one is `CARRIERS` in
+[`scripts/bump.py`](scripts/bump.py), which both the bump tool and
+`tests/test_version.py` read — so the thing that writes them and the thing
+that checks them cannot disagree about where they are.
 
 | File | Form |
 | ---- | ---- |
 | `exam_bank/__init__.py` | `__version__ = "x.y.z"` — **source of truth** |
 | `VERSION.md` | the **Current:** line above |
 | `CHANGELOG.md` | the most recent `## [x.y.z] - YYYY-MM-DD` heading |
+| `desktop/package.json` | `"version"` |
+| `desktop/package-lock.json` | `"version"` **twice** — top level and `packages[""]` |
+| `frontend/package.json` | `"version"` |
+| `frontend/package-lock.json` | `"version"` **twice** |
+| `desktop/src-tauri/tauri.conf.json` | `"version"` — what the installer filename carries |
+| `desktop/src-tauri/Cargo.toml` | `version = "x.y.z"` |
+| `desktop/src-tauri/Cargo.lock` | the `pentaho-exam-bank` package entry |
 
-Phases 3 and 4 add carriers this app does not have yet — `package.json` and its
-lockfile, `desktop/src-tauri/tauri.conf.json`, `Cargo.toml` and `Cargo.lock`.
-Add each to the table **and to the test** as it arrives; a carrier nobody checks
-is a carrier that drifts.
+A carrier nobody checks is a carrier that drifts. The two npm lockfiles are the
+ones to watch: npm rewrites both of their version keys on install, silently,
+and the Content Manager's sat six releases behind before anyone looked.
 
 ## Releasing
 
-1. Bump `__version__` in `exam_bank/__init__.py`.
-2. Bump the **Current:** line in this file.
-3. In [`CHANGELOG.md`](CHANGELOG.md), rename `## [Unreleased]` to
-   `## [x.y.z] - YYYY-MM-DD` and open a fresh `Unreleased` section.
-4. Run the tests — `venv\Scripts\python.exe -m pytest -q`. `test_version.py`
-   catches a carrier you missed.
+1. `venv\Scripts\python.exe scripts/bump.py x.y.z` — moves every carrier and
+   cuts `## [Unreleased]` into `## [x.y.z] - <today>` with a fresh Unreleased
+   above it. It refuses to write anything if a carrier has already drifted,
+   so a half-bumped tree is not a state this can reach. `--dry-run` first if
+   you want to see the list.
+2. Run the tests — `venv\Scripts\python.exe -m pytest -q`. `test_version.py`
+   checks all eleven sites.
+3. Build and collect the installer — `cd desktop && npm run dist`.
+4. Install it, then `desktop\scripts\verify-install.ps1`. It fails if the
+   installed launcher is not the build you just made, so "verified" cannot
+   accidentally mean the previous release.
 5. Commit, staging by path, with `git commit -F <message-file>`.

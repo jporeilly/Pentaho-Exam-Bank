@@ -4,15 +4,20 @@ Source of truth: ``exam_bank.__version__``. Every other carrier — the
 **Current:** line in VERSION.md and the most recent release heading in
 CHANGELOG.md — must match it exactly. See VERSION.md for the bump policy.
 
-Phases 3 and 4 add carriers this app does not have yet (package.json and its
-lockfile, tauri.conf.json, Cargo.toml, Cargo.lock). Add each one here as it
-arrives: a carrier nobody checks is a carrier that drifts.
+Phase 4 brought the rest: package.json and its lockfile for both the desktop
+shell and the frontend, tauri.conf.json, Cargo.toml and Cargo.lock. They are
+checked from `scripts/bump.py`'s carrier table, so the tool that writes them
+and the test that checks them cannot disagree about where they are.
 """
 
 import re
+import sys
 from pathlib import Path
 
 from exam_bank import __version__ as VERSION
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from bump import CARRIERS  # noqa: E402  (needs the path above)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -72,3 +77,41 @@ def test_release_heading_carries_a_date():
 def test_the_docs_the_house_rules_require_all_exist():
     for name in ("VERSION.md", "CHANGELOG.md", "INSTALL.md", "README.md"):
         assert (ROOT / name).is_file(), f"{name} is missing"
+
+
+def test_every_carrier_bump_py_knows_about_agrees():
+    """The Phase 3 and 4 carriers: package.json and its lockfile (twice
+    each, top level and packages[""]), tauri.conf.json, Cargo.toml and
+    Cargo.lock.
+
+    The table is imported from `scripts/bump.py` rather than written out
+    again here. Two copies of "where the version lives" is the same
+    decision in two places, and the first change to either would make one
+    of them wrong - which is exactly the failure this test exists to
+    catch. A pattern that stops matching its file fails here loudly rather
+    than silently checking nothing.
+    """
+    assert CARRIERS, "bump.py's carrier table is empty"
+    seen = set()
+    for rel, pattern, label in CARRIERS:
+        text = _read(rel)
+        match = re.search(pattern, text)
+        assert match, (
+            f"{rel}: nothing matches the pattern for {label}. The file's "
+            "shape changed; fix scripts/bump.py and this passes again."
+        )
+        assert match.group(1) == VERSION, (
+            f"{rel} ({label}) says {match.group(1)}, __version__ says {VERSION}"
+        )
+        seen.add(rel)
+
+    # The carriers that existed before Phase 4 are checked individually
+    # above; these are the ones the installer brought in. Named explicitly
+    # so DELETING a row from bump.py's table cannot quietly shrink what is
+    # verified - the test would still pass over whatever was left.
+    for required in ("desktop/package.json", "desktop/package-lock.json",
+                     "frontend/package.json", "frontend/package-lock.json",
+                     "desktop/src-tauri/tauri.conf.json",
+                     "desktop/src-tauri/Cargo.toml",
+                     "desktop/src-tauri/Cargo.lock"):
+        assert required in seen, f"{required} is not in bump.py's carrier table"
