@@ -107,7 +107,9 @@ class Question:
     topic: str = ""                 # Subject area / tag
     tags: List[str] = field(default_factory=list)
     difficulty: str = "Medium"      # Easy / Medium / Hard
-    bloom_level: str = "Apply"      # Bloom's taxonomy level
+    # Unassessed, not asserted: see the note in question_importer. A level
+    # nobody has judged understates itself rather than claiming Apply.
+    bloom_level: str = "Understand"  # Bloom's taxonomy level
     certification_id: str = ""      # FK to certifications table
     # Position this question held in its course pool when it was adopted.
     # -1 = not part of an authored pool (a generated question). Without it a
@@ -391,7 +393,7 @@ class ExamBankDB:
                 topic TEXT DEFAULT '',
                 tags TEXT DEFAULT '[]',
                 difficulty TEXT DEFAULT 'Medium',
-                bloom_level TEXT DEFAULT 'Apply',
+                bloom_level TEXT DEFAULT 'Understand',
                 certification_id TEXT DEFAULT '',
                 pool_order INTEGER DEFAULT -1,
                 source_type TEXT DEFAULT 'pptx',

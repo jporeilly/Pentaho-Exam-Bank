@@ -303,7 +303,7 @@ def convert_sheet(
         if "bloom" in mapping and cells[mapping["bloom"]]:
             out["Bloom Level"] = cells[mapping["bloom"]]
         else:
-            out["Bloom Level"] = "Apply"
+            out["Bloom Level"] = "Understand"
 
         # Tags
         if "tags" in mapping:

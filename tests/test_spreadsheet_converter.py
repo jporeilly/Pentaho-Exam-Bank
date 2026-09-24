@@ -215,7 +215,10 @@ class TestConvertSheetDirect:
 
         rows = convert_sheet(ws)
         assert rows[0]["Difficulty"] == "Medium"
-        assert rows[0]["Bloom Level"] == "Apply"
+        # An unassessed level makes the MODEST claim. "Apply" asserts the
+        # question makes the learner do something, which nobody judged when
+        # the column was simply absent.
+        assert rows[0]["Bloom Level"] == "Understand"
 
 
 # ── Sheet conversion — Option pattern ─────────────────
