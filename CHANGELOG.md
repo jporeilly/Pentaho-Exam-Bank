@@ -9,6 +9,35 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- **Pentaho branding on the installer wizard.** It was shipping NSIS's
+  stock blue sidebar and default artwork. `nsis-header.bmp` and
+  `nsis-sidebar.bmp` come from the Content Manager's `make-icons.py`, the
+  same generator that draws the app icon, so the wizard cannot drift from
+  the mark: a black field with the P tile wearing the violet exam badge,
+  the Pentaho wordmark, and a violet accent rule under the header wordmark.
+  Black sidebar rather than a coloured one because this is a tool, not a
+  course — the distinction the Content Editor drew when it split
+  `--accent` from `--sidebar-field`.
+
+  ```bat
+  python <PCM>\scripts\make-icons.py --nsis-only ^
+      --out-dir desktop\src-tauri\icons ^
+      --title "Exam Bank" --subtitle "Certification Questions" ^
+      --badge exam --badge-color "#7C3AED" --accent "#7C3AED"
+  ```
+
+- **`verify-install.ps1` now checks which build it is looking at, and
+  whether the courses search ran.** It reported "Everything checked out"
+  about an install that was a day old and did not contain the feature
+  being verified — every check was true, and all of them were about the
+  wrong subject. It now fails when the installed launcher is not the
+  latest local build (silent away from a build tree, where there is
+  nothing to compare against), and reports separately that
+  `provisioning\find-courses.ps1` shipped and that a checkout was
+  recorded. Finding no courses is a **warning**, not a failure: a machine
+  with no Content Manager is a valid install. Never having searched is a
+  failure. Telling those two apart was the entire point.
+
 - **`dist/` holds the built installers, one per version**
   (`desktop/scripts/collect-installer.ps1`). Tauri leaves its output four
   directories deep inside `target/`, where `cargo clean` will delete it. This

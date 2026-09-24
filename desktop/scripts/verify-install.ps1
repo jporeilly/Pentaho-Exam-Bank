@@ -265,7 +265,91 @@ if (-not $SkipLaunch) {
     }
 }
 
-# --- 5. the Content Editor's own verdict ---------------------------------
+# --- 5. is this actually the build that was just made? -------------------
+#
+# Added after the script said "Everything checked out" about an install
+# that was a day old and did not contain the feature being verified. Every
+# check above passed honestly - they were all true of the OLD install. A
+# verifier that cannot tell you WHICH build it just blessed is an
+# instrument that reports on the wrong subject with total confidence.
+#
+# Only meaningful next to a build tree, so it is silent elsewhere: an
+# installed copy on a user's machine has nothing to compare against and
+# that is not a fault.
+$built = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) `
+                   "desktop\src-tauri\target\release\pentaho-exam-bank.exe"
+if ((Test-Path -LiteralPath $built) -and $launcher) {
+    Head "Which build is installed"
+    $hBuilt = (Get-FileHash -LiteralPath $built -Algorithm SHA256).Hash
+    $hLive  = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash
+    if ($hBuilt -eq $hLive) {
+        Pass "the installed launcher is the one in target\release"
+    } else {
+        Fail "the installed launcher is NOT the latest local build"
+        Note "installed : $((Get-Item -LiteralPath $launcher).LastWriteTime)"
+        Note "built     : $((Get-Item -LiteralPath $built).LastWriteTime)"
+        Note "Every check above is true of the OLDER build. Run the installer"
+        Note "in dist\ and verify again."
+    }
+}
+
+# --- 6. the courses the app will open on ---------------------------------
+#
+# The reason this section exists: the first install came up with every
+# pane empty because the app's only rule for finding courses was "look for
+# a sibling directory", which cannot hold under Program Files. The
+# installer now searches, and a search that silently stopped running would
+# look exactly like a machine that has no courses on it.
+Head "Content Manager courses"
+
+$prov = Join-Path $target "provisioning\find-courses.ps1"
+if (Test-Path -LiteralPath $prov) {
+    Pass "provisioning\find-courses.ps1 shipped"
+} else {
+    Fail "provisioning\find-courses.ps1 is not in the install"
+    Note "The POSTINSTALL hook runs this by path; without it the hook is a"
+    Note "no-op and the app falls back to asking in Settings."
+}
+
+# PcmRepo is written by that script, in the 64-bit view. Read both anyway:
+# if it ever appears only in the 32-bit view, the 64-bit Python that reads
+# it would not see it, and a silent half-write is worth a failure.
+function Read-Hint($view) {
+    $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+        [Microsoft.Win32.RegistryHive]::LocalMachine, $view)
+    try {
+        $key = $base.OpenSubKey($KeyPath)
+        if (-not $key) { return $null }
+        try { return $key.GetValue("PcmRepo") } finally { $key.Close() }
+    } finally { $base.Close() }
+}
+
+$hint = Read-Hint ([Microsoft.Win32.RegistryView]::Registry64)
+if (-not $hint) { $hint = Read-Hint ([Microsoft.Win32.RegistryView]::Registry32) }
+
+if ($hint) {
+    $coursesDir = Join-Path $hint "courses"
+    $n = @(Get-ChildItem -LiteralPath $coursesDir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "course.json") }).Count
+    if ($n -gt 0) {
+        Pass "the installer found $n course(s) - $hint"
+    } else {
+        # Recorded but useless. Worse than nothing: the app reports itself
+        # configured and then finds no courses.
+        Fail "PcmRepo points at $hint, which has no courses"
+    }
+} else {
+    # NOT a failure. A machine with no Content Manager on it is a perfectly
+    # valid install, and the app asks in Settings. Stated plainly so the
+    # difference between "searched and found nothing" and "never searched"
+    # is visible rather than inferred.
+    Warn "no Content Manager checkout was recorded"
+    Note "Fine if there is none on this machine - the app will ask in"
+    Note "Settings. To see what the search itself finds:"
+    Note "  powershell -File `"$prov`" -ReportOnly"
+}
+
+# --- 7. the Content Editor's own verdict ---------------------------------
 Head "The Content Editor's Questions button"
 
 $editorRoots = @(

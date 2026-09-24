@@ -229,6 +229,29 @@ venv\Scripts\python.exe -c "from PIL import Image; im=Image.open(r'icons\icon.ic
 `public/` at the site root — `index.html` names both rather than leaving the
 browser to guess, because the guess does not survive a non-root base path.
 
+### The installer wizard
+
+The NSIS wizard has its own two bitmaps, `desktop/src-tauri/icons/nsis-header.bmp`
+(150x57) and `nsis-sidebar.bmp` (164x314), named from `tauri.conf.json`. They
+are committed artifacts for the same reason the icon is, and come from the
+same generator, so the wizard cannot drift away from the mark:
+
+```bat
+venv\Scripts\python.exe <PCM>\scripts\make-icons.py --nsis-only ^
+    --out-dir desktop\src-tauri\icons ^
+    --title "Exam Bank" --subtitle "Certification Questions" ^
+    --badge exam --badge-color "#7C3AED" --accent "#7C3AED"
+```
+
+`--accent` colours the rule under the header wordmark; the sidebar field is
+left at the suite black on purpose. A coloured field is for a COURSE
+installer — this is a tool, and has no accent of its own to wear. That
+distinction is why the generator has two flags rather than one.
+
+Without these keys NSIS ships its own stock artwork, which is a blue
+gradient and looks like a different product. Nothing fails; the wizard
+just stops being ours.
+
 ## Development
 
 ```bat
