@@ -192,6 +192,17 @@ if (-not $SkipLaunch) {
     } else {
         $before = @(Get-Process -Name "pentaho-exam-bank" -ErrorAction SilentlyContinue |
                     Select-Object -ExpandProperty Id)
+        # The backends running BEFORE this script touched anything. Without
+        # this the orphan check below counts every backend from this install
+        # - including the copy the user has open on their own screen - and
+        # reports a working job object as a leak. It did exactly that the
+        # first time the app was running during a verify.
+        $beforeBackends = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+                            Where-Object { $_.CommandLine -and $_.CommandLine -like "*$target*boot.py*" } |
+                            Select-Object -ExpandProperty ProcessId)
+        if ($beforeBackends.Count -gt 0) {
+            Note "$($beforeBackends.Count) backend(s) from this install were already running; not ours to judge"
+        }
         Start-Process -FilePath $launcher | Out-Null
 
         # The port is chosen free at launch, so it is discovered from the
@@ -254,7 +265,8 @@ if (-not $SkipLaunch) {
             Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
         $orphans = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
-                     Where-Object { $_.CommandLine -and $_.CommandLine -like "*$target*boot.py*" })
+                     Where-Object { $_.CommandLine -and $_.CommandLine -like "*$target*boot.py*" } |
+                     Where-Object { $beforeBackends -notcontains $_.ProcessId })
         if ($orphans.Count -eq 0) {
             Pass "closing it stopped the backend too"
         } else {
@@ -267,29 +279,58 @@ if (-not $SkipLaunch) {
 
 # --- 5. is this actually the build that was just made? -------------------
 #
-# Added after the script said "Everything checked out" about an install
-# that was a day old and did not contain the feature being verified. Every
-# check above passed honestly - they were all true of the OLD install. A
-# verifier that cannot tell you WHICH build it just blessed is an
-# instrument that reports on the wrong subject with total confidence.
+# Added after the script said "Everything checked out" about an install that
+# was a day old and did not contain the feature being verified. Every check
+# above passed honestly - they were all true of the OLD install. A verifier
+# that cannot tell you WHICH build it just blessed is an instrument that
+# reports on the wrong subject with total confidence.
 #
-# Only meaningful next to a build tree, so it is silent elsewhere: an
-# installed copy on a user's machine has nothing to compare against and
-# that is not a fault.
-$built = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) `
-                   "desktop\src-tauri\target\release\pentaho-exam-bank.exe"
-if ((Test-Path -LiteralPath $built) -and $launcher) {
+# The reference is the launcher INSIDE the collected installer, not the one
+# in target\release. The first version of this check compared against
+# target\release and failed a perfectly correct install: Tauri REWRITES
+# that file around bundling (same size, different bytes), so by the time a
+# build finishes it no longer matches what the installer actually carries.
+# A check proved able to fail but never proved able to pass is only half
+# tested, and this was the half that was missing.
+#
+# Reading the launcher out of an NSIS archive needs 7-Zip. Where it is
+# absent the check says so and skips, rather than pretending.
+$distDir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "dist"
+$setup = $null
+if (Test-Path -LiteralPath $distDir) {
+    $setup = Get-ChildItem -LiteralPath $distDir -Filter "*-setup.exe" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+}
+if ($setup -and $launcher) {
     Head "Which build is installed"
-    $hBuilt = (Get-FileHash -LiteralPath $built -Algorithm SHA256).Hash
-    $hLive  = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash
-    if ($hBuilt -eq $hLive) {
-        Pass "the installed launcher is the one in target\release"
+    $sevenZip = @(
+        (Get-Command 7z -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source),
+        "$env:ProgramFiles\7-Zip\7z.exe"
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+
+    if (-not $sevenZip) {
+        Note "skipped - 7-Zip is needed to read the launcher out of $($setup.Name)"
     } else {
-        Fail "the installed launcher is NOT the latest local build"
-        Note "installed : $((Get-Item -LiteralPath $launcher).LastWriteTime)"
-        Note "built     : $((Get-Item -LiteralPath $built).LastWriteTime)"
-        Note "Every check above is true of the OLDER build. Run the installer"
-        Note "in dist\ and verify again."
+        $tmp = Join-Path $env:TEMP "peb-verify-$PID"
+        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+        try {
+            & $sevenZip e -y -o"$tmp" $setup.FullName "pentaho-exam-bank.exe" | Out-Null
+            $packaged = Join-Path $tmp "pentaho-exam-bank.exe"
+            if (-not (Test-Path -LiteralPath $packaged)) {
+                Warn "could not read the launcher out of $($setup.Name)"
+            } elseif ((Get-FileHash -LiteralPath $packaged -Algorithm SHA256).Hash -eq
+                      (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash) {
+                Pass "the installed launcher is the one in $($setup.Name)"
+            } else {
+                Fail "the installed launcher is NOT the one in $($setup.Name)"
+                Note "installed : $((Get-Item -LiteralPath $launcher).LastWriteTime)"
+                Note "installer : $($setup.LastWriteTime)"
+                Note "Every check above is true of the OLDER build. Run that"
+                Note "installer and verify again."
+            }
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
