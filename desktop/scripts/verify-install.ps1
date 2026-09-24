@@ -236,6 +236,14 @@ if (-not $SkipLaunch) {
             } else {
                 Pass "answering - version $($health.version)"
 
+                # Kept for the courses section below, which runs after the
+                # app has been closed again. Asked of the APP rather than read
+                # out of the SQLite file: the app is the thing whose opinion
+                # matters, and opening its database behind its back is how a
+                # verifier ends up reporting on a file nobody uses.
+                $script:bankQuestions = [int]$health.database.questions
+                $script:bankCerts = [int]$health.database.certifications
+
                 $dbPath = [string]$health.database.path
                 if ($dbPath.ToLower().StartsWith($target.ToLower())) {
                     Fail "the database is INSIDE the install: $dbPath"
@@ -388,6 +396,23 @@ if ($hint) {
     Note "Fine if there is none on this machine - the app will ask in"
     Note "Settings. To see what the search itself finds:"
     Note "  powershell -File `"$prov`" -ReportOnly"
+}
+
+# Did the bank actually FILL? Added because this script twice reported an
+# install perfect while saying nothing about the feature the release existed
+# for. Finding the courses is the means; having the questions is the point,
+# and the two are separately capable of failing.
+if ($null -ne $script:bankQuestions) {
+    if ($script:bankQuestions -gt 0) {
+        Pass "the bank holds $($script:bankQuestions) question(s) across $($script:bankCerts) certification(s)"
+    } elseif ($hint) {
+        Fail "the bank is EMPTY although $hint was found"
+        Note "A new install adopts the courses on first launch. An empty bank"
+        Note "next to a found checkout means that did not happen - check the"
+        Note "app log for 'First-run course adoption did not run'."
+    } else {
+        Note "the bank is empty, which is expected with no courses on this machine"
+    }
 }
 
 # --- 7. the Content Editor's own verdict ---------------------------------
