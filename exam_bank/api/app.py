@@ -10,6 +10,8 @@ translation of ``core``. Nothing here holds state between requests.
 
 from __future__ import annotations
 
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -24,10 +26,65 @@ from .routers import (
     questions, settings, system,
 )
 
+log = logging.getLogger(__name__)
+
+
+def _adopt_courses_on_first_run() -> None:
+    """Fill a brand-new bank from the courses on disk.
+
+    A fresh install opened on an empty bank while several hundred questions
+    sat in the courses the installer had just found. Both halves were behaving
+    correctly - the installer ships no database, because it is the author's
+    data and not ours - but nobody had introduced them.
+
+    Guarded by `bank_is_empty`, which requires no questions AND no
+    certifications. That is the whole safety argument: there is nothing in an
+    empty bank to overwrite, lose or reorder, so this needs no confirmation.
+    The moment a bank has anything in it, syncing becomes a decision and goes
+    through plan-then-apply like everything else that writes.
+
+    Failure is logged and swallowed. An authoring tool that will not start
+    because it could not read somebody else's courses directory is worse than
+    one that starts empty and says so in the Courses pane.
+    """
+    try:
+        from ..core import course_sync
+        from ..core.bank import ExamBankDB
+        from ..utils.config import DB_PATH, config
+
+        root = (config.pcm_courses_dir or "").strip()
+        if not root or not Path(root).is_dir():
+            return
+
+        db = ExamBankDB(DB_PATH, same_thread_only=False)
+        try:
+            if not course_sync.bank_is_empty(db):
+                return
+            plan = course_sync.plan(root, db)
+            if not plan.total_new:
+                return
+            result = course_sync.apply(root, db, expect_token=plan.token)
+            log.info(
+                "First run: adopted %d questions from %d course(s) in %s",
+                result["added"], len(result["courses"]), root,
+            )
+        finally:
+            db.close()
+    except Exception as e:  # never let this stop the app starting
+        log.warning("First-run course adoption did not run: %s", e)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _adopt_courses_on_first_run()
+    yield
+
+
 app = FastAPI(
     title="Pentaho Exam Bank",
     version=__version__,
     description="Authoring API for Pentaho certification questions.",
+    lifespan=lifespan,
 )
 
 # The React front end arrives in 0.4.0 and will be served by Vite on its own

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api, ApiError, type Course, type CourseSections, type Lab } from "./api";
+import { SyncPanel } from "./SyncPanel";
 
 /**
  * The courses the Content Manager has, and what is inside one.
@@ -13,7 +14,7 @@ export function CoursesPane() {
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string>("");
 
-  useEffect(() => {
+  const load = () => {
     api
       .courses()
       .then((c) => {
@@ -21,7 +22,9 @@ export function CoursesPane() {
         setError("");
       })
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : String(e)));
-  }, []);
+  };
+
+  useEffect(load, []);
 
   if (error) return <div className="banner">{error}</div>;
   if (!courses) return <div className="empty">Loading courses…</div>;
@@ -29,6 +32,8 @@ export function CoursesPane() {
     return <div className="empty">No courses found in the Content Manager.</div>;
 
   return (
+    <>
+    <SyncPanel onSynced={load} />
     <div className="card">
       <table>
         <thead>
@@ -51,6 +56,7 @@ export function CoursesPane() {
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

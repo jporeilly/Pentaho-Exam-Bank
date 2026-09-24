@@ -461,6 +461,45 @@ export interface PublishPlan {
 
 // ── Calls ───────────────────────────────────────────────────────────
 
+/** One course in a sync plan. */
+export interface SyncCourse {
+  slug: string;
+  title: string;
+  examSha: string;
+  certificationId: string;
+  certificationName: string;
+  adopted: boolean;
+  inCourse: number;
+  new: number;
+  changed: number;
+  unchanged: number;
+  unusable: { id: string; stem: string; reason: string }[];
+  /** Ids another course also claims. Refused, never written. */
+  conflicts: { id: string; stem: string; reason: string }[];
+  changedIds: string[];
+  error: string;
+}
+
+/** What adopting every course would do to the bank. */
+export interface SyncPlan {
+  coursesDir: string;
+  token: string;
+  courses: SyncCourse[];
+  totalNew: number;
+  totalChanged: number;
+  totalUnchanged: number;
+  totalUnusable: number;
+  totalConflicts: number;
+}
+
+export interface SyncResult {
+  added: number;
+  updated: number;
+  skippedChanged: number;
+  courses: { slug: string; added: number; updated: number; skipped: number }[];
+  token: string;
+}
+
 export const api = {
   health: () => request<Health>("/api/health"),
   stats: () => request<Record<string, unknown>>("/api/stats"),
@@ -643,6 +682,16 @@ export const api = {
     request<PublishPlan>(`/api/courses/${encodeURIComponent(slug)}/exam/questions`, {
       method: "POST",
       body: JSON.stringify({ certification_id, status, expect_sha }),
+    }),
+
+    /** What adopting every course's exam would do to the bank. Writes nothing. */
+  planCourseSync: () => request<SyncPlan>("/api/courses/sync/plan", { method: "POST" }),
+  /** Adopt what the plan described. `token` comes from the plan, and the
+   *  server refuses without it - so this cannot be called first. */
+  syncCourses: (token: string, overwrite_changed = false, only: string[] = []) =>
+    request<SyncResult>("/api/courses/sync", {
+      method: "POST",
+      body: JSON.stringify({ token, overwrite_changed, only }),
     }),
 
   /** Export is a file download, so it is a URL the browser fetches, not JSON. */

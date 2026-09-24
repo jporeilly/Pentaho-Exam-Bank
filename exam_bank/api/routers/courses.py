@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ...core import course_sync
 from ...core.bank import ExamBankDB
 from ...core.context_budget import source_budget_chars
 from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course
@@ -254,3 +255,49 @@ def publish_course_exam_questions(
     except PublishRefused as e:
         raise HTTPException(409, str(e)) from e
     return {**_plan_json(slug, made), "written": True}
+
+
+class SyncRequest(BaseModel):
+    """Which sync to run, and proof that one was looked at first."""
+
+    #: The token from `/api/courses/sync/plan`. Required, for the same reason
+    #: publishing requires a sourceSha: between looking and acting somebody
+    #: may have pulled the courses repo.
+    token: str = ""
+    #: Overwrite questions the bank has since edited. Off by default, and
+    #: deliberately awkward to reach: the bank is the editing tool for these
+    #: questions, and a routine refresh that reverted an author's work would
+    #: make it unsafe to use.
+    overwrite_changed: bool = False
+    #: Limit the sync to these course slugs. Empty means every course.
+    only: list[str] = []
+
+
+@router.post("/api/courses/sync/plan")
+def plan_course_sync(db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """What adopting every course's exam would do to the bank. Writes nothing."""
+    return course_sync.plan(courses_dir(), db).as_dict()
+
+
+@router.post("/api/courses/sync")
+def run_course_sync(
+    body: SyncRequest, db: ExamBankDB = Depends(get_db)
+) -> dict[str, Any]:
+    """Adopt what the plan described."""
+    if not body.token:
+        raise HTTPException(
+            400,
+            "Syncing needs the token from a plan. Ask "
+            "/api/courses/sync/plan first, and pass back the token it returned.",
+        )
+    try:
+        return course_sync.apply(
+            courses_dir(), db,
+            expect_token=body.token,
+            overwrite_changed=body.overwrite_changed,
+            only=body.only or None,
+        )
+    except ValueError as e:
+        # 409, not 400: the request was well formed and was correct when it
+        # was composed. The world moved.
+        raise HTTPException(409, str(e)) from e

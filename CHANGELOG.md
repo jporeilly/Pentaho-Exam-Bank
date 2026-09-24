@@ -6,6 +6,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **The bank adopts the Content Manager's courses, and keeps them current**
+  (`exam_bank/core/course_sync.py`, `POST /api/courses/sync/plan` and
+  `/api/courses/sync`, the panel at the top of the Courses pane). A fresh
+  install opened on an empty bank while several hundred questions sat in the
+  courses the installer had just found. Both halves were behaving correctly
+  — the installer ships no database, because that is the author's data and
+  not ours — but nobody had introduced them.
+
+  Look-then-act, like publishing: the plan reads and reports and writes
+  nothing, and the apply carries the plan's token, so a sync cannot run
+  against courses that moved while the summary sat on screen.
+
+  **Idempotent**, which `scripts/migrate_pcm_exams.py` is not — that script
+  mints a fresh certification on every run, right for a one-off migration
+  and wrong for anything run twice. Certifications are matched on
+  `source_ref`, the course slug, never on the title: a title is authored
+  prose, and matching on it would split a course in two the first time
+  somebody reworded one.
+
+  **A sync never reverts an edit.** A question the bank has since changed is
+  reported and skipped unless the author explicitly opts in, and even then
+  the review state is kept — the course file has no opinion about it, and
+  resetting an approved question to draft would undo work nobody asked to
+  undo. These questions were adopted precisely because they had nowhere else
+  to be edited; a refresh that quietly overwrote that would make the tool
+  unsafe to use.
+
+  **A brand-new bank fills itself on first launch.** Guarded by
+  `bank_is_empty`, which requires no questions *and* no certifications:
+  that is the whole safety argument for writing unasked, and it stops being
+  true the moment the bank holds anything. Failure is logged and swallowed —
+  an authoring tool that will not start because it could not read somebody
+  else's courses directory is worse than one that starts empty.
+
+- **A question id claimed by two courses is refused, not silently
+  overwritten.** Found with real data while verifying the pane, not
+  imagined: **30 ids in the live courses are used by two courses each** —
+  `m1-q1` belongs to both `architect-install-certified` and
+  `developer-di-practitioner`, and `bi-developer-ct`/`bi-developer-me` share
+  eleven, `developer-ai`/`developer-sd` seven. The ids are hand-authored per
+  course and nothing ever made them unique across courses.
+
+  The questions table is keyed on that id and `save()` is INSERT OR REPLACE,
+  so adopting both courses would have written one course's question over the
+  other's, moved it to the wrong certification, and reported a completely
+  successful sync: 398 questions in git arriving as 365 in the bank, with no
+  error and nothing to compare against. The plan now names the other course
+  and refuses the id on both sides. `architect-install-certified` is
+  currently unadoptable in full because all twelve of its ids collide.
+
+  Refusing is the only honest option a sync has. Making them unique means
+  either rewriting ids the Content Manager keys exam results and resume state
+  on, or changing the table's primary key — real changes that somebody has to
+  choose.
+
+- **The sync reports questions the importer silently dropped.** An entry with
+  no prompt or no options never comes back from `import_from_pcm_exam_json`
+  and nothing said so, which meant a course holding N questions adopted N-1
+  with the only evidence being two numbers nobody was comparing.
+  `analyst-ba-practitioner` has one, and now says so.
+
 
 ## [1.0.0] - 2026-09-24
 
