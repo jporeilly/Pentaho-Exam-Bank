@@ -68,6 +68,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 
+- **The icon is a marked exam paper, not a tickbox.** A page with a rule
+  and a tick punched out of it, still in violet (`#7C3AED`). The old badge
+  said "done" where this app means "exam", and at 24 px in a taskbar of
+  three Pentaho tiles that is the only thing distinguishing it. The badge
+  itself was added to the Content Manager's `make-icons.py`, which is where
+  all three suite icons are drawn.
+
 - **The NiceGUI layer is gone, and `run.bat` starts one server.** The API
   serves the built React front end from `frontend/dist` at its own root, so
   the interface and the API are one process on **port 7788**; the 7777 the
@@ -118,6 +125,23 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   it.
 
 ### Fixed
+
+- **An install can now find the Content Manager's courses.** The only rule
+  was "look for a sibling directory", which is right in every checkout and
+  can never work in an install: the code sits under Program Files, so the
+  sibling searched was `C:\Program Files\Pentaho Exam Bank\Pentaho-Content-Manager`.
+  The first install opened with every pane empty and nothing on screen
+  saying why. The installer now runs `find-courses.ps1`, which looks one
+  level down a short list of known roots and records the checkout it finds
+  under `HKLM\SOFTWARE\Pentaho\ExamBank\PcmRepo` — the same value shape the
+  Content Editor already writes, so one search answers for both apps. The
+  app reads that hint, and still prefers an explicit `PCM_REPO`. Finding
+  nothing is not a failure: the install continues and Settings asks.
+- **A saved empty courses path no longer pins the app to "not configured".**
+  Every config migrated from a checkout holds `""` for `pcm_courses_dir`,
+  and that was passed through as a deliberate choice, overriding the
+  default forever — so the discovery above would have been found and then
+  ignored on exactly the machines that needed it.
 
 - **The staging script leaked the build machine's own configuration.**
   Importing the staged tree to verify it runs `config.py`, which creates its

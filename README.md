@@ -201,7 +201,9 @@ certifications died when the courses were renamed under them.
 The suite shares one mark: a black tile with a white capital P, no red and
 no swirl. What separates the taskbar pins at 24 px is the **badge** — the
 Content Manager wears a mortarboard, the Content Editor a pencil, and this
-app a ticked answer box in violet (`#7C3AED`).
+app a marked exam paper in violet (`#7C3AED`) — a page with a rule and a
+tick punched out of it, which says "exam" where a plain tickbox said only
+"done".
 
 `icons/icon.ico` is a **committed artifact**. Nothing here draws it: the one
 drawing lives in the Content Manager's `scripts/make-icons.py`, and copying
@@ -213,7 +215,7 @@ Content Manager checked out:
 
 ```bat
 venv\Scripts\python.exe <PCM>\scripts\make-icons.py ^
-    --installer-ico icons\icon.ico --badge check --badge-color "#7C3AED"
+    --installer-ico icons\icon.ico --badge exam --badge-color "#7C3AED"
 ```
 
 Then rescale the PNGs **down** from the .ico's largest frame — never up,

@@ -97,10 +97,89 @@ elif _OLD_CONFIG.exists() and CONFIG_FILE.exists():
     _OLD_CONFIG.unlink()  # new location takes precedence
 
 
+# Where an installer records the Content Manager checkout it found on this
+# machine. Two keys because two apps do the same search and either may have
+# run first: the Exam Bank's own installer writes the first, and the Content
+# Editor has been writing the second for several releases. The VALUE is the
+# repo ROOT, not the courses directory — that is the shape the editor
+# already stores, and matching it means one search answers for both.
+_PCM_HINT_KEYS = (
+    r"SOFTWARE\Pentaho\ExamBank",
+    r"SOFTWARE\Pentaho\ContentEditor",
+)
+_PCM_HINT_VALUE = "PcmRepo"
+
+
+def _installer_hint() -> Optional[Path]:
+    """A Content Manager checkout recorded in the registry, if one is usable.
+
+    Both hives and BOTH REGISTRY VIEWS. An NSIS installer is a 32-bit
+    process, so its writes land in WOW6432Node, while this is 64-bit Python
+    reading the native view — check one and an install that definitely
+    registered itself looks absent.
+
+    A hint is only returned when it still has a ``courses`` directory. A
+    checkout that has since moved or been emptied is worse than no hint at
+    all: the app would report itself configured and then find nothing.
+    """
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+    except ImportError:  # pragma: no cover - Windows-only path
+        return None
+
+    views = (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY)
+    for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        for key_path in _PCM_HINT_KEYS:
+            for view in views:
+                try:
+                    with winreg.OpenKey(
+                        hive, key_path, 0, winreg.KEY_READ | view
+                    ) as key:
+                        raw, _ = winreg.QueryValueEx(key, _PCM_HINT_VALUE)
+                except OSError:
+                    continue
+                if not raw:
+                    continue
+                candidate = Path(str(raw)).expanduser()
+                if (candidate / "courses").is_dir():
+                    return candidate
+    return None
+
+
 def _default_pcm_courses_dir() -> str:
-    """Default to the sibling Pentaho Content Manager courses dir if present."""
-    cand = PROJECT_ROOT.parent / "Pentaho-Content-Manager" / "courses"
-    return str(cand) if cand.is_dir() else ""
+    """Where to look for the Content Manager's courses, best guess first.
+
+    The only rule used to be "look for a sibling directory", which is right
+    in every checkout and can never work in an install: the code sits under
+    Program Files, so the sibling searched was
+    ``C:\\Program Files\\Pentaho Exam Bank\\Pentaho-Content-Manager``. The
+    first install opened with every pane empty and nothing on screen saying
+    why.
+
+    Order matters. An explicit environment variable is a deliberate choice
+    and outranks anything found by searching; the installer's hint is a
+    machine-wide fact; the sibling is the developer convenience it always
+    was. Nothing found returns "" — unconfigured, which the UI already
+    reports properly. A guessed path would fail later and further from the
+    cause.
+    """
+    from_env = os.environ.get("PCM_REPO", "").strip()
+    if from_env:
+        # Not trusted blindly. A stale PCM_REPO left over from a machine
+        # that has been reimaged would otherwise pin the app to a directory
+        # that no longer exists, with no fallback.
+        candidate = Path(from_env).expanduser() / "courses"
+        if candidate.is_dir():
+            return str(candidate)
+
+    hint = _installer_hint()
+    if hint:
+        return str(hint / "courses")
+
+    sibling = PROJECT_ROOT.parent / "Pentaho-Content-Manager" / "courses"
+    return str(sibling) if sibling.is_dir() else ""
 
 
 @dataclass
@@ -218,6 +297,17 @@ class AppConfig:
                 # Filter to only known fields
                 known = {f.name for f in cls.__dataclass_fields__.values()}
                 filtered = {k: v for k, v in data.items() if k in known}
+
+                # An empty courses path is the ABSENCE of a choice, not a
+                # choice. Configs written before the installer learned to
+                # look — and every config migrated from a checkout — hold
+                # "", and passing that through would override the default
+                # forever: the app would keep saying "not configured" on a
+                # machine where the courses were found at install time.
+                # Dropping the key lets the field default run again.
+                if not str(filtered.get("pcm_courses_dir", "")).strip():
+                    filtered.pop("pcm_courses_dir", None)
+
                 return cls(**filtered)
             except Exception:
                 pass

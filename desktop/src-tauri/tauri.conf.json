@@ -39,7 +39,8 @@
     ],
     "resources": {
       "vendor/python": "python",
-      "vendor/app": "app"
+      "vendor/app": "app",
+      "../scripts/find-courses.ps1": "provisioning/find-courses.ps1"
     },
     "category": "Education",
     "shortDescription": "Write, review and publish Pentaho certification exam questions",

@@ -52,6 +52,22 @@
   WriteRegStr HKLM "${PEB_REGKEY}" "" "$INSTDIR"
   WriteRegStr HKLM "${PEB_REGKEY}" "Version" "${VERSION}"
   SetRegView lastused
+
+  ; Find the Content Manager's courses, so the app opens on them instead of
+  ; on "nothing is configured".
+  ;
+  ; The first install shipped without this and the app came up with every
+  ; pane empty: its only rule for finding courses was "look for a sibling
+  ; directory", which inside an install means
+  ; $INSTDIR\Pentaho-Content-Manager and can never exist.
+  ;
+  ; Failure is fine and deliberately ignored. The app still falls back to
+  ; PCM_REPO, to the Content Editor's own hint, and to a sibling checkout,
+  ; and Settings has a field for it - so a machine with no courses on it gets
+  ; an app that asks, not an install that fails.
+  DetailPrint "Looking for Content Manager courses..."
+  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\provisioning\find-courses.ps1"'
+  Pop $0
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
