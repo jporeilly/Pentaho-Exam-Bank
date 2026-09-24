@@ -1,6 +1,6 @@
 # Version
 
-**Current: 1.0.0**
+**Current: 1.1.0**
 
 **Status:** released. The app is a Tauri desktop shell over a FastAPI backend
 and a React UI, shipping as a per-machine Windows installer with its own
@@ -27,6 +27,11 @@ repo directory, and adopting a live course exam became lossless.
 | 0.3.0 | Phase 2 — publish back to a course (merge, never regenerate) |
 | 0.4.0 | Phase 3 — Tauri + React UI |
 | 1.0.0 | Phase 4 — Windows installer |
+
+The phase ladder ends there. Past 1.0.0 this is ordinary semver against the
+installed app: a minor for a feature an installed copy did not have, a patch
+for a fix. 1.1.0 is the first of those — the bank adopts the Content
+Manager's courses instead of opening empty, which 1.0.0 shipped without.
 
 ## Where the version string lives
 
