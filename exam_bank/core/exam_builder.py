@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 
 from fpdf import FPDF
 
-from .bank import Question, ExamBankDB
+from .bank import _TOPIC_ORDER, Question, ExamBankDB
 
 
 @dataclass(frozen=True)
@@ -682,7 +682,12 @@ def get_available_topics(
 ) -> Dict[str, int]:
     """Get topics and question counts for given certifications.
 
-    Returns {topic_name: count} sorted by topic name.
+    Returns {topic_name: count} in the order the COURSE teaches them, not
+    alphabetically. This is what the exam-paper pane lists the topic mix by,
+    and an author setting weights is thinking in lab order: alphabetical put
+    "Concepts & Terminology" above "Getting Started", which is the reverse of
+    how the course runs. `_TOPIC_ORDER` in `bank.py` is the same rule the
+    bank's own topic listings use, so the two cannot drift apart.
     """
     if not certification_ids:
         return {}
@@ -695,7 +700,7 @@ def get_available_topics(
         f"SELECT topic, COUNT(*) FROM questions "
         f"WHERE certification_id IN ({cert_ph}) AND topic IS NOT NULL AND topic != '' "
         f"AND status IN ({status_ph}) "
-        f"GROUP BY topic ORDER BY topic",
+        f"GROUP BY topic {_TOPIC_ORDER}",
         params,
     ).fetchall()
     return {row[0]: row[1] for row in rows}

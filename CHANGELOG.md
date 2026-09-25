@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **Topics list in course order, not alphabetically.** A topic's place is the
+  earliest pool position any of its questions holds — authors write a pool
+  lab by lab, so `MIN(pool_order)` recovers the sequence the workshops teach
+  in. `analyst-ba-practitioner` now reads Overview → User Console →
+  Interactive Reports → Analyzer Reports → Dashboard Designer, where
+  alphabetical opened on Analyzer Reports and left User Console last.
+
+  Both listings were fixed, because they are separately wrong in the same
+  way: the bank's own `get_topics` / `get_topic_counts`, and
+  `exam_builder.get_available_topics`, which is the one the **exam-paper
+  pane** reads and therefore the one an author actually sets weights
+  against. It had "Concepts & Terminology" above "Getting Started" in the DI
+  mix — the reverse of how the course runs. They now share one
+  `_TOPIC_ORDER` clause so they cannot drift apart.
+
+  Topics made only of questions authored in the bank (`pool_order -1`) fall
+  to the end rather than jumping the queue, which is what ranking them
+  naively by the smallest number would do.
+
 ### Fixed
 
 - **A packaged install no longer falls back to `python` on PATH.** The shell

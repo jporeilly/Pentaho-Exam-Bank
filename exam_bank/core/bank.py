@@ -364,6 +364,22 @@ SORTS = {
 DEFAULT_SORT = "course"
 
 
+#: Topics in the order the COURSE teaches them, not alphabetically.
+#:
+#: A topic's place is the earliest pool position any of its questions holds:
+#: authors write a pool lab by lab, so "Overview" owns positions 0-7 and
+#: "Dashboard Designer" 34-43, and MIN(pool_order) recovers that sequence.
+#: Alphabetical put Analyzer Reports before Overview and User Console last,
+#: which is an order the course never taught in.
+#:
+#: Questions authored in the bank (pool_order -1) would otherwise drag their
+#: topic to the front, so those are excluded from the ranking; a topic made
+#: only of them falls to the end on the COALESCE.
+_TOPIC_ORDER = (
+    "ORDER BY COALESCE(MIN(NULLIF(pool_order, -1)), 1000000), topic"
+)
+
+
 class ExamBankDB:
     """SQLite database for storing and querying questions and certifications."""
 
@@ -685,12 +701,13 @@ class ExamBankDB:
         """Return question counts per topic."""
         if certification_id:
             rows = self.conn.execute(
-                "SELECT topic, COUNT(*) FROM questions WHERE certification_id = ? AND topic != '' GROUP BY topic ORDER BY topic",
+                "SELECT topic, COUNT(*) FROM questions WHERE certification_id = ? "
+                f"AND topic != '' GROUP BY topic {_TOPIC_ORDER}",
                 (certification_id,),
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT topic, COUNT(*) FROM questions WHERE topic != '' GROUP BY topic ORDER BY topic"
+                f"SELECT topic, COUNT(*) FROM questions WHERE topic != '' GROUP BY topic {_TOPIC_ORDER}"
             ).fetchall()
         return {row[0]: row[1] for row in rows}
 
@@ -740,12 +757,13 @@ class ExamBankDB:
     def get_topics(self, certification_id: str = "") -> List[str]:
         if certification_id:
             rows = self.conn.execute(
-                "SELECT DISTINCT topic FROM questions WHERE topic != '' AND certification_id = ? ORDER BY topic",
+                "SELECT topic FROM questions WHERE topic != '' AND certification_id = ? "
+                f"GROUP BY topic {_TOPIC_ORDER}",
                 (certification_id,)
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT DISTINCT topic FROM questions WHERE topic != '' ORDER BY topic"
+                f"SELECT topic FROM questions WHERE topic != '' GROUP BY topic {_TOPIC_ORDER}"
             ).fetchall()
         return [r[0] for r in rows]
 

@@ -70,3 +70,42 @@ def test_topics_come_out_grouped_without_the_bank_knowing_about_labs(pool, tmp_d
 
     topics = [q.topic for q in tmp_db.search(certification_id=pool.id)]
     assert topics == ["Overview", "Overview", "Reports", "Reports", "Dashboards"]
+
+
+def test_topics_are_listed_in_course_order_not_alphabetically(pool, tmp_db):
+    """The topic dropdown listed A-Z, which put Dashboards before Overview -
+    an order the course never taught in. A topic's place is the earliest
+    pool position any of its questions holds."""
+    assert tmp_db.get_topics(pool.id) == ["Overview", "Reports", "Dashboards"]
+    assert sorted(tmp_db.get_topics(pool.id)) != tmp_db.get_topics(pool.id), (
+        "if these ever coincide the test proves nothing - pick topics whose "
+        "alphabetical order differs from their course order"
+    )
+
+
+def test_topic_counts_use_the_same_order(pool, tmp_db):
+    """Two listings of the same thing must not disagree about its order."""
+    assert list(tmp_db.get_topic_counts(pool.id)) == tmp_db.get_topics(pool.id)
+
+
+def test_a_topic_authored_in_the_bank_does_not_jump_the_queue(pool, tmp_db):
+    """pool_order -1 means "never in a course". Ranked naively it is the
+    smallest number and would drag its topic to the front of every list."""
+    tmp_db.save(_q("Authored here? (Choose one.)", -1, pool.id, "Extra"))
+
+    assert tmp_db.get_topics(pool.id) == ["Overview", "Reports", "Dashboards", "Extra"]
+
+
+def test_the_exam_paper_topic_mix_uses_course_order_too(pool, tmp_db):
+    """The exam-paper pane is where an author actually SETS topic weights,
+    and it reads its own query. Alphabetical put "Concepts & Terminology"
+    above "Getting Started" in the DI mix - the reverse of how the course
+    runs - while the Bank pane next door had already been fixed."""
+    from exam_bank.core.exam_builder import get_available_topics
+
+    got = list(get_available_topics(tmp_db, [pool.id], ["draft"]))
+    assert got == ["Overview", "Reports", "Dashboards"]
+    assert got == tmp_db.get_topics(pool.id), (
+        "the two listings must not disagree about the order of the same "
+        "topics - they share _TOPIC_ORDER for exactly that reason"
+    )
