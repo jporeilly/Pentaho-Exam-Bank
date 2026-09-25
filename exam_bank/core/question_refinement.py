@@ -1,5 +1,6 @@
 """Post-generation AI operations: regen, improve, QA check, explanation, key assignment."""
 
+import copy as _copy
 import json
 import re
 import string
@@ -247,19 +248,25 @@ Return ONLY a JSON object with these keys:
 
     try:
         data = json.loads(text[start:end + 1])
-        question.scenario = data.get("scenario", question.scenario)
-        question.stem = data.get("stem", question.stem)
-        if is_multi and "keys" in data:
-            question.keys = data["keys"]
-            question.key = data["keys"][0] if data["keys"] else question.key
-        elif "key" in data:
-            question.key = data["key"]
-        question.key_source_text = data.get("key_source_text", question.key_source_text)
-        question.distractors = data.get("distractors", question.distractors)
-        question.explanation = data.get("explanation", question.explanation)
-        return question
     except json.JSONDecodeError:
         return None
+
+    # A COPY. This used to assign straight onto the argument, so calling it
+    # handed the model's output to whoever held that Question - and anything
+    # that saved afterwards persisted an AI rewrite nobody had accepted. The
+    # caller decides what to keep; this function only proposes.
+    proposed = _copy.deepcopy(question)
+    proposed.scenario = data.get("scenario", proposed.scenario)
+    proposed.stem = data.get("stem", proposed.stem)
+    if is_multi and "keys" in data:
+        proposed.keys = data["keys"]
+        proposed.key = data["keys"][0] if data["keys"] else proposed.key
+    elif "key" in data:
+        proposed.key = data["key"]
+    proposed.key_source_text = data.get("key_source_text", proposed.key_source_text)
+    proposed.distractors = data.get("distractors", proposed.distractors)
+    proposed.explanation = data.get("explanation", proposed.explanation)
+    return proposed
 
 
 def qa_check_question(
@@ -616,3 +623,104 @@ CRITICAL RULES:
     # Remove unverified tag
     question.tags = [t for t in question.tags if t != "key-unverified"]
     return True
+
+
+#: What `review_answers` is allowed to say about a field.
+ANSWER_REVIEW_FIELDS = ("key", "distractor", "options", "stem")
+
+
+def review_answers(
+    question: Question,
+    model: str,
+    base_url: str = "http://localhost:11434",
+) -> List[dict]:
+    """Judge the ANSWERS: is the key right, and are the distractors wrong?
+
+    `qa_check_question` is a proofreader and says so in its own prompt - "Do
+    NOT flag ... answer quality". Nothing checked whether the question is
+    actually answerable as written, which is the failure that reached
+    production: `analyst-ba-practitioner/ir-q9` listed four output formats
+    and marked all four correct, so it could not be got wrong, and no
+    automated check noticed for as long as it shipped.
+
+    Returns [{"field", "value", "issue", "severity"}], severity "error" for
+    something that makes the question wrong or unanswerable and "warning" for
+    something that weakens it. An empty list means the reviewer found
+    nothing - NOT that the question is certified correct. It is a second
+    opinion from a model, and the author decides.
+    """
+    is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
+    keys = list(question.keys) if is_multi else [question.key]
+
+    prompt = f"""You are reviewing whether a certification exam question can be
+answered correctly as written. Judge the ANSWERS, not the prose.
+
+Look for, in this order:
+- **A key that is wrong**: the marked answer is not actually correct.
+- **A distractor that is also correct**: it would have to be accepted too, so
+  the question has more than one right answer.
+- **No real distractors**: every option is correct, or the options are
+  restatements of each other, so the question cannot be got wrong.
+- **A giveaway**: the key is the only long/specific/grammatically-agreeing
+  option, so it can be picked without knowing the subject.
+- **Overlapping options**: two choices that cannot be told apart.
+- **An unanswerable stem**: the stem does not determine a single answer.
+
+Question:
+- Scenario: {question.scenario or "(none)"}
+- Stem: {question.stem}
+- {"Keys (all marked correct)" if is_multi else "Key (marked correct)"}: {json.dumps(keys)}
+- Distractors (marked incorrect): {json.dumps(question.distractors)}
+- Explanation: {question.explanation or "(none)"}
+
+Report only what is WRONG. Do not restate what is fine, and do not comment on
+spelling, grammar or style - a separate proofreader does that.
+
+Return ONLY a JSON array. Each entry:
+- "field": one of "key", "distractor", "options", "stem"
+- "value": the exact text at fault, or "" when it is about the set as a whole
+- "issue": what is wrong and what would fix it
+- "severity": "error" if the question is wrong or unanswerable, else "warning"
+
+Return [] if you find nothing.
+"""
+
+    response = providers.generate(
+        prompt=prompt,
+        model=model,
+        system=system_prompt_for_review(),
+        base_url=base_url,
+        timeout=120.0,
+    )
+
+    items = _extract_json_array(response)
+    if not isinstance(items, list):
+        return []
+
+    out: List[dict] = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        field = str(raw.get("field", "")).strip().lower()
+        severity = str(raw.get("severity", "")).strip().lower()
+        issue = str(raw.get("issue", "")).strip()
+        if not issue:
+            continue
+        out.append({
+            # An unrecognised field is reported against the set rather than
+            # dropped: the finding may still be worth reading, and silently
+            # discarding a model's answer is how a reviewer stops being one.
+            "field": field if field in ANSWER_REVIEW_FIELDS else "options",
+            "value": str(raw.get("value", "")),
+            "issue": issue,
+            "severity": "error" if severity == "error" else "warning",
+        })
+    return out
+
+
+def system_prompt_for_review() -> str:
+    return (
+        "You review certification exam questions for correctness. You are "
+        "terse, you only report faults, and you never invent a fault to have "
+        "something to say. An empty array is a valid and common answer."
+    )

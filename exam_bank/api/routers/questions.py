@@ -7,7 +7,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from ...core import providers, question_refinement
 from ...core.bank import STATUS_TRANSITIONS, STATUSES, ExamBankDB
+from ...core.validation import problems_with
+from ...utils.config import config
 from ..deps import get_db, question_json
 
 router = APIRouter(tags=["questions"])
@@ -139,3 +142,101 @@ def delete_question(question_id: str, db: ExamBankDB = Depends(get_db)) -> dict[
         raise HTTPException(404, f"No question '{question_id}'")
     db.delete(question_id)
     return {"ok": True, "id": question_id}
+
+
+# --- AI assistance -------------------------------------------------------
+#
+# Both endpoints are READ-ONLY. They return a proposal or a list of findings
+# and never touch the bank: accepting a rewrite is an ordinary save the author
+# makes, through the editor they were already looking at.
+#
+# That is the same look-then-act shape as publishing and importing, and here
+# it is not a nicety. A model that rewrites a question in place would be the
+# one contributor to the bank whose work nobody reviewed.
+
+
+class AiRewriteRequest(BaseModel):
+    """What to ask for. The default instruction is the module's own."""
+
+    instruction: str = ""
+
+
+def _ai_model() -> str:
+    """The model to use, or a 409 naming what is missing.
+
+    Resolved per request rather than held: the provider and model are
+    settings the author can change while the app is running, and a cached
+    handle would keep answering with the old one.
+    """
+    model = providers.model_for(providers.active_provider())
+    if not model:
+        raise HTTPException(
+            409,
+            "No AI model is configured. Pick a provider and model in "
+            "Settings first.",
+        )
+    return model
+
+
+@router.post("/api/questions/{question_id}/ai/rewrite")
+def ai_rewrite_question(
+    question_id: str, body: AiRewriteRequest, db: ExamBankDB = Depends(get_db)
+) -> dict[str, Any]:
+    """Propose a rewritten question. Writes nothing."""
+    question = db.get(question_id)
+    if question is None:
+        raise HTTPException(404, f"No question '{question_id}'.")
+
+    kwargs = {"question": question, "model": _ai_model(), "base_url": config.ollama_url}
+    if body.instruction.strip():
+        kwargs["instruction"] = body.instruction.strip()
+
+    proposed = question_refinement.improve_question(**kwargs)
+    if proposed is None:
+        raise HTTPException(
+            502,
+            "The model did not return a usable question. Try again, or a "
+            "larger model.",
+        )
+
+    # The problems are reported against the PROPOSAL, because the author is
+    # about to decide whether to take it and an improvement that cannot be
+    # graded is not an improvement.
+    return {
+        "proposed": question_json(proposed),
+        "problems": [
+            {"field": p.field, "message": p.message} for p in problems_with(proposed)
+        ],
+        "unchanged": question_json(proposed) == question_json(question),
+    }
+
+
+@router.post("/api/questions/{question_id}/ai/review")
+def ai_review_question(
+    question_id: str, db: ExamBankDB = Depends(get_db)
+) -> dict[str, Any]:
+    """Check the answers, and proofread. Writes nothing."""
+    question = db.get(question_id)
+    if question is None:
+        raise HTTPException(404, f"No question '{question_id}'.")
+
+    model = _ai_model()
+    answers = question_refinement.review_answers(
+        question, model, base_url=config.ollama_url
+    )
+    prose = question_refinement.qa_check_question(
+        question, model, base_url=config.ollama_url
+    )
+
+    # Kept apart in the response. "The key is also true of option C" and "a
+    # comma is missing" are not the same kind of news, and a flat list buries
+    # the first under the second.
+    return {
+        "answers": answers,
+        "prose": prose,
+        # What the bank's own deterministic validator says, which owes
+        # nothing to a model and is worth showing beside its opinion.
+        "gradeable": [
+            {"field": p.field, "message": p.message} for p in problems_with(question)
+        ],
+    }

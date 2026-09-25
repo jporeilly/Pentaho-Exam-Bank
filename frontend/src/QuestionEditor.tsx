@@ -14,7 +14,15 @@
  * are exactly the moves that will be accepted.
  */
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, type Lifecycle, type Problem, type Question } from "./api";
+import {
+  api,
+  ApiError,
+  type AiReview,
+  type AiRewrite,
+  type Lifecycle,
+  type Problem,
+  type Question,
+} from "./api";
 
 // `Problem` is defined in api.ts and re-exported here. Import reports the same
 // shape from the server, computed by `core/validation.py` from the same rules,
@@ -116,6 +124,15 @@ export function QuestionEditor({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<Question>(question);
+
+  // The AI proposes; the author accepts. Neither endpoint writes, and
+  // "Use this" only fills the form - the question is still saved by the
+  // same button as any other edit. A model that wrote to the bank directly
+  // would be the one contributor whose work nobody reviewed.
+  const [aiBusy, setAiBusy] = useState<"" | "rewrite" | "review">("");
+  const [aiError, setAiError] = useState("");
+  const [proposal, setProposal] = useState<AiRewrite | null>(null);
+  const [review, setReview] = useState<AiReview | null>(null);
   const [lifecycle, setLifecycle] = useState<Lifecycle | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -204,6 +221,40 @@ export function QuestionEditor({
 
   const moves = lifecycle?.transitions[draft.status] ?? [];
   const forField = (name: string) => problems.filter((p) => p.field === name);
+
+  const runRewrite = async () => {
+    setAiBusy("rewrite");
+    setAiError("");
+    setReview(null);
+    try {
+      setProposal(await api.aiRewrite(draft.id));
+    } catch (e: unknown) {
+      setAiError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setAiBusy("");
+    }
+  };
+
+  const runReview = async () => {
+    setAiBusy("review");
+    setAiError("");
+    setProposal(null);
+    try {
+      setReview(await api.aiReview(draft.id));
+    } catch (e: unknown) {
+      setAiError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setAiBusy("");
+    }
+  };
+
+  /** Take the proposal into the form. Still unsaved: the author reads it
+   *  in the fields they already know, and presses Save if they agree. */
+  const acceptProposal = () => {
+    if (!proposal) return;
+    setDraft({ ...draft, ...proposal.proposed, id: draft.id });
+    setProposal(null);
+  };
 
   return (
     <div className="editor card">
@@ -348,10 +399,106 @@ export function QuestionEditor({
           <span className="faint">Save before changing status</span>
         )}
 
+        <button
+          className="secondary"
+          onClick={runRewrite}
+          disabled={busy || aiBusy !== ""}
+          title="Ask the model for a better wording. Nothing is saved until you do."
+        >
+          {aiBusy === "rewrite" ? "Rewriting…" : "AI rewrite"}
+        </button>
+        <button
+          className="secondary"
+          onClick={runReview}
+          disabled={busy || aiBusy !== ""}
+          title="Ask the model whether this can be answered correctly as written."
+        >
+          {aiBusy === "review" ? "Checking…" : "AI check answers"}
+        </button>
+
         <button className="secondary danger" onClick={remove} disabled={busy}>
           Delete
         </button>
       </div>
+
+      {aiError && <div className="banner" style={{ marginTop: 12 }}>{aiError}</div>}
+
+      {proposal && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <strong>Proposed rewrite</strong>
+          {proposal.unchanged && (
+            <p className="muted">The model returned this unchanged.</p>
+          )}
+          <p style={{ marginTop: 8 }}>{proposal.proposed.stem}</p>
+          <ul className="muted" style={{ fontSize: "0.9em" }}>
+            <li>Key: {proposal.proposed.key}</li>
+            {proposal.proposed.distractors.map((d, i) => (
+              <li key={i}>{d}</li>
+            ))}
+          </ul>
+          {proposal.problems.length > 0 && (
+            <div className="banner" style={{ marginTop: 8 }}>
+              This rewrite could not be graded:{" "}
+              {proposal.problems.map((p) => p.message).join("; ")}
+            </div>
+          )}
+          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+            <button onClick={acceptProposal} disabled={proposal.problems.length > 0}>
+              Use this
+            </button>
+            <button className="secondary" onClick={() => setProposal(null)}>
+              Discard
+            </button>
+            <span className="muted" style={{ alignSelf: "center" }}>
+              Nothing is saved until you press Save.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {review && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <strong>Answer check</strong>
+          {review.answers.length === 0 && review.prose.length === 0 &&
+            review.gradeable.length === 0 && (
+              <p className="muted">
+                Nothing found. That is a second opinion, not a guarantee.
+              </p>
+            )}
+          {review.gradeable.length > 0 && (
+            <ul>
+              {review.gradeable.map((g, i) => (
+                <li key={`g${i}`} className="warn">
+                  <strong>{g.field}:</strong> {g.message}{" "}
+                  <span className="muted">(the bank&rsquo;s own check)</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {review.answers.length > 0 && (
+            <ul>
+              {review.answers.map((f, i) => (
+                <li key={`a${i}`} className={f.severity === "error" ? "warn" : ""}>
+                  <strong>{f.field}</strong>
+                  {f.value && <> &mdash; &ldquo;{f.value}&rdquo;</>}: {f.issue}
+                </li>
+              ))}
+            </ul>
+          )}
+          {review.prose.length > 0 && (
+            <>
+              <div className="muted" style={{ marginTop: 8 }}>Proofreading</div>
+              <ul className="muted" style={{ fontSize: "0.9em" }}>
+                {review.prose.map((f, i) => (
+                  <li key={`p${i}`}>
+                    <strong>{f.field}</strong>: {f.issue}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -8,6 +8,40 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 ## [Unreleased]
 ### Added
 
+- **AI rewrite and AI answer-check, on a question in the editor.** Two
+  buttons: *AI rewrite* proposes a better wording, *AI check answers* asks
+  whether the question can be answered correctly as written.
+
+  **Both endpoints write nothing.** They return a proposal or a list of
+  findings; accepting a rewrite fills the form and the author saves it with
+  the same button as any other edit. That is the look-then-act shape
+  publishing and importing already use, and here it is not a nicety — a
+  model that edited the bank directly would be the only contributor whose
+  work nobody reviewed.
+
+  `question_refinement.improve_question` **assigned the model's output
+  straight onto the Question it was handed**, so the caller's object came
+  back already rewritten and anything that saved afterwards persisted an AI
+  edit nobody had accepted. It works on a copy now. That module has carried
+  eight AI operations since the NiceGUI layer was deleted, with no caller
+  and no test; this is the first of them wired up, and the first test it has
+  ever had.
+
+  The answer check is new. `qa_check_question` is a proofreader and says so
+  in its own prompt — "Do NOT flag ... answer quality" — so nothing judged
+  whether a question was answerable. That is the failure that reached
+  production in `analyst-ba-practitioner/ir-q9`: four options, all four
+  marked correct, impossible to get wrong, and no automated check noticed
+  for as long as it shipped. `review_answers` looks for a wrong key, a
+  distractor that is also correct, options that are all correct, a giveaway,
+  and overlapping choices.
+
+  Findings are grouped rather than listed flat: an answer fault, a
+  proofreading note, and the bank's own deterministic validator are three
+  different kinds of news, and one list buries the first under the second.
+  An empty result means the reviewer found nothing — **not** that the
+  question is certified correct.
+
 - **Topics list in course order, not alphabetically.** A topic's place is the
   earliest pool position any of its questions holds — authors write a pool
   lab by lab, so `MIN(pool_order)` recovers the sequence the workshops teach

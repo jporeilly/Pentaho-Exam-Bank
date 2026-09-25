@@ -503,6 +503,31 @@ export interface SyncResult {
   token: string;
 }
 
+/** One thing an AI reviewer says is wrong. */
+export interface AiFinding {
+  field: string;
+  value: string;
+  issue: string;
+  severity: "error" | "warning";
+}
+
+/** What `/ai/review` reports. Answer faults are kept apart from
+ *  proofreading: "the key is also true of option C" and "a comma is
+ *  missing" are not the same kind of news. */
+export interface AiReview {
+  answers: AiFinding[];
+  prose: AiFinding[];
+  /** The bank's own deterministic validator, which owes nothing to a
+   *  model and is worth showing beside its opinion. */
+  gradeable: { field: string; message: string }[];
+}
+
+export interface AiRewrite {
+  proposed: Question;
+  problems: { field: string; message: string }[];
+  unchanged: boolean;
+}
+
 export const api = {
   health: () => request<Health>("/api/health"),
   stats: () => request<Record<string, unknown>>("/api/stats"),
@@ -695,6 +720,19 @@ export const api = {
     request<SyncResult>("/api/courses/sync", {
       method: "POST",
       body: JSON.stringify({ token, overwrite_changed, only }),
+    }),
+
+  /** Propose a rewritten question. Writes nothing - the author accepts by
+   *  saving, the same way any other edit is accepted. */
+  aiRewrite: (id: string, instruction = "") =>
+    request<AiRewrite>(`/api/questions/${encodeURIComponent(id)}/ai/rewrite`, {
+      method: "POST",
+      body: JSON.stringify({ instruction }),
+    }),
+  /** Check the answers, and proofread. Writes nothing. */
+  aiReview: (id: string) =>
+    request<AiReview>(`/api/questions/${encodeURIComponent(id)}/ai/review`, {
+      method: "POST",
     }),
 
   /** Export is a file download, so it is a URL the browser fetches, not JSON. */
