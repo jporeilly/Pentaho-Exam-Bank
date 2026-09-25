@@ -122,6 +122,17 @@ header.bar {
 
 .shell { display: flex; flex: 1; min-height: 0; }
 
+/* Which build, reading which content: the Content Editor's footer pairing,
+   so a screenshot from either app says what it is. */
+.statusbar {
+  display: flex; justify-content: flex-end; align-items: center;
+  padding: 4px 14px; font-size: 11.5px; color: var(--text-faint);
+  background: var(--bg-raised); border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.statusbar .version { cursor: default; }
+.statusbar .mismatch { color: var(--bad); font-weight: 600; }
+
 .rail {
   width: 176px;
   flex: none;

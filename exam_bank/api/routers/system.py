@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -14,6 +16,25 @@ from .. import launch
 from ..deps import get_db
 
 router = APIRouter(tags=["system"])
+
+
+def content_manager_version(courses_dir: str) -> str:
+    """The version of the Content Manager whose courses this bank reads.
+
+    The courses directory is `<content-manager>/courses`, and the Content
+    Manager's own package.json sits beside it. Shown in the status bar next to
+    the bank's version, the same pairing the Content Editor makes with its
+    "Engine": which build, reading which content. Empty when it cannot be read
+    - an unconfigured or copied courses folder has no Content Manager beside
+    it, and that is not an error worth reporting here.
+    """
+    if not courses_dir:
+        return ""
+    try:
+        pkg = Path(courses_dir).parent / "package.json"
+        return str(json.loads(pkg.read_text(encoding="utf-8")).get("version") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
 
 
 @router.get("/api/version")
@@ -41,6 +62,7 @@ def health(db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
         "courses": {
             "path": config.pcm_courses_dir,
             "configured": bool(config.pcm_courses_dir),
+            "contentManagerVersion": content_manager_version(config.pcm_courses_dir),
         },
         # What the process was opened for, when something launched it with a
         # course in mind. Reported here because the client already asks for

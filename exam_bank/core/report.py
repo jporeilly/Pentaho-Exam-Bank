@@ -57,10 +57,6 @@ BARS: dict[int, dict[str, Any]] = {
     3: {"name": "Certified", "applyPlus": 70, "analyzePlus": 40, "evaluate": 15, "recall": 15},
 }
 
-#: A gap this wide (in percentage points) between Apply+ and scenario-led
-#: questions is worth a look either way round. See `_findings`.
-SCENARIO_GAP = 20
-
 #: Label for questions that belong to no certification — authored in the bank
 #: and never filed. They are real questions and are counted, just not under an
 #: exam that does not exist.
@@ -203,7 +199,7 @@ def _findings(summary: dict, level: Optional[dict], exam: Optional[dict],
     n = summary["questions"]
     if n == 0:
         return out
-    ap, sc = _pct(summary["applyPlus"], n), _pct(summary["scenarioLed"], n)
+    sc = _pct(summary["scenarioLed"], n)
 
     if exam and exam["pool"] and exam["draw"] >= exam["pool"]:
         out.append({
@@ -234,22 +230,25 @@ def _findings(summary: dict, level: Optional[dict], exam: Optional[dict],
                        if both else "Close the largest gap first."),
         })
 
-    if ap - sc >= SCENARIO_GAP:
+    # Every question sets a scenario: one to three sentences of real context
+    # that the question then asks about. That is the house item-writing
+    # standard, so the check is simply whether any question lacks one.
+    #
+    # It replaced two gap rules comparing scenario coverage with Apply+ in
+    # either direction. Those were written when scenarios were optional, and
+    # one of them - "scenarios that do no work", scenario share well above
+    # Apply+ - fired on every exam that followed the standard, since an
+    # Understand question with a scenario is correct, not decoration.
+    missing = n - summary["scenarioLed"]
+    if missing:
         out.append({
-            "severity": "review", "title": "Reaches Apply without scenarios",
-            "detail": f"{ap}% reach Apply or above but only {sc}% set a situation in the "
-                      "scenario field.",
-            "action": "Check before rewriting: a question can carry its situation inside the "
-                      "prompt, which this count cannot see. Where the context is really "
-                      "borrowed from the workshop just finished, build it into the question.",
-        })
-    elif sc - ap >= SCENARIO_GAP:
-        out.append({
-            "severity": "review", "title": "Scenarios that do no work",
-            "detail": f"{sc}% open with a situation, yet only {ap}% reach Apply. Remove the "
-                      "framing and those questions test the same recall.",
-            "action": "Make the scenario determine the answer: a diagnosis, or a choice the "
-                      "situation constrains.",
+            "severity": "review",
+            "title": f"{missing} question{'s' if missing != 1 else ''} without a scenario",
+            "detail": f"{sc}% of questions set a scenario. Every question should: one to three "
+                      "sentences of real working context that the question then asks about, "
+                      "never a reference to the course itself.",
+            "action": "Write a scenario for each and keep the prompt to the question alone. The "
+                      "question list's Scen. column shows which ones.",
         })
 
     if summary["thin"]:

@@ -1,6 +1,14 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
+import pkg from "./package.json";
+
+// The UI's own version, baked in at build time - the same thing the Content
+// Editor does with its __APP_VERSION__. The backend reports its version over
+// the API; carrying the UI's separately is what lets the status bar notice a
+// stale bundle served by a newer backend, or the other way round.
+const appVersion: string = pkg.version;
+
 /*
  * The Exam Bank's front end. A plain browser app that talks to the
  * FastAPI backend (`python -m exam_bank.api`, port 7788) over HTTP and
@@ -19,6 +27,9 @@ import react from "@vitejs/plugin-react";
  */
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   server: {
     port: 7789,
     strictPort: true, // fail loudly rather than drift to another port

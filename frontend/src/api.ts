@@ -82,7 +82,13 @@ export interface Health {
   version: string;
   database: { path: string; exists: boolean; questions: number; certifications: number };
   provider: { provider: string; ok: boolean; model: string; detail: string; models?: string[] };
-  courses: { path: string; configured: boolean };
+  courses: {
+    path: string;
+    configured: boolean;
+    /** The Content Manager whose courses these are, from its package.json.
+     *  Empty when it cannot be read. Optional: an older backend omits it. */
+    contentManagerVersion?: string;
+  };
   launch: LaunchContext;
 }
 

@@ -7,6 +7,39 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-25
+### Added
+
+- **A status bar showing which build is running, and on what.** Along the
+  bottom of the window, the way the Content Editor does it: *Exam Bank
+  v1.4.1 · Content Manager v0.5.0* — this app's version and the version of
+  the Content Manager whose courses it reads, so a screenshot identifies
+  itself. The version used to sit faintly in the header; it lives here now.
+
+  The interface's version is baked in at build time and the backend's comes
+  over the API. They normally agree and only one is shown. When they differ,
+  both are, the second in red, because that is a stale install — part one
+  release, part another — and it explains behaviour nothing else would. The
+  Content Manager version is read from the `package.json` beside the
+  configured courses folder, and simply left out when there is none.
+
+### Fixed
+
+- **The Report no longer calls a scenario on every question a problem.**
+  One finding flagged exams whose scenario coverage ran well above their
+  Apply+ as "scenarios that do no work", on the theory that framing on a
+  recall question was decoration. That was written when scenarios were
+  optional. The house standard is now that **every** question sets a
+  scenario — an Understand question with one is correct — so the rule fired
+  on precisely the exams that had just been brought up to standard: PDI in
+  2 Hours and DI Practitioner, both at 100% scenarios, both flagged.
+
+  It and its mirror image ("reaches Apply without scenarios") are replaced
+  by the check the standard actually implies: how many questions have **no**
+  scenario. A test pins that an exam with a scenario on every question and a
+  low Apply+ raises nothing about scenarios.
+
+
 ## [1.4.0] - 2026-09-25
 ### Added
 

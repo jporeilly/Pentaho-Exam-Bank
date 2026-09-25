@@ -385,3 +385,32 @@ def test_the_front_end_build_is_what_gets_served():
     assert hasattr(app_module, "mount_ui")
     assert app_module._DIST.name == "dist"
     assert app_module._DIST.parent.name == "frontend"
+
+
+class TestContentManagerVersion:
+    """The status bar pairs the bank's version with the Content Manager whose
+    courses it reads, found in the package.json beside the courses folder."""
+
+    def test_read_from_the_package_json_beside_the_courses_folder(self, tmp_path):
+        from exam_bank.api.routers.system import content_manager_version
+
+        (tmp_path / "courses").mkdir()
+        (tmp_path / "package.json").write_text('{"version": "0.5.0"}', encoding="utf-8")
+        assert content_manager_version(str(tmp_path / "courses")) == "0.5.0"
+
+    def test_empty_when_there_is_nothing_to_read(self, tmp_path):
+        from exam_bank.api.routers.system import content_manager_version
+
+        (tmp_path / "courses").mkdir()
+        assert content_manager_version(str(tmp_path / "courses")) == ""
+        (tmp_path / "package.json").write_text("not json", encoding="utf-8")
+        assert content_manager_version(str(tmp_path / "courses")) == ""
+        assert content_manager_version("") == ""
+
+    def test_health_reports_it(self, client, tmp_path, monkeypatch):
+        from exam_bank.utils import config as config_module
+
+        (tmp_path / "courses").mkdir()
+        (tmp_path / "package.json").write_text('{"version": "7.7.7"}', encoding="utf-8")
+        monkeypatch.setattr(config_module.config, "pcm_courses_dir", str(tmp_path / "courses"))
+        assert client.get("/api/health").json()["courses"]["contentManagerVersion"] == "7.7.7"

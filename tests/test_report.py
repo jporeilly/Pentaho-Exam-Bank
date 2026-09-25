@@ -164,10 +164,9 @@ def level_one_exam(db, tmp_path, *, apply=10, analyze=3, evaluate=1, recall=6, n
               + ["Apply"] * (apply - analyze) + ["Remember"] * recall)
     levels += ["Understand"] * (n - len(levels))
     for i, level in enumerate(levels):
-        # Scenarios on the Apply+ questions only, so scenario coverage matches
-        # Apply+ and the scenario-gap finding stays out of what is being tested.
-        situated = level in ("Apply", "Analyze", "Evaluate")
-        add(db, cert, f"q{i}", level, pool=i, scenario="s" if situated else "")
+        # Every question sets a scenario, as the standard requires, so the only
+        # findings left to test are the bar's.
+        add(db, cert, f"q{i}", level, pool=i, scenario="s")
     return build_report(db, tmp_path)["exams"][0]
 
 
@@ -235,23 +234,39 @@ def test_headroom_is_not_flagged_when_the_draw_is_smaller(db, tmp_path):
     assert not any(f["title"] == "No draw headroom" for f in e["findings"])
 
 
-def test_apply_without_scenarios_is_flagged_at_twenty_points(db):
-    cert = add_cert(db, "Gap", "gap")
-    for i in range(10):  # 100% Apply+, 80% scenario: a 20-point gap
-        add(db, cert, f"q{i}", "Apply", scenario="s" if i < 8 else "")
+def test_every_question_without_a_scenario_is_counted(db):
+    """The house standard gives every question a scenario, so the finding
+    is simply how many do not have one."""
+    cert = add_cert(db, "Some", "some")
+    for i in range(7):
+        add(db, cert, f"s{i}", "Apply", scenario="A load fails overnight.")
+    for i in range(3):
+        add(db, cert, f"n{i}", "Apply", scenario="")
     titles = [f["title"] for f in build_report(db)["exams"][0]["findings"]]
-    assert "Reaches Apply without scenarios" in titles
+    assert "3 questions without a scenario" in titles
 
 
-def test_nineteen_points_is_not_a_gap(db):
-    cert = add_cert(db, "Near", "near")
-    # 21 questions, all Apply; 17 with a scenario is 81%, a 19-point gap.
-    for i in range(17):
-        add(db, cert, f"q{i}", "Apply", scenario="s")
-    for i in range(4):
-        add(db, cert, f"r{i}", "Apply", scenario="")
+def test_one_question_without_a_scenario_is_singular(db):
+    cert = add_cert(db, "One", "one")
+    add(db, cert, "with", "Apply", scenario="s")
+    add(db, cert, "without", "Apply", scenario="")
     titles = [f["title"] for f in build_report(db)["exams"][0]["findings"]]
-    assert "Reaches Apply without scenarios" not in titles
+    assert "1 question without a scenario" in titles
+
+
+def test_an_exam_with_a_scenario_on_every_question_is_not_flagged_for_it(db):
+    """The rule this replaced flagged scenario coverage running well above
+    Apply+ as 'scenarios that do no work' - which fired on every exam that
+    followed the standard, since an Understand question with a scenario is
+    correct. 100% scenarios and a low Apply+ must raise nothing about
+    scenarios."""
+    cert = add_cert(db, "Full", "full")
+    for i in range(8):
+        add(db, cert, f"u{i}", "Understand", scenario="s")
+    for i in range(2):
+        add(db, cert, f"a{i}", "Apply", scenario="s")
+    titles = " ".join(f["title"] for f in build_report(db)["exams"][0]["findings"])
+    assert "scenario" not in titles.lower()
 
 
 # ── HTTP ────────────────────────────────────────────────────────────────────

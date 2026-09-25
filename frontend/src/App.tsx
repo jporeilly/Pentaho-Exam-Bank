@@ -73,7 +73,6 @@ export function App() {
               <span className={`dot ${health.provider.ok ? "ok" : "bad"}`} />
               {health.provider.ok ? health.provider.model : "no model"}
             </span>
-            <span className="status faint">v{health.version}</span>
           </>
         )}
       </header>
@@ -139,6 +138,44 @@ export function App() {
         {tab === "docs" && <DocsPane />}
         </main>
       </div>
+
+      <VersionBar health={health} />
     </div>
+  );
+}
+
+/**
+ * Which build, reading which content - the Content Editor's status-bar
+ * pairing ("Course v… · Editor v… · Engine v…"), so a screenshot from either
+ * app identifies itself.
+ *
+ * The UI's version is baked in at build time and the backend's comes over the
+ * API. They normally agree and only one is shown; when they differ both are,
+ * because that is a stale install - a UI bundle from one release served by a
+ * backend from another - and it explains behaviour nothing else would.
+ */
+export function VersionBar({ health }: { health: Health | null }) {
+  const ui = __APP_VERSION__;
+  const backend = health?.version ?? "";
+  const mismatch = backend !== "" && backend !== ui;
+  const cm = health?.courses.contentManagerVersion ?? "";
+  return (
+    <footer className="statusbar">
+      <span
+        className="version"
+        title={
+          "This Exam Bank's build, and the Content Manager whose courses it reads.\n\n" +
+          "The interface and the backend are versioned together. If they ever show " +
+          "different numbers, the install is part one release and part another; " +
+          "reinstall to bring them back into step.\n\n" +
+          "The Content Manager version is read from the package.json beside the " +
+          "configured courses folder."
+        }
+      >
+        Exam Bank v{ui}
+        {mismatch && <span className="mismatch"> · Backend v{backend}</span>}
+        {cm && ` · Content Manager v${cm}`}
+      </span>
+    </footer>
   );
 }
