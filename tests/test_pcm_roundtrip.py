@@ -274,3 +274,50 @@ def test_an_untouched_pool_still_round_trips_byte_for_byte(exam_path, tmp_path):
 
     after = json.loads(out.read_text(encoding="utf-8"))["questions"]
     assert [q["options"] for q in after] == [q["options"] for q in EXAM["questions"]]
+
+
+class TestPcmBloomLevel:
+    """A PCM course may state the level each question was judged at.
+
+    This path used to hardcode the default, which meant a classified
+    course arrived flattened to one level - and re-syncing an edited
+    course silently undid the classification that had been written into
+    the bank by hand.
+    """
+
+    def _exam(self, tmp_path, question):
+        import json
+        p = tmp_path / "exam.json"
+        p.write_text(json.dumps({"title": "T", "questions": [question]}), encoding="utf-8")
+        return p
+
+    def _q(self, **extra):
+        q = {"id": "q1", "prompt": "Stem?", "options": ["a", "b", "c", "d"], "correct": 0}
+        q.update(extra)
+        return q
+
+    def test_reads_the_stated_level(self, tmp_path):
+        got = import_from_pcm_exam_json(self._exam(tmp_path, self._q(bloom="Analyze")))
+        assert got[0].bloom_level == "Analyze"
+
+    def test_accepts_the_other_two_spellings(self, tmp_path):
+        for key in ("bloom_level", "taxonomy"):
+            got = import_from_pcm_exam_json(self._exam(tmp_path, self._q(**{key: "Evaluate"})))
+            assert got[0].bloom_level == "Evaluate", key
+
+    def test_is_case_insensitive(self, tmp_path):
+        got = import_from_pcm_exam_json(self._exam(tmp_path, self._q(bloom="apply")))
+        assert got[0].bloom_level == "Apply"
+
+    def test_falls_back_when_the_course_says_nothing(self, tmp_path):
+        got = import_from_pcm_exam_json(self._exam(tmp_path, self._q()))
+        assert got[0].bloom_level == "Understand"
+
+    def test_ignores_a_level_the_bank_would_refuse(self, tmp_path):
+        # Rather than write a value the bank's own editor rejects.
+        got = import_from_pcm_exam_json(self._exam(tmp_path, self._q(bloom="Telepathy")))
+        assert got[0].bloom_level == "Understand"
+
+    def test_difficulty_is_read_too(self, tmp_path):
+        got = import_from_pcm_exam_json(self._exam(tmp_path, self._q(difficulty="Hard")))
+        assert got[0].difficulty == "Hard"

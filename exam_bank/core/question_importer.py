@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from .bank import Question
+from .bank import BLOOM_LEVELS, Question
 from .pptx_reader import PPTXReader
 from .source import SlideInfo
 from . import mcp_client
@@ -387,6 +387,22 @@ def is_pcm_exam_json(path: Path) -> bool:
     return isinstance(first, dict) and "prompt" in first and "options" in first
 
 
+def _bloom_of(item: dict) -> str:
+    """The Bloom level a PCM question states, or the default.
+
+    Accepts the same three spellings the generic importer does, and
+    ignores anything outside BLOOM_LEVELS rather than writing a value the
+    bank's own editor would refuse.
+    """
+    for key in ("bloom", "bloom_level", "taxonomy"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            for level in BLOOM_LEVELS:
+                if value.lower() == level.lower():
+                    return level
+    return "Understand"
+
+
 def import_from_pcm_exam_json(path: Path) -> List[Question]:
     """Import questions from a Pentaho Content Manager ``exam.json``.
 
@@ -444,8 +460,14 @@ def import_from_pcm_exam_json(path: Path) -> List[Question]:
             option_order=list(options),                 # preserve authored order
             explanation=item.get("explanation", ""),
             topic=item.get("module", "") or exam_title,
-            difficulty="Medium",
-            bloom_level="Understand",
+            # A PCM course may state the level it was judged at. Honour it:
+            # this path used to hardcode the default, so a course that had
+            # been classified question-by-question arrived flattened to a
+            # single level, and re-syncing an edited course silently undid
+            # the classification. Fall back to the same defaults as before
+            # when the course says nothing.
+            difficulty=str(item.get("difficulty") or "Medium"),
+            bloom_level=_bloom_of(item),
             source_type="pcm",
             source_file=str(item.get("source", "")),
             status="draft",
