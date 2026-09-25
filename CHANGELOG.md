@@ -29,6 +29,33 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed
 
+- **A question authored in the bank no longer publishes with its key at
+  option A.** `all_choices` is correct answers followed by distractors, so
+  every question the bank created went out key-first — which is how the live
+  courses reached 94% "A" in `pdi-2hr-lab`. The options are now permuted
+  before they are written.
+
+  **Deterministically**, seeded from the question id. A fresh random order on
+  every publish would rewrite every option of every question each time: an
+  unreadable diff, and a plan claiming the whole pool had changed when
+  nothing had. Seeding from the id means publishing twice writes identical
+  bytes while different questions scatter their keys evenly — measured at
+  24–26% per position over 4,000 ids.
+
+  A question **adopted from a course keeps its authored order**. That order
+  is the author's decision, and rewriting it would churn the file to no
+  purpose.
+
+  The Word export got the same treatment and for the same reason: the PDF
+  paper and the text export both already shuffled, but `export_docx` wrote
+  `[key] + distractors` straight out, so the document read "the answer is A"
+  all the way down. It shares the one permutation, so a question sits the
+  same way wherever it is written.
+
+  This is belt and braces. The Content Manager now shuffles options per
+  attempt at render time, so no learner sees the stored order — what this
+  fixes is the file, the printed document, and anything else that reads them.
+
 - **A packaged install no longer falls back to `python` on PATH.** The shell
   resolved its interpreter with
   `vendored_python(...).unwrap_or_else(|| PathBuf::from("python"))`. On a

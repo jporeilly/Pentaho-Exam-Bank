@@ -2,6 +2,7 @@
 
 import csv
 import io
+import hashlib
 import json
 import html
 import random
@@ -86,6 +87,30 @@ def export_json(questions: List[Question], path: Path):
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+
+def stable_option_order(question_id: str, count: int) -> list[int]:
+    """A permutation of ``range(count)`` that depends only on the id.
+
+    Deterministic on purpose. A question with no authored option order gets
+    its key first, because ``all_choices`` is correct answers followed by
+    distractors - which is how the live courses ended up 94% answerable with
+    "A" in `pdi-2hr-lab`. Permuting fixes that, but permuting RANDOMLY would
+    reshuffle every option of every question on every publish: an unreadable
+    diff, and a plan that claims the whole pool changed when nothing did.
+
+    Seeding from the id means the same question always lands the same way, so
+    publishing twice writes the same bytes, while different questions scatter
+    their keys across the positions.
+
+    This is belt and braces: the Content Manager now shuffles options per
+    attempt at render time, so a learner never sees the stored order. What
+    this fixes is the file itself, and anything else that reads it.
+    """
+    rng = random.Random(hashlib.sha256(question_id.encode("utf-8")).hexdigest())
+    idx = list(range(count))
+    rng.shuffle(idx)
+    return idx
+
 def pcm_exam_items(
     questions: List[Question], *, source_label: str = ""
 ) -> List[dict]:
@@ -114,6 +139,14 @@ def pcm_exam_items(
     items = []
     for q in questions:
         options = list(q.all_choices)
+
+        # A question the bank authored has no recorded option order, so
+        # `all_choices` hands back the key first. Scatter it, deterministically
+        # - see stable_option_order. A question ADOPTED from a course keeps the
+        # order its author wrote: that is their decision, and rewriting it
+        # would churn the file for no gain.
+        if not getattr(q, "option_order", None) and len(options) > 1:
+            options = [options[i] for i in stable_option_order(q.id, len(options))]
 
         def _idx_of(text: str) -> int:
             # Index of a choice in `options`; append if somehow missing
@@ -416,6 +449,13 @@ def export_docx(questions: List[Question], path: Path):
         # -- Build labelled choices --
         correct_set = set(q.correct_answers)
         all_answers = [q.key] + q.distractors if q.question_type == "single" else list(q.keys) + q.distractors
+        # Key first, every question, so the document read "the answer is A"
+        # all the way down. The PDF paper and the text export both already
+        # shuffled; this one did not. Same deterministic permutation the
+        # publish path uses, so a question sits the same way wherever it is
+        # written out.
+        if len(all_answers) > 1:
+            all_answers = [all_answers[i] for i in stable_option_order(q.id, len(all_answers))]
         labels = [chr(65 + idx) for idx in range(len(all_answers))]  # A, B, C, D, ...
 
         for label, answer in zip(labels, all_answers):
