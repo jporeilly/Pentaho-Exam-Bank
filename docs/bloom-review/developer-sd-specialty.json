@@ -1,0 +1,32 @@
+{
+ "course": "developer-sd-specialty",
+ "note": "Already names its workshops (HiveMQ, EMQX, user-events, RabbitMQ) rather than numbering them, so the naming rule clears most anchored questions outright. Only mqtt-q6's lab-output recall still needs reframing.",
+ "questions": [
+  {"id":"sd-concept-q1","level":"Understand","verdict":"keep","why":"Unbounded-vs-finite is the defining distinction, asked directly."},
+  {"id":"sd-concept-q2","level":"Understand","verdict":"keep","why":"Parent/child batching is the core PDI streaming mechanism."},
+  {"id":"sd-concept-q3","level":"Understand","verdict":"keep","why":"'Why must it be first' - reasoning from how rows originate."},
+  {"id":"sd-concept-q4","level":"Analyze","verdict":"keep","why":"STRONG. Duration 5000 vs 100 records at ~1 msg/sec - the learner works out which threshold fires."},
+  {"id":"sd-concept-q5","level":"Remember","verdict":"rewrite","why":"Select-all recognition of the supported protocol list."},
+  {"id":"sd-concept-q6","level":"Understand","verdict":"keep","why":"Decoupling is the point of pub/sub, asked as a consequence."},
+  {"id":"sd-concept-q7","level":"Understand","verdict":"keep","why":"BORDERLINE. Requires knowing what backpressure means to pick the settings."},
+  {"id":"mqtt-q1","level":"Understand","verdict":"keep","why":"Why lightweight pub/sub suits constrained devices."},
+  {"id":"mqtt-q2","level":"Analyze","verdict":"keep","why":"QoS 2 vs QoS 0 is a genuine trade-off."},
+  {"id":"mqtt-q3","level":"Remember","verdict":"keep","why":"RECALL FLOOR, and it names the HiveMQ workshop. 1883 is the standard MQTT TCP port."},
+  {"id":"mqtt-q4","level":"Analyze","verdict":"keep","why":"STRONG. Real troubleshooting - consumer connected, child never runs, what do you check first."},
+  {"id":"mqtt-q5","level":"Understand","verdict":"keep","why":"clean session false and what the broker then persists."},
+  {"id":"mqtt-q6","level":"Remember","verdict":"rewrite","why":"Names the EMQX logistics workshop correctly, but 'what does the child transformation ultimately produce' is lab-output recall."},
+  {"id":"kafka-q1","level":"Understand","verdict":"keep","why":"KRaft removing the ZooKeeper dependency is architectural."},
+  {"id":"kafka-q2","level":"Understand","verdict":"keep","why":"BORDERLINE. Definitional, but offsets underpin everything else."},
+  {"id":"kafka-q3","level":"Understand","verdict":"keep","why":"Behaviour of a setting under a stated precondition."},
+  {"id":"kafka-q4","level":"Apply","verdict":"keep","why":"Names the user-events workshop, and TINYTEXT breaking index creation is a genuine Apply problem. Clears the bar as written."},
+  {"id":"kafka-q5","level":"Analyze","verdict":"keep","why":"Formula vs Calculator on operand rules; the field name is incidental colour, not an anchor."},
+  {"id":"kafka-q6","level":"Understand","verdict":"rename","why":"'in this workshop' is not a name - cite the Kafka workshop by title. The MySQL schema/connection point is sound."},
+  {"id":"kafka-q7","level":"Understand","verdict":"keep","why":"Consumer groups and partition assignment."},
+  {"id":"amqp-q1","level":"Understand","verdict":"keep","why":"Exchange to bindings to queues is the AMQP model."},
+  {"id":"amqp-q2","level":"Understand","verdict":"keep","why":"Fanout semantics."},
+  {"id":"amqp-q3","level":"Remember","verdict":"rewrite","why":"Select-all recognition of queue flags."},
+  {"id":"amqp-q4","level":"Remember","verdict":"rewrite","why":"'Recommended order of operations' is procedure recall."},
+  {"id":"amqp-q5","level":"Remember","verdict":"keep","why":"RECALL FLOOR, and it names the RabbitMQ workshop. 5672/15672 are the standard ports."},
+  {"id":"amqp-q6","level":"Analyze","verdict":"keep","why":"Consequence of a mismatched queue declaration - the transformation aborts."}
+ ]
+}
