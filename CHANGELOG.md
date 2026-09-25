@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **The navigation rail has tests.** It shipped in 1.3.0 with none: rendered
+  and walked by hand, which proves it worked once and nothing about
+  tomorrow. A peer session counted the frontend test files at v1.2.0 and at
+  HEAD — 13 and 13 — and pointed out that the rail's own changelog entry
+  makes four falsifiable claims that nothing checked.
+
+  Thirteen tests. The one that mattered is that the group **headings stay in
+  the DOM when the rail is collapsed**: an accessibility claim written into
+  a public changelog, a one-line regression for a sighted developer to make,
+  and nothing on screen would look wrong afterwards. Watched failing with
+  the headings dropped.
+
+  Also pinned: the count beside Bank must not join the button's accessible
+  name (it announced itself as "Bank 413" and renamed itself whenever the
+  bank grew), and the rail still renders when `localStorage` throws, as it
+  does in a private window.
+
+  **The 860px auto-collapse is not covered and the entry should not have
+  implied otherwise** — it is a CSS media query with no JavaScript behind
+  it, so jsdom cannot exercise it. It was verified by resizing a real
+  browser to 768px and reading the computed width back, and the test file
+  says so rather than leaving a gap that looks like coverage.
+
 
 ## [1.3.0] - 2026-09-25
 ### Added
