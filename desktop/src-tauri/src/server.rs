@@ -126,15 +126,44 @@ fn free_port() -> io::Result<u16> {
     Ok(port)
 }
 
-/// The vendored interpreter, or None to fall back to whatever `python` is on
-/// PATH (which is how `tauri dev` runs against a plain checkout).
-fn vendored_python(resource_dir: &Path) -> Option<PathBuf> {
+/// The interpreter to run `boot.py` with.
+///
+/// A PACKAGED install must use the runtime it shipped. Falling back to
+/// whatever `python` happens to be on PATH looks harmless and is not: on a
+/// machine with the Microsoft Store Python, a corrupt install starts the
+/// backend under a foreign interpreter, which gets far enough to import the
+/// app and then dies on `ModuleNotFoundError: No module named 'fpdf'`. That
+/// names a dependency, points at site-packages that have nothing to do with
+/// this app, and says nothing about the actual fault - the vendored runtime
+/// being absent. Seen for real after an interrupted upgrade removed
+/// `python\` from under a running install.
+///
+/// So the fallback is kept only for `tauri dev`, where there IS no vendored
+/// runtime and PATH is the right answer. The two cases are told apart by the
+/// staged app: a packaged build has `<resources>/app/boot.py` beside its
+/// `python/`, and a checkout does not.
+fn resolve_python(resource_dir: &Path) -> io::Result<PathBuf> {
     let exe = resource_dir.join("python").join("python.exe");
     if exe.is_file() {
-        Some(exe)
-    } else {
-        None
+        return Ok(exe);
     }
+
+    let packaged = resource_dir.join("app").join("boot.py").is_file();
+    if packaged {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "The bundled Python runtime is missing: {} does not exist. \
+                 This install is incomplete - run the installer again. \
+                 (Refusing to fall back to `python` on PATH: a different \
+                 interpreter would fail later with an unrelated error.)",
+                exe.display()
+            ),
+        ));
+    }
+
+    // A checkout. PATH is the intended answer here.
+    Ok(PathBuf::from("python"))
 }
 
 impl Server {
@@ -154,7 +183,7 @@ impl Server {
     ) -> io::Result<Self> {
         let port = free_port()?;
 
-        let program = vendored_python(resource_dir).unwrap_or_else(|| PathBuf::from("python"));
+        let program = resolve_python(resource_dir)?;
         let args: Vec<String> = vec![
             boot_py.to_string_lossy().into_owned(),
             "--port".into(),

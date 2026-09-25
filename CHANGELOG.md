@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+
+- **A packaged install no longer falls back to `python` on PATH.** The shell
+  resolved its interpreter with
+  `vendored_python(...).unwrap_or_else(|| PathBuf::from("python"))`. On a
+  machine with the Microsoft Store Python that fallback is actively harmful:
+  after an interrupted upgrade removed `python\` from under an install, the
+  backend started under a foreign interpreter, got far enough to import the
+  app, and died with
+
+      ModuleNotFoundError: No module named 'fpdf'
+
+  naming a dependency, pointing at site-packages belonging to another Python
+  entirely, and saying nothing about the real fault — the bundled runtime
+  being gone. A bare binary name is only ever right on a machine that happens
+  to have the right thing on PATH.
+
+  A packaged build now fails loudly and says the runtime is missing and to
+  run the installer again. The fallback survives only for `tauri dev`, where
+  there is no vendored runtime and PATH is the correct answer; the two are
+  told apart by `<resources>/app/boot.py`, which only a packaged build has.
+
+- **`verify-install.ps1` no longer dies on the failure it just found.** With
+  `Set-StrictMode -Version Latest`, reading an unset variable throws — so
+  when the backend failed to start, the bank-contents check referenced a
+  counter that had never been assigned and the script terminated with a
+  PowerShell error instead of printing its verdict. The counters are
+  initialised up front. A verifier has to survive the thing it is verifying.
+
 
 ## [1.2.0] - 2026-09-25
 ### Added

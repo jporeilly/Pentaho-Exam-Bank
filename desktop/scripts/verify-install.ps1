@@ -59,6 +59,12 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $script:Failures = 0
+# Initialised here, not where the app is started: under StrictMode an
+# unset variable THROWS, so when the backend failed to start this script
+# died on its own bank-contents check instead of reporting the failure it
+# had just found. A verifier must survive the thing it is verifying.
+$script:bankQuestions = $null
+$script:bankCerts = 0
 $script:Warnings = 0
 
 function Head($m) { Write-Host ""; Write-Host "  $m" -ForegroundColor Cyan }
