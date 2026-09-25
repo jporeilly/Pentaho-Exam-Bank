@@ -7,6 +7,56 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-25
+### Added
+
+- **Publish can push the exam to the courses repo, so learners get it.**
+  Publishing used to stop at the Content Manager's authoring copy of
+  `exam.json`, and an installed Content Manager never reads that: it syncs
+  from the distribution repo, Pentaho-Courses, at every launch. So a
+  published exam reached nobody until someone pushed it by hand. The Publish
+  screen now offers **Also push to the courses repo**, ticked whenever a push
+  is possible, and the button becomes *Publish and push*. One press:
+
+  1. writes the exam, as before;
+  2. bumps the course's version in `course.json` (0.1.11 → 0.1.12), so an
+     installer or a synced machine says it carries new content;
+  3. adds a line to the Content Manager's CHANGELOG under [Unreleased] naming
+     the questions added, edited and removed;
+  4. commits exactly those three files in the Content Manager and pushes;
+  5. pushes the exam to Pentaho-Courses, where the published `course.json`
+     changes one value, its version.
+
+  Installed apps pick it up at their next launch — no installer rebuild,
+  which is only ever needed for changes to the app itself.
+
+  **Only the exam is pushed.** The bank owns questions and nothing else, so
+  the rest of the course stays exactly as it was published: lab guides,
+  certificate settings and workshop paths can depend on a newer installer,
+  and pushing them with an exam would be a release nobody decided on.
+
+  **It refuses before writing** when a push cannot succeed, and says why in
+  the plan, with the box disabled: no git on the machine; the Content
+  Manager repo behind its remote; uncommitted changes in `exam.json`,
+  `course.json` or `CHANGELOG.md` that a commit would sweep in; a course that
+  was never published whole. And it stops before touching anything — nothing
+  bumped, committed or pushed — when the push would put a secret-like value
+  into the public repo that is not already there, or when staging reaches
+  outside the course's exam. The clone is sparse, one course only: a full
+  clone of Pentaho-Courses aborts part-way on Windows over one course's long
+  path, and staging from that partial tree would record every other course
+  as deleted.
+
+  Git is found on PATH, else the MinGit the Content Editor or the Content
+  Manager ships; it uses the machine's own git credentials, as the Content
+  Editor's publish does. The repo is `courses_repo_url` in the settings file,
+  Pentaho-Courses by default.
+
+  Tested against real git repositories: what lands on each remote is
+  asserted path by path, and the secrets and staged-path guards were each
+  watched failing with the guard removed.
+
+
 ## [1.4.1] - 2026-09-25
 ### Added
 

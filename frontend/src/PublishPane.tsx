@@ -47,6 +47,10 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
   const [status, setStatus] = useState("approved");
 
   const [plan, setPlan] = useState<PublishPlan | null>(null);
+  // Push to the courses repo with the write. Defaults on whenever the plan
+  // says a push is possible: an exam that only reaches the authoring copy
+  // reaches no learner.
+  const [push, setPush] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<PublishPlan | null>(null);
@@ -95,7 +99,9 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
     setBusy(true);
     setError("");
     try {
-      setPlan(await api.planPublish(slug, certId, status));
+      const made = await api.planPublish(slug, certId, status);
+      setPlan(made);
+      setPush(Boolean(made.push?.available));
     } catch (e) {
       setPlan(null);
       setError(e instanceof ApiError ? e.message : String(e));
@@ -109,7 +115,9 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
     setBusy(true);
     setError("");
     try {
-      const result = await api.publish(slug, certId, plan.sourceSha, status);
+      const result = await api.publish(
+        slug, certId, plan.sourceSha, status, push && Boolean(plan.push?.available),
+      );
       setDone(result);
       setPlan(null);
     } catch (e) {
@@ -194,7 +202,9 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
       </div>
 
       {done && <Wrote plan={done} />}
-      {plan && <Plan plan={plan} busy={busy} onPublish={publish} />}
+      {plan && (
+        <Plan plan={plan} busy={busy} onPublish={publish} push={push} onPush={setPush} />
+      )}
     </div>
   );
 }
@@ -203,11 +213,16 @@ function Plan({
   plan,
   busy,
   onPublish,
+  push,
+  onPush,
 }: {
   plan: PublishPlan;
   busy: boolean;
   onPublish: () => void;
+  push: boolean;
+  onPush: (on: boolean) => void;
 }) {
+  const canPush = Boolean(plan.push?.available);
   if (plan.isNoop) {
     return (
       <div className="plan card">
@@ -304,31 +319,84 @@ function Plan({
         </p>
       )}
 
+      <div className="push-choice">
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={canPush && push}
+            disabled={!canPush || busy}
+            onChange={(e) => onPush(e.target.checked)}
+          />
+          Also push to the courses repo
+        </label>
+        {canPush ? (
+          <p className="faint">
+            Commits the exam and pushes it to{" "}
+            <code className="mono">{plan.push?.coursesRepo}</code>, with the
+            course version going <strong>{plan.push?.versionFrom}</strong> →{" "}
+            <strong>{plan.push?.versionTo}</strong> and a line in the Content
+            Manager's changelog. Only this course's exam is pushed — nothing
+            else in the course changes. Installed Content Managers pick it up
+            at their next launch.
+          </p>
+        ) : (
+          <p className="faint push-unavailable">
+            Can't push from here: {plan.push?.reason || "not available"}
+          </p>
+        )}
+      </div>
+
       <div className="toolbar">
         <button onClick={onPublish} disabled={busy}>
-          {busy ? "Publishing…" : "Publish to the course"}
+          {busy ? "Publishing…" : canPush && push ? "Publish and push" : "Publish to the course"}
         </button>
         <span className="faint">
-          Writes {plan.path}. The course still has to be published to the
-          courses repo before an installed app sees it.
+          {canPush && push
+            ? `Writes ${plan.path}, then pushes it.`
+            : `Writes ${plan.path}. An installed app sees it only once it is pushed to the courses repo.`}
         </span>
       </div>
     </div>
   );
 }
 
+const short = (sha?: string) => (sha ? sha.slice(0, 7) : "");
+
 function Wrote({ plan }: { plan: PublishPlan }) {
+  const pushed = plan.pushed;
+  const reached = Boolean(pushed?.courses?.pushed);
   return (
     <div className="plan card">
-      <h3>Published</h3>
+      <h3>{reached ? "Published and pushed" : "Published"}</h3>
       <p>
         <code className="mono">{plan.path}</code> now holds{" "}
         <strong>{plan.afterCount}</strong> questions.
       </p>
-      <p className="faint">
-        This wrote the authoring copy. An installed Content Manager syncs from
-        the published courses repo, so nothing a learner runs has changed yet.
-      </p>
+      {pushed && reached && (
+        <p className="push-done">
+          Pushed to <code className="mono">{pushed.coursesRepo}</code> as course
+          version <strong>{pushed.versionTo}</strong> (was {pushed.versionFrom}):
+          courses repo <code className="mono">{short(pushed.courses?.commit)}</code>,
+          Content Manager <code className="mono">{short(pushed.authoring?.commit)}</code>.
+          Installed Content Managers get it at their next launch.
+        </p>
+      )}
+      {pushed && pushed.error && (
+        <div className="banner">
+          The exam is written, but the push stopped
+          {pushed.failedAt ? ` at the ${pushed.failedAt} stage` : ""}: {pushed.error}
+          {pushed.authoring?.pushed && !reached && (
+            <> The Content Manager commit did go out; only the courses repo is behind.</>
+          )}
+        </div>
+      )}
+      {!pushed && (
+        <p className="faint">
+          This wrote the authoring copy. An installed Content Manager syncs from
+          the courses repo, so nothing a learner runs has changed until it is
+          pushed there.
+        </p>
+      )}
     </div>
   );
 }

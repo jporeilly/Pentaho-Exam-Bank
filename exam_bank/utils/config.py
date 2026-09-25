@@ -248,6 +248,12 @@ class AppConfig:
     # (each subdir a course with course.json + lab guide.md files).
     pcm_courses_dir: str = field(default_factory=_default_pcm_courses_dir)
 
+    # Where a published exam is pushed so installed Content Managers see it:
+    # the distribution repo every learner's app syncs from at launch. The
+    # Content Editor's own publish pushes to the same place.
+    courses_repo_url: str = "https://github.com/jporeilly/Pentaho-Courses.git"
+    courses_repo_ref: str = "main"
+
     # Auto-backup
     auto_backup_enabled: bool = False
     auto_backup_interval_hours: int = 24

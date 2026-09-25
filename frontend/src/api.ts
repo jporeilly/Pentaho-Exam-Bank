@@ -466,6 +466,31 @@ export interface PublishPlan {
   descriptionBefore: string;
   descriptionAfter: string;
   written?: boolean;
+  /** On a plan: whether the exam could also be pushed to the courses repo
+   *  installed apps sync from, and to which course version; if not, why. */
+  push?: PushPreview;
+  /** On a write made with push: what happened at each stage. */
+  pushed?: PushResult;
+}
+
+export interface PushPreview {
+  available: boolean;
+  reason?: string;
+  versionFrom?: string;
+  versionTo?: string;
+  coursesRepo?: string;
+}
+
+export interface PushResult {
+  versionFrom?: string;
+  versionTo?: string;
+  coursesRepo?: string;
+  changelog?: string;
+  authoring?: { commit?: string; pushed?: boolean };
+  courses?: { commit?: string; pushed?: boolean; upToDate?: boolean };
+  /** Set when a stage failed; the exam file is written either way. */
+  error?: string;
+  failedAt?: string;
 }
 
 // ── Calls ───────────────────────────────────────────────────────────
@@ -797,11 +822,15 @@ export const api = {
     certification_id: string,
     expect_sha: string,
     status = "approved",
+    push = false,
   ) =>
-    request<PublishPlan>(`/api/courses/${encodeURIComponent(slug)}/exam/questions`, {
-      method: "POST",
-      body: JSON.stringify({ certification_id, status, expect_sha }),
-    }),
+    request<PublishPlan & { push?: PushResult }>(
+      `/api/courses/${encodeURIComponent(slug)}/exam/questions`,
+      {
+        method: "POST",
+        body: JSON.stringify({ certification_id, status, expect_sha, push }),
+      },
+    ).then((r) => ({ ...r, pushed: push ? (r.push as PushResult | undefined) : undefined })),
 
     /** What adopting every course's exam would do to the bank. Writes nothing. */
   planCourseSync: () => request<SyncPlan>("/api/courses/sync/plan", { method: "POST" }),

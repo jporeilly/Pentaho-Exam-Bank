@@ -20,8 +20,9 @@ from ...core import course_sync
 from ...core.bank import ExamBankDB
 from ...core.context_budget import source_budget_chars
 from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course
+from ...core import distribution
 from ...core.publisher import PublishRefused, apply as apply_publish, plan as plan_publish
-from ...utils.config import config
+from ...utils.config import ASSETS_DIR, config
 from ..deps import courses_dir, get_db
 
 router = APIRouter(tags=["courses"])
@@ -146,6 +147,9 @@ class PublishRequest(BaseModel):
     # The hash the caller was shown a plan for. Required on the write, so a
     # publish cannot happen without somebody having looked at one first.
     expect_sha: str = ""
+    #: Also push the exam to the courses repo installed apps sync from. See
+    #: core/distribution.py. Off unless asked for: it publishes to a remote.
+    push: bool = False
 
 
 def _publish_plan(slug: str, body: PublishRequest, db: ExamBankDB):
@@ -222,12 +226,37 @@ def _plan_json(slug: str, made) -> dict[str, Any]:
     }
 
 
+def _preflight(slug: str) -> "distribution.Preflight":
+    return distribution.preflight(
+        courses_dir(), slug,
+        repo_url=config.courses_repo_url, repo_ref=config.courses_repo_ref,
+    )
+
+
+def _push_preview(slug: str) -> dict[str, Any]:
+    """Whether the exam could also be pushed, and to which version - or, if
+    not, the reason, in the author's terms. Never raises: a push that is not
+    possible still leaves an ordinary publish possible."""
+    try:
+        return _preflight(slug).as_dict()
+    except distribution.DistributionRefused as e:
+        return {"available": False, "reason": str(e)}
+
+
+def _course_title(slug: str) -> str:
+    try:
+        data = json.loads((_course_dir(slug) / "course.json").read_text(encoding="utf-8"))
+        return str(data.get("title") or slug)
+    except (OSError, ValueError):
+        return slug
+
+
 @router.post("/api/courses/{slug}/exam/questions/plan")
 def plan_course_exam_questions(
     slug: str, body: PublishRequest, db: ExamBankDB = Depends(get_db)
 ) -> dict[str, Any]:
     """What publishing would change in the course's exam.json. Writes nothing."""
-    return _plan_json(slug, _publish_plan(slug, body, db))
+    return {**_plan_json(slug, _publish_plan(slug, body, db)), "push": _push_preview(slug)}
 
 
 @router.post("/api/courses/{slug}/exam/questions")
@@ -250,11 +279,37 @@ def publish_course_exam_questions(
         )
 
     made = _publish_plan(slug, body, db)
+
+    # Everything a push can know in advance is checked BEFORE the write, so a
+    # refusal leaves the course file exactly as it was.
+    pre = None
+    if body.push:
+        try:
+            pre = _preflight(slug)
+        except distribution.DistributionRefused as e:
+            raise HTTPException(409, str(e)) from e
+
     try:
         apply_publish(made, expect_sha=body.expect_sha)
     except PublishRefused as e:
         raise HTTPException(409, str(e)) from e
-    return {**_plan_json(slug, made), "written": True}
+    result = {**_plan_json(slug, made), "written": True}
+
+    if pre is not None:
+        summary = {
+            "added": made.added,
+            "changed": [c.id for c in made.changed],
+            "removed": made.removed,
+            "afterCount": made.after_count,
+        }
+        try:
+            result["push"] = distribution.release(
+                pre, slug, _course_title(slug), summary, ASSETS_DIR / "cache")
+        except distribution.DistributionRefused as e:
+            # The file is written; the push stopped before anything left the
+            # machine. Said as such rather than as a failed publish.
+            result["push"] = {"error": str(e), "failedAt": "before-push"}
+    return result
 
 
 class SyncRequest(BaseModel):

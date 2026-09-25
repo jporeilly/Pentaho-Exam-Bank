@@ -672,3 +672,10 @@ button.danger:disabled { opacity: 0.55; }
   .report-finding { grid-template-columns: minmax(0, 1fr); }
   .report-tiles, .bloom-levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Publish: the push that goes with the write. */
+.push-choice { margin: 14px 0 6px; padding: 10px 12px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-raised)); border: 1px solid var(--line); }
+.push-choice p { margin: 4px 0 0; }
+.push-unavailable { color: var(--warn); }
+.push-done { color: var(--ok); }

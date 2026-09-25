@@ -293,7 +293,7 @@ describe("publishing", () => {
     );
 
     expect(await screen.findByText("Published")).toBeInTheDocument();
-    expect(screen.getByText(/nothing a learner runs has changed yet/)).toBeInTheDocument();
+    expect(screen.getByText(/nothing a learner runs has changed until it is pushed/)).toBeInTheDocument();
   });
 
   it("drops the plan when the file changed underneath it", async () => {
@@ -348,5 +348,98 @@ describe("publishing", () => {
     await choose("Status", "draft");
 
     expect(screen.queryByText(/What would change/)).not.toBeInTheDocument();
+  });
+});
+
+describe("pushing to the courses repo", () => {
+  const PUSHABLE = {
+    available: true, versionFrom: "0.1.11", versionTo: "0.1.12",
+    coursesRepo: "https://github.com/jporeilly/Pentaho-Courses.git",
+  };
+
+  it("offers the push, ticked, with the version it will publish", async () => {
+    mockApi({ plan: plan({ push: PUSHABLE }) });
+    render(<PublishPane />);
+    await choose("Course", "demo-course");
+    await check();
+    expect(await screen.findByRole("checkbox", { name: "Also push to the courses repo" })).toBeChecked();
+    expect(screen.getByText("0.1.11")).toBeInTheDocument();
+    expect(screen.getByText("0.1.12")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish and push" })).toBeInTheDocument();
+  });
+
+  it("asks the server to push when it is ticked", async () => {
+    const calls = mockApi({ plan: plan({ push: PUSHABLE }) });
+    render(<PublishPane />);
+    await choose("Course", "demo-course");
+    await check();
+    await userEvent.click(await screen.findByRole("button", { name: "Publish and push" }));
+    const write = calls.find((c) => c.path.match(/exam\/questions$/))!;
+    expect(write.body).toMatchObject({ push: true, expect_sha: "abc123" });
+  });
+
+  it("publishes without pushing when it is unticked", async () => {
+    const calls = mockApi({ plan: plan({ push: PUSHABLE }) });
+    render(<PublishPane />);
+    await choose("Course", "demo-course");
+    await check();
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Also push to the courses repo" }));
+    await userEvent.click(screen.getByRole("button", { name: "Publish to the course" }));
+    const write = calls.find((c) => c.path.match(/exam\/questions$/))!;
+    expect(write.body).toMatchObject({ push: false });
+  });
+
+  it("says why a push is not possible, and cannot be ticked", async () => {
+    const calls = mockApi({
+      plan: plan({ push: { available: false, reason: "The Content Manager repository is 2 commit(s) behind its remote." } }),
+    });
+    render(<PublishPane />);
+    await choose("Course", "demo-course");
+    await check();
+    const box = await screen.findByRole("checkbox", { name: "Also push to the courses repo" });
+    expect(box).toBeDisabled();
+    expect(box).not.toBeChecked();
+    expect(screen.getByText(/2 commit\(s\) behind its remote/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Publish to the course" }));
+    const write = calls.find((c) => c.path.match(/exam\/questions$/))!;
+    expect(write.body).toMatchObject({ push: false });
+  });
+
+  it("reports both commits and the version once it has pushed", async () => {
+    mockApi({
+      plan: plan({ push: PUSHABLE }),
+      publish: {
+        ...plan(), written: true,
+        push: {
+          versionFrom: "0.1.11", versionTo: "0.1.12", coursesRepo: PUSHABLE.coursesRepo,
+          authoring: { commit: "aaaaaaa1111", pushed: true },
+          courses: { commit: "bbbbbbb2222", pushed: true },
+        },
+      } as unknown as PublishPlan,
+    });
+    render(<PublishPane />);
+    await choose("Course", "demo-course");
+    await check();
+    await userEvent.click(await screen.findByRole("button", { name: "Publish and push" }));
+    expect(await screen.findByText("Published and pushed")).toBeInTheDocument();
+    expect(screen.getByText("bbbbbbb")).toBeInTheDocument();
+    expect(screen.getByText("aaaaaaa")).toBeInTheDocument();
+  });
+
+  it("says plainly when the file is written but the push stopped", async () => {
+    mockApi({
+      plan: plan({ push: PUSHABLE }),
+      publish: {
+        ...plan(), written: true,
+        push: { error: "git push failed: rejected", failedAt: "courses",
+                authoring: { commit: "aaaaaaa1111", pushed: true } },
+      } as unknown as PublishPlan,
+    });
+    render(<PublishPane />);
+    await choose("Course", "demo-course");
+    await check();
+    await userEvent.click(await screen.findByRole("button", { name: "Publish and push" }));
+    expect(await screen.findByText(/the push stopped at the courses stage/)).toBeInTheDocument();
+    expect(screen.getByText(/only the courses repo is behind/)).toBeInTheDocument();
   });
 });
