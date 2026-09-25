@@ -61,6 +61,27 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   to the end rather than jumping the queue, which is what ranking them
   naively by the smallest number would do.
 
+### Changed
+
+- **A navigation rail down the side, in place of the tab row.** Nine
+  destinations had outgrown a top bar: they wrapped at narrow widths, and in
+  one row they read as nine equal siblings when they are really three stages
+  of one job. Grouped **Content** (Courses, Generate, Import), **Questions**
+  (Bank, Exam paper, Publish) and **System** (Settings, Admin, AI & Docs),
+  with the order inside each group being the order the work happens in.
+
+  The current item is marked with a bar down its left edge rather than the
+  underline the tabs used — in a vertical list an underline reads as a
+  separator between rows, not as "you are here". Bank carries the bank's
+  size, which is the one count worth knowing before clicking.
+
+  Collapses to icons and remembers it, and does so on its own below 860px.
+  The group headings stay in the DOM when collapsed: the grouping is the
+  point of the rail and should not disappear for a screen reader along with
+  the labels. Every `localStorage` access is wrapped — it throws in a
+  private window, and a nav that will not render is worse than one that
+  forgot it was collapsed.
+
 ### Fixed
 
 - **A question authored in the bank no longer publishes with its key at

@@ -10,29 +10,7 @@ import { GeneratePane } from "./GeneratePane";
 import { ImportPane } from "./ImportPane";
 import { PublishPane } from "./PublishPane";
 import { SettingsPane } from "./SettingsPane";
-
-type Tab =
-  | "courses"
-  | "generate"
-  | "bank"
-  | "import"
-  | "exam"
-  | "publish"
-  | "settings"
-  | "admin"
-  | "docs";
-
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "courses", label: "Courses" },
-  { id: "generate", label: "Generate" },
-  { id: "bank", label: "Bank" },
-  { id: "import", label: "Import" },
-  { id: "exam", label: "Exam paper" },
-  { id: "publish", label: "Publish" },
-  { id: "settings", label: "Settings" },
-  { id: "admin", label: "Admin" },
-  { id: "docs", label: "AI & Docs" },
-];
+import { SideNav, type Tab } from "./SideNav";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("courses");
@@ -78,18 +56,6 @@ export function App() {
           Exam Bank
         </span>
 
-        <nav className="tabs">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? "page" : undefined}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-
         <span className="spacer" />
 
         {health && (
@@ -111,7 +77,14 @@ export function App() {
         )}
       </header>
 
-      <main>
+      <div className="shell">
+        <SideNav
+          tab={tab}
+          onSelect={setTab}
+          questions={health?.database.questions}
+        />
+
+        <main>
         {healthError && (
           // The backend being down is the one failure that makes every pane
           // useless, so it is said once here rather than repeated in each.
@@ -162,7 +135,8 @@ export function App() {
         {tab === "settings" && <SettingsPane onSaved={loadHealth} />}
         {tab === "admin" && <AdminPane onChanged={loadHealth} />}
         {tab === "docs" && <DocsPane />}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
