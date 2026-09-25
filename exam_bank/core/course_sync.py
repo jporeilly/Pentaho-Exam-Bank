@@ -41,9 +41,30 @@ from .validation import problems_with
 #: the bank's own workmanship and a course file knows nothing about them. A
 #: question adopted as a draft and since approved must read as `unchanged`,
 #: or every sync would offer to undo the review.
+#:
+#: These are ATTRIBUTE names on Question, not column names in the questions
+#: table, because `_fingerprint` reads them with getattr. The two differ:
+#: the columns are `key_answer` and `keys_json`, the attributes `key` and
+#: `keys`. This list held the column names until 2026-09-25, and since
+#: getattr was given a default, both contributed None to every fingerprint
+#: ever taken - ten named fields doing the work of eight.
+#:
+#: It never lost an answer-key change, and it is worth being exact about why,
+#: because the reason is luck rather than design: for a PCM question the key
+#: and the distractors partition the options, so moving `correct` changes the
+#: distractor set too and `distractors` caught it. The fingerprint was right
+#: about the answer by accident. `test_every_content_field_exists_on_question`
+#: fails on a name that does not resolve, so the next one is caught when it is
+#: written rather than whenever something stops being masked.
+#:
+#: `bloom_level` is here because a course file states it outright. Not
+#: `difficulty`: no course sets one, so the importer's default would be the
+#: only thing compared, and if it ever becomes an SME judgement in the bank
+#: this list is where that decision gets made.
 _CONTENT_FIELDS = (
-    "scenario", "stem", "question_type", "key_answer", "keys_json",
+    "scenario", "stem", "question_type", "key", "keys",
     "distractors", "option_order", "explanation", "topic", "pool_order",
+    "bloom_level",
 )
 
 
