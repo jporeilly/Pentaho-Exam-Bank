@@ -48,6 +48,7 @@ def list_questions(
     certification_id: str = "",
     assigned_sme: str = "",
     tags: str = "",
+    sort: str = "course",
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
@@ -58,7 +59,9 @@ def list_questions(
         status=status, certification_id=certification_id,
         assigned_sme=assigned_sme, tags=tags,
     )
-    items = db.search(limit=limit, offset=offset, **filters)
+    # sort is deliberately NOT in filters: search_count shares that dict
+    # and takes no ordering - a count does not have one.
+    items = db.search(limit=limit, offset=offset, sort=sort, **filters)
     return {
         "items": [question_json(q) for q in items],
         "total": db.search_count(**filters),

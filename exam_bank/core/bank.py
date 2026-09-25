@@ -342,6 +342,28 @@ class Question:
         return errors, warnings
 
 
+#: How a page of questions may be ordered.
+#:
+#: "course" is the order the pool was AUTHORED in, which is the order the
+#: workshops teach it: `pool_order` is the position a question held in its
+#: course's exam.json when it was adopted, and the authors write each pool
+#: lab by lab. Topics therefore fall out as contiguous blocks for free -
+#: analyst-ba runs Overview 0-7, User Console 8-13, Interactive Reports
+#: 14-23 - without the bank needing to know anything about labs.
+#:
+#: Questions with no pool position (-1: authored here, never in a course)
+#: sort last rather than first. Ascending order would otherwise open every
+#: pool on the handful of drafts nobody has filed yet.
+SORTS = {
+    "course": (
+        "(SELECT name FROM certifications c WHERE c.id = questions.certification_id), "
+        "CASE WHEN pool_order < 0 THEN 1 ELSE 0 END, pool_order, created_at"
+    ),
+    "updated": "updated_at DESC",
+}
+DEFAULT_SORT = "course"
+
+
 class ExamBankDB:
     """SQLite database for storing and querying questions and certifications."""
 
@@ -555,6 +577,7 @@ class ExamBankDB:
         tags: str = "",
         limit: int = 100,
         offset: int = 0,
+        sort: str = DEFAULT_SORT,
     ) -> List[Question]:
         conditions = []
         params = []
@@ -590,7 +613,10 @@ class ExamBankDB:
             params.append(f'%"{tags}"%')
 
         where = " AND ".join(conditions) if conditions else "1=1"
-        query = f"SELECT * FROM questions WHERE {where} ORDER BY updated_at DESC LIMIT ? OFFSET ?"
+        # An unknown sort falls back rather than raising: this is a query
+        # string from a URL, and a typo should not 500 a browse.
+        order = SORTS.get(sort, SORTS[DEFAULT_SORT])
+        query = f"SELECT * FROM questions WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         rows = self.conn.execute(query, params).fetchall()

@@ -6,6 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **The bank browses in course order — the order the workshops teach it.**
+  `pool_order` is the position a question held in its course's `exam.json`
+  when it was adopted, and the authors write each pool lab by lab, so that
+  column already *was* workshop order. Nothing used it: the list query
+  hardcoded `updated_at DESC`.
+
+  Topics therefore come out as contiguous blocks for free —
+  `analyst-ba-practitioner` reads Overview (0–7), User Console (8–13),
+  Interactive Reports (14–23), Analyzer Reports (24–33), Dashboard Designer
+  (34–43) — without the bank parsing `SUMMARY.md` or knowing that labs
+  exist. The grouping is a consequence of the data, not a feature to
+  maintain.
+
+  A **Course order / Recently updated** control sits in the Bank toolbar,
+  and `?sort=` on `/api/questions` takes the same two values. Course order
+  is the default: 395 of the bank's 405 questions came from a course pool,
+  and the old default was already known friction — `BankPane` patches an
+  edited row in place specifically so it doesn't jump position on save.
+
+  Questions with no pool position (`-1`: authored in the bank, never in a
+  course) sort **last**. Ascending would otherwise open every pool on the
+  handful of unfiled drafts. An unrecognised `sort` falls back rather than
+  raising — it arrives from a URL, and a typo should not 500 a browse.
+
+### Fixed
+
+- **The Delete button was invisible — red text on a red background.**
+  `#a32b1c` on `#a32b1c`, a contrast ratio of **1.00:1**, on every Delete
+  in the Bank list and in the question editor.
+
+  Three separate rules had accumulated for `button.danger`. The oldest
+  painted `background: var(--bad)` on *every* danger button including the
+  `secondary` (outline) variant; a later pair modelled it correctly with
+  `:not(.secondary)` but never removed the first, and a third set the text
+  colour again with a hardcoded hex instead of the token. The outline
+  button ended up taking its background from one rule and its text colour
+  from another — both resolving to the same value.
+
+  The same decision written in three places, which is why it could drift
+  into contradicting itself. Now written once: `.danger` is red-on-paper at
+  5.41:1, `.danger:not(.secondary)` is white-on-red at 7.19:1, both clear
+  of WCAG AA.
+
 
 ## [1.1.0] - 2026-09-24
 ### Added

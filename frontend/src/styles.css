@@ -55,7 +55,11 @@ button.secondary {
   color: var(--text);
 }
 button.secondary:hover:not(:disabled) { background: var(--bg-hover); }
-button.danger { background: var(--bad); color: #fff; }
+/* The destructive variants are defined ONCE, further down, next to each
+   other. A solid rule here painted `background: var(--bad)` on every
+   .danger including the SECONDARY one, and the later colour rule then
+   set the text to var(--bad) as well - the Delete button in the question
+   editor was #a32b1c on #a32b1c, a contrast ratio of 1.00:1. */
 
 /* No borders on dropdowns or inputs — they read as a filled field, which is
    quieter at the density this app runs at. */
@@ -199,7 +203,6 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--tex
 }
 
 .editor-actions { margin-top: 16px; align-items: center; gap: 10px; }
-button.danger { color: #b91c1c; }
 
 /* The list rows are clickable now. */
 tbody tr.q-row { cursor: pointer; }

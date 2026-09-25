@@ -44,11 +44,17 @@ export function BankPane({
   const [text, setText] = useState("");
   const [certification, setCertification] = useState("");
   const [status, setStatus] = useState("");
+  // Course order by default. `pool_order` is the position each question held
+  // in its course's exam.json, and the authors write a pool lab by lab, so
+  // this is the order the workshops teach it - and topics come out as
+  // contiguous blocks without the bank knowing anything about labs.
+  const [sort, setSort] = useState<"course" | "updated">("course");
 
   const filters: QuestionFilters = {
     text,
     certification_id: certification,
     status,
+    sort,
     limit: PAGE,
     offset,
   };
@@ -142,6 +148,16 @@ export function BankPane({
               {c.name} ({c.questionCount})
             </option>
           ))}
+        </select>
+        <select
+          value={sort}
+          onChange={(e) =>
+            changeFilter(() => setSort(e.target.value as "course" | "updated"))
+          }
+          title="Course order follows the workshops; the pool was authored lab by lab"
+        >
+          <option value="course">Course order</option>
+          <option value="updated">Recently updated</option>
         </select>
         <select value={status} onChange={(e) => changeFilter(() => setStatus(e.target.value))}>
           <option value="">Any status</option>

@@ -198,6 +198,9 @@ export interface QuestionFilters {
   certification_id?: string;
   assigned_sme?: string;
   tags?: string;
+  /** "course" = the order the workshops teach it (the pool's authored
+   *  order); "updated" = most recently edited first. */
+  sort?: "course" | "updated";
   limit?: number;
   offset?: number;
 }
