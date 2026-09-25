@@ -1,6 +1,6 @@
 {
   "name": "pentaho-exam-bank-desktop",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Windows desktop shell for the Pentaho Exam Bank",
   "scripts": {

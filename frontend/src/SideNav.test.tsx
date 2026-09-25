@@ -20,12 +20,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SideNav } from "./SideNav";
+import { SideNav, type Tab } from "./SideNav";
 
 const HEADINGS = ["Content", "Questions", "System"];
 const ITEMS = [
   "Courses", "Generate", "Import",
-  "Bank", "Exam paper", "Publish",
+  "Bank", "Report", "Exam paper", "Publish",
   "Settings", "Admin", "AI & Docs",
 ];
 
@@ -35,7 +35,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mount(tab = "courses" as const, questions?: number) {
+function mount(tab: Tab = "courses", questions?: number) {
   const onSelect = vi.fn();
   render(<SideNav tab={tab} onSelect={onSelect} questions={questions} />);
   return onSelect;

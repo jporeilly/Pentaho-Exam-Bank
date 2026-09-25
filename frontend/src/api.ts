@@ -528,9 +528,94 @@ export interface AiRewrite {
   unchanged: boolean;
 }
 
+/** Counts for one set of questions — the bank, an exam, or a workshop.
+ *  Every Bloom level and status is present, zero or not. */
+export interface ReportSummary {
+  questions: number;
+  byBloom: Record<string, number>;
+  /** Questions whose level is not one the bank recognises. In the total,
+   *  in no bar. */
+  unknownBloom: number;
+  applyPlus: number;
+  analyzePlus: number;
+  recall: number;
+  evaluate: number;
+  scenarioLed: number;
+  multi: number;
+  thin: number;
+  byStatus: Record<string, number>;
+}
+
+export interface ReportCriterion {
+  criterion: string;
+  kind: "floor" | "ceiling";
+  got: number;
+  percent: number;
+  bar: number;
+  ok: boolean;
+  /** How many questions short of a floor, or over a ceiling. */
+  gap: number;
+}
+
+export interface ReportBar {
+  level: number;
+  name: string;
+  criteria: ReportCriterion[];
+  clears: boolean;
+}
+
+export interface ReportFinding {
+  severity: "act" | "review" | "minor" | "note" | "clear";
+  title: string;
+  detail: string;
+  action: string;
+}
+
+export interface ReportTopic extends ReportSummary {
+  topic: string;
+}
+
+export interface ReportExam extends ReportSummary {
+  certificationId: string;
+  name: string;
+  sourceRef: string;
+  /** From the course's course.json. Null when it states none (a try-it lab)
+   *  or no courses directory is configured. */
+  level: { number: number; name: string } | null;
+  /** From the course's exam.json. */
+  exam: { pool: number; draw: number; passMark: number | null } | null;
+  bar: ReportBar | null;
+  findings: ReportFinding[];
+  topics: ReportTopic[];
+}
+
+export interface ReportItem {
+  id: string;
+  certificationId: string;
+  topic: string;
+  bloom: string;
+  status: string;
+  scenario: boolean;
+  multi: boolean;
+  stem: string;
+  poolOrder: number;
+}
+
+export interface Report extends ReportSummary {
+  levels: string[];
+  statuses: { id: string; label: string }[];
+  coursesConfigured: boolean;
+  exams: ReportExam[];
+  /** Certifications holding no questions. */
+  emptyCourses: number;
+  /** Every question, in course order. */
+  items: ReportItem[];
+}
+
 export const api = {
   health: () => request<Health>("/api/health"),
   stats: () => request<Record<string, unknown>>("/api/stats"),
+  report: () => request<Report>("/api/report"),
 
   questions: (filters: QuestionFilters = {}) =>
     request<QuestionPage>(`/api/questions${query({ ...filters })}`),

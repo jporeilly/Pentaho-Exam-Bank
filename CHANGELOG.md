@@ -6,7 +6,64 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.4.0] - 2026-09-25
 ### Added
+
+- **A Report screen: each exam's Bloom breakdown, in the app.** A new
+  destination in the rail, between Bank and Exam paper, because you read an
+  exam's balance once its questions are in and before you draw a paper from
+  it. Pick an exam and it shows:
+
+  - the headline figures: questions, Apply or above, Analyze or above,
+    scenario-led, draw headroom, approved;
+  - the Bloom classification as one bar from Remember to Create, with a count
+    and share per level;
+  - the **bar for the exam's certification level**, criterion by criterion,
+    with each gap counted in questions rather than percentage points — "3
+    questions short" is something an author can sit down and write. A figure
+    exactly on its line passes and says so;
+  - the same split by workshop, in the order the course teaches them;
+  - where every question sits in the review lifecycle;
+  - findings, generated from those numbers by the same rules for every exam,
+    so one appears only where its numbers trigger it;
+  - every question at its level, filterable by level.
+
+  The numbers had been in the bank all along — `get_bloom_counts` was
+  computed and served by `/api/stats` and drawn by nothing, a gap
+  `docs/PORT-AUDIT.md` recorded when the NiceGUI dashboard did not come
+  across. The breakdown was first built as a standalone page for the
+  exam review; it lives here now so it reads the live bank instead of a
+  snapshot.
+
+  **All the arithmetic is the server's** (`core/report.py`, served at
+  `/api/report`). The pane only draws: the bar check and the findings are
+  not recomputed in TypeScript, because two copies of the rules would
+  disagree the first time one changed. The level and the draw come from the
+  course files (`course.json`'s `level`, `exam.json`'s
+  `questionsPerAttempt`), since only they know them; with no courses
+  directory configured the report still works and says why the bar is
+  missing.
+
+  **The bars are defined once, in `core/report.py`** — Level 1 Practitioner
+  50 / 15 / 1 / 30, Level 2 Specialty 60 / 30 / 5 / 20, Level 3 Certified
+  70 / 40 / 15 / 15 (Apply+, Analyze+ and Evaluate floors, recall ceiling, as
+  percentages). They are the figures the 2026-09 exam review applied across
+  the Content Manager's courses, and until now they were written down in
+  nothing that ran. They follow the usual shape of a certification ladder
+  but are a working standard, not an accredited one. A course with no
+  `level` — `pdi-2hr-lab`, a try-it lab — is not scored, and the report says
+  so rather than drawing an empty bar.
+
+  A Bloom level the bank does not recognise, such as a lower-case `apply`
+  from an importer that did not validate, is counted and flagged rather than
+  dropped; otherwise an exam's bars would add up to less than its size with
+  nothing to say why.
+
+  Tested at both ends: the bar arithmetic is pinned exactly on the line and
+  one question either side of it, and the tests were watched failing with a
+  strict comparison in place of `>=`, with workshops sorted alphabetically,
+  and with the level filter ignored.
 
 - **The navigation rail has tests.** It shipped in 1.3.0 with none: rendered
   and walked by hand, which proves it worked once and nothing about
@@ -30,6 +87,59 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   it, so jsdom cannot exercise it. It was verified by resizing a real
   browser to 768px and reading the computed width back, and the test file
   says so rather than leaving a gap that looks like coverage.
+
+
+### Changed
+
+- **Parchment, with colour.** The theme was taken whole from the Content
+  Editor's parchment, and every part of it was a shade of brown: the paper,
+  the lines, the text, the buttons, the current page in the rail. It read as
+  "all very brown", and a chart drawn in it made every Bloom level look
+  alike. The paper stays warm; what sits on it is not brown any more.
+
+  - Text is a dark slate instead of a dark brown, and the lines and fills
+    are near-neutral.
+  - The accent is a teal (5.4:1 as text on the paper, and white on it for
+    buttons), so buttons, the current page and the charts speak one colour.
+  - A **data ramp** joins the theme as tokens (`--data-1` … `--data-6`):
+    pale gold through green and teal to deep blue and indigo. Sequential,
+    so it still reads as order — light is shallow, dark is deep — while
+    each step is its own colour. No red in it; red stays reserved for what
+    is wrong.
+  - Status pills are coloured by state: draft blue-grey, in review amber,
+    revised violet, approved green, rejected red.
+
+  This parts company with the Content Editor, which still opens on the
+  brown parchment the two apps used to share.
+
+### Fixed
+
+- **A course edit that only re-levels a question now reaches the bank.**
+  Course sync decides whether a question changed by fingerprinting the
+  fields in `_CONTENT_FIELDS`, and two of the ten names in that list were the
+  database *column* names — `key_answer`, `keys_json` — where the
+  attributes are `key` and `keys`. Both read as `None` on every question
+  ever fingerprinted. And `bloom_level` was not in the list at all, so a
+  course that changed a question's stated Bloom level without touching its
+  wording fingerprinted as unchanged and was skipped.
+
+  That is exactly the edit the Content Manager's exam review made across
+  eleven exams. It had not bitten only because every level change so far
+  arrived with a rewrite. The answer key was never lost either, and that was
+  luck: for a course question the key and the distractors partition the
+  options, so moving the key moved the distractors and they caught it.
+
+  Fingerprints are computed afresh on both sides at every sync and never
+  stored, so upgrading changes nothing about questions already in the bank —
+  the next sync simply sees what it should have seen. A test now fails if any
+  name in the list is not a real attribute of a question.
+
+- **The frontend build passes its typecheck again.** The navigation-rail
+  tests typed their helper's `tab` parameter as the literal `"courses"`, so
+  calling it with `"bank"` was a type error, and `npm run build` runs `tsc`
+  before `vite` — the build was broken on `main` from the moment those tests
+  landed, while vitest, which does not typecheck, stayed green. The
+  parameter is a `Tab` now.
 
 
 ## [1.3.0] - 2026-09-25

@@ -13,6 +13,7 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen,
+  ChartColumn,
   Database,
   FileText,
   MessagesSquare,
@@ -30,6 +31,7 @@ export type Tab =
   | "courses"
   | "generate"
   | "bank"
+  | "report"
   | "import"
   | "exam"
   | "publish"
@@ -68,6 +70,9 @@ export function navGroups(questions?: number): NavGroup[] {
       heading: "Questions",
       items: [
         { id: "bank", label: "Bank", icon: Database, count: questions },
+        // After Bank: you read an exam's balance once its questions are in,
+        // and before you draw a paper from it.
+        { id: "report", label: "Report", icon: ChartColumn },
         { id: "exam", label: "Exam paper", icon: FileText },
         { id: "publish", label: "Publish", icon: Send },
       ],

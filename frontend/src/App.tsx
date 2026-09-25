@@ -9,6 +9,7 @@ import { ExamPane } from "./ExamPane";
 import { GeneratePane } from "./GeneratePane";
 import { ImportPane } from "./ImportPane";
 import { PublishPane } from "./PublishPane";
+import { ReportPane } from "./ReportPane";
 import { SettingsPane } from "./SettingsPane";
 import { SideNav, type Tab } from "./SideNav";
 
@@ -129,6 +130,7 @@ export function App() {
           <GeneratePane initialCourse={openCourse} onCommitted={loadHealth} />
         )}
         {tab === "bank" && <BankPane openCourse={openCourse} onChanged={loadHealth} />}
+        {tab === "report" && <ReportPane openCourse={openCourse} />}
         {tab === "import" && <ImportPane onImported={loadHealth} />}
         {tab === "exam" && <ExamPane />}
         {tab === "publish" && <PublishPane openCourse={openCourse} />}

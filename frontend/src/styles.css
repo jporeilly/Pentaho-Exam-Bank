@@ -8,22 +8,41 @@
  * here reaches for one as a highlight; red is kept for things that are wrong.
  */
 :root {
-  --bg: #f5efe3;
-  --bg-raised: #fffdf7;
-  --bg-input: #e8ded0;
-  --bg-hover: #e4d9c4;
-  --line: #ded2bd;
-  --text: #2e2618;
-  --text-strong: #171208;
-  --text-dim: #6a5c45;
-  --text-faint: #8d7d63;
-  --accent: #8a5a12;
-  --accent-text: #fffdf7;
-  --ok: #3f6d21;
-  --warn: #8a5a12;
+  /* The paper stays warm; what was brown on it is not. Text is a dark
+     slate rather than a dark brown, the lines and fills are near-neutral,
+     and the accent is the teal from the data ramp below, so buttons, the
+     current page and the charts speak one colour. (Until 1.4.0 this was
+     all taken from the Content Editor's parchment browns; the user found
+     it "all very brown", and it was.) */
+  --bg: #f6f3ec;
+  --bg-raised: #fffefb;
+  --bg-input: #ebe7df;
+  --bg-hover: #e2ded4;
+  --line: #e0dbd0;
+  --text: #1f2a37;
+  --text-strong: #0f172a;
+  --text-dim: #4b5a6b;
+  --text-faint: #7a8594;
+  --accent: #16707c;
+  --accent-text: #ffffff;
+  --ok: #2e7d32;
+  --warn: #b45309;
   --bad: #a32b1c;
-  --shadow: rgba(80, 60, 20, 0.18);
+  --shadow: rgba(30, 40, 55, 0.14);
   --radius: 6px;
+  /* Colour for data. Parchment is deliberately quiet, but a chart drawn in
+     one brown makes every level look alike. This is a sequential ramp -
+     pale gold through green and teal to deep blue and indigo - so it still
+     reads as ORDER (light is shallow, dark is deep) while each step is
+     its own colour. No red in it: red stays reserved for what is wrong. */
+  --data-1: #ede3a3;
+  --data-2: #bcd98f;
+  --data-3: #72c29c;
+  --data-4: #2f9aa8;
+  --data-5: #22649c;
+  --data-6: #2c3a7c;
+  /* The same teal, dark enough to be text on the paper (5.4:1). */
+  --data-ink: #16707c;
   color-scheme: light;
 }
 
@@ -210,7 +229,7 @@ main { flex: 1; overflow: auto; padding: 18px; min-width: 0; }
   padding: 10px 14px; border-radius: var(--radius); margin-bottom: 16px;
   background: #f7e2de; color: #6d2016; border: 1px solid #e2bfb8;
 }
-.banner.warn { background: #f6ecd6; color: #6b4610; border-color: #e0cfa6; }
+.banner.warn { background: #fdf1dc; color: #7c3a0a; border-color: #f1d3a3; }
 
 .card {
   background: var(--bg-raised);
@@ -233,9 +252,10 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--tex
   display: inline-block; padding: 1px 8px; border-radius: 999px;
   font-size: 11px; font-weight: 600; background: var(--bg-input); color: var(--text-dim);
 }
-.pill.draft { background: #e8ded0; color: #6a5c45; }
-.pill.approved { background: #dfead3; color: #3f6d21; }
-.pill.sme_review { background: #f6ecd6; color: #8a5a12; }
+.pill.draft { background: #e3eaf3; color: #3b5373; }
+.pill.approved { background: #dcefdc; color: #1f6b25; }
+.pill.sme_review { background: #fdefd6; color: #92400e; }
+.pill.revised { background: #ede4fb; color: #5b21b6; }
 .pill.rejected { background: #f7e2de; color: #a32b1c; }
 
 .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
@@ -483,4 +503,161 @@ button.danger:disabled { opacity: 0.55; }
   font-size: 13px;
   line-height: 1.55;
   color: var(--text-dim);
+}
+
+/* ── Report ────────────────────────────────────────────────────────── */
+/* Bloom's six levels take the theme's data ramp: each level its own colour,
+   still light-to-dark in Bloom's order. Text flips to light at Evaluate,
+   where the ramp gets dark enough to need it; Analyze's teal keeps dark
+   text, which reads at 6:1 where white would manage only 3:1. */
+
+.report .lede { margin: 0 0 14px; color: var(--text-dim); }
+.report h2 { margin: 0; font-size: 18px; }
+.tone-1 { background: var(--data-1); color: var(--text-strong); }
+.tone-2 { background: var(--data-2); color: var(--text-strong); }
+.tone-3 { background: var(--data-3); color: var(--text-strong); }
+.tone-4 { background: var(--data-4); color: var(--text-strong); }
+.tone-5 { background: var(--data-5); color: #fffdf7; }
+.tone-6 { background: var(--data-6); color: #fffdf7; }
+.tone-0 { background: var(--bg-input); color: var(--text-dim); }
+
+.report-exams { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-exam {
+  display: grid; gap: 1px; text-align: left; font-weight: 400;
+  background: var(--bg-raised); color: var(--text);
+  border: 1px solid var(--line); padding: 8px 13px;
+}
+.report-exam .name { font-weight: 600; color: var(--text-strong); }
+.report-exam .meta { font-size: 11.5px; color: var(--text-faint); }
+.report-exam:hover:not(:disabled) { filter: none; background: var(--bg-hover); }
+.report-exam[aria-pressed="true"] { border-color: var(--data-4); box-shadow: inset 0 0 0 1px var(--data-4); background: #eef6f4; }
+.report-aside { margin: 8px 0 0; font-size: 12px; }
+
+.report-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+  margin: 22px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+.report-head h3 { margin: 0; font-size: 17px; color: var(--text-strong); }
+
+/* Six tiles and six levels: three across, or six on a wide window, so none
+   is ever left alone on a row the way auto-fit leaves the sixth. */
+.report-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.report-tile {
+  --tile: var(--accent);
+  background: color-mix(in srgb, var(--tile) 7%, var(--bg-raised));
+  border: 1px solid color-mix(in srgb, var(--tile) 22%, var(--line));
+  border-top: 3px solid var(--tile);
+  border-radius: var(--radius); padding: 9px 12px 10px;
+}
+/* Ink-weight colours: each reads at 4.5:1 or better as text on its tint. */
+.report-tile.c-indigo { --tile: #4338ca; }
+.report-tile.c-teal   { --tile: #0f766e; }
+.report-tile.c-blue   { --tile: #1d4ed8; }
+.report-tile.c-violet { --tile: #6d28d9; }
+.report-tile.c-amber  { --tile: #b45309; }
+.report-tile.c-green  { --tile: #15803d; }
+.report-tile .v { color: var(--tile); }
+.report-tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+.report-tile .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.report-tile .s { font-size: 12px; color: var(--text-dim); }
+
+.report-section { margin-top: 22px; }
+.report-section h4 {
+  margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-dim);
+}
+
+.bloom-bar { display: flex; gap: 2px; height: 20px; border-radius: var(--radius); overflow: hidden; }
+.bloom-bar.tall { height: 34px; }
+.bloom-seg {
+  display: flex; align-items: center; justify-content: center; min-width: 2px;
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.bloom-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+.bloom-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.bloom-level {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: var(--radius); background: var(--bg);
+}
+.bloom-level.zero { opacity: 0.6; }
+.bloom-level .count { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bloom-level .count small { font-weight: 400; color: var(--text-faint); margin-left: 5px; }
+.swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
+.bloom-split { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 12px; font-size: 12.5px; color: var(--text-dim); }
+.bloom-split strong { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+
+.report-verdict { font-weight: 600; margin-bottom: 8px; }
+.report-verdict.ok, .report-criteria .result.ok { color: var(--ok); }
+.report-verdict.bad, .report-criteria .result.bad { color: var(--bad); }
+.report-criteria .result { font-weight: 600; }
+.report-criteria .result .faint { font-weight: 400; }
+.report-criteria td.num-left { font-variant-numeric: tabular-nums; }
+.report-criteria tbody tr:hover { background: none; }
+.report-none { margin: 0; }
+
+.report-topic {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center;
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+.report-topic:last-child { border-bottom: none; }
+.report-topic .name { font-weight: 600; color: var(--text-strong); }
+.report-topic .faint { font-size: 12px; }
+.report-topic .figure { font-size: 12.5px; color: var(--text-dim); }
+.report-topic .figure strong { color: var(--data-ink); font-size: 14px; }
+.report-topic .bloom-bar { grid-column: 1 / -1; }
+
+.report-pipeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
+.report-stage {
+  background: var(--bg-raised); border: 1px solid var(--line); border-left-width: 4px;
+  border-radius: var(--radius); padding: 8px 11px;
+}
+.report-stage .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
+.report-stage .value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.report-stage .faint { font-size: 11.5px; }
+.report-stage.zero .value { color: var(--text-faint); font-weight: 500; }
+.report-stage.st-draft { border-left-color: var(--data-5); }
+.report-stage.st-sme_review, .report-stage.st-revised { border-left-color: var(--warn); }
+.report-stage.st-approved { border-left-color: var(--ok); }
+.report-stage.st-rejected { border-left-color: var(--bad); }
+.report-stage.st-retired { border-left-color: var(--line); }
+
+.report-findings { display: grid; gap: 8px; }
+.report-finding {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px;
+  background: var(--bg-raised); border: 1px solid var(--line); border-left-width: 4px;
+  border-radius: var(--radius); padding: 10px 12px;
+}
+.report-finding .sev { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); padding-top: 2px; }
+.report-finding .title { font-weight: 600; color: var(--text-strong); }
+.report-finding p { margin: 3px 0 0; font-size: 12.5px; color: var(--text-dim); }
+.report-finding p.action { color: var(--text); }
+.report-finding.sev-act { border-left-color: var(--bad); }
+.report-finding.sev-review { border-left-color: var(--warn); }
+.report-finding.sev-minor { border-left-color: var(--data-3); }
+.report-finding.sev-note { border-left-color: var(--data-5); }
+.report-finding.sev-clear { border-left-color: var(--ok); }
+
+.report-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.report-chip {
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 500; font-size: 12.5px;
+  background: var(--bg-input); color: var(--text); padding: 5px 11px; border-radius: 999px;
+}
+.report-chip:hover:not(:disabled) { filter: none; background: var(--bg-hover); }
+.report-chip[aria-pressed="true"] { background: var(--text-strong); color: var(--bg-raised); }
+.report-table { padding: 0; overflow-x: auto; }
+.report-table td { line-height: 1.45; }
+.report-table td.nowrap { white-space: nowrap; }
+.report-table td.scen { text-align: center; color: var(--text-faint); }
+.report-table td.scen.yes { color: var(--ok); }
+.report-table .mono { margin-top: 2px; }
+.bloom-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.report-multi { margin-left: 6px; }
+.report-count { margin: 6px 0 0; font-size: 12px; }
+
+@media (min-width: 1180px) {
+  .report-tiles, .bloom-levels { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .report-finding { grid-template-columns: minmax(0, 1fr); }
+  .report-tiles, .bloom-levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

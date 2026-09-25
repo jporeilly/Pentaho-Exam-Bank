@@ -23,7 +23,7 @@ from .. import __version__
 from ..core.providers import ProviderError
 from .routers import (
     admin, certifications, courses, docs, exam, export, generation, importing,
-    questions, settings, system,
+    questions, report, settings, system,
 )
 
 log = logging.getLogger(__name__)
@@ -119,6 +119,7 @@ app.include_router(exam.router)
 app.include_router(settings.router)
 app.include_router(admin.router)
 app.include_router(docs.router)
+app.include_router(report.router)
 
 
 # ── the built front end ─────────────────────────────────────────
