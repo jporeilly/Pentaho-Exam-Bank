@@ -286,3 +286,84 @@ def test_a_shared_id_is_still_refused_when_one_course_already_holds_it(courses, 
     assert after.certification_id == before.certification_id, (
         "and did not migrate to beta's certification"
     )
+
+
+# ── What counts as "changed" ─────────────────────────────────────────────
+#
+# `_CONTENT_FIELDS` decides which edits in a course file a sync can see. It
+# is read with getattr against Question, so a name that is not an attribute
+# silently contributes None to every fingerprint and the field it stands for
+# stops being compared at all. That happened: the list held the COLUMN names
+# `key_answer` and `keys_json` while the attributes are `key` and `keys`.
+#
+# No answer-key change was ever lost to it, by luck rather than design - the
+# key and the distractors partition the options, so moving `correct` moves
+# the distractor set and `distractors` caught it. A course-file test cannot
+# tell the two apart for that reason, so the key is pinned directly against
+# `_fingerprint` instead, where nothing can mask it.
+
+
+def test_every_content_field_exists_on_question():
+    """The guard the original defect needed. A misspelt or renamed field must
+    fail here, loudly, rather than by quietly never being compared."""
+    from exam_bank.core.bank import Question
+
+    q = Question(id="probe")
+    missing = [name for name in course_sync._CONTENT_FIELDS if not hasattr(q, name)]
+    assert missing == [], (
+        f"{missing} are not attributes of Question, so getattr returns None for "
+        "every question and these fields are excluded from change detection"
+    )
+
+
+def test_the_answer_key_is_compared_on_its_own_merits():
+    """Pinned against `_fingerprint` directly, because a course-file test
+    cannot show this. Move `correct` in an exam.json and the distractor set
+    moves with it, so `distractors` reports the change whether or not the key
+    is compared at all - which is exactly how the broken name went unnoticed.
+    Here the key is the only thing that differs."""
+    from exam_bank.core.bank import Question
+
+    a = Question(id="q", stem="s", key="Alpha", keys=["Alpha"],
+                 distractors=["Beta", "Gamma"])
+    b = Question(id="q", stem="s", key="Gamma", keys=["Gamma"],
+                 distractors=["Beta", "Gamma"])
+
+    assert course_sync._fingerprint(a) != course_sync._fingerprint(b), (
+        "two questions differing only in which answer is correct must not "
+        "fingerprint alike"
+    )
+
+
+def test_a_changed_bloom_is_seen_as_changed(courses, tmp_db):
+    """A course states its bloom outright, so re-levelling a question without
+    touching its wording is a real edit. It used to fingerprint as unchanged
+    and never reach the bank, which is how a corpus and its bank drift."""
+    course_sync.apply(courses, tmp_db, expect_token=course_sync.plan(courses, tmp_db).token)
+
+    exam = courses / "alpha-practitioner" / "exam.json"
+    data = json.loads(exam.read_text(encoding="utf-8"))
+    qid = data["questions"][0]["id"]
+    data["questions"][0]["bloom"] = "Evaluate"
+    exam.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    p = course_sync.plan(courses, tmp_db)
+    alpha = next(c for c in p.courses if c.slug == "alpha-practitioner")
+    assert alpha.changed == [qid]
+
+    course_sync.apply(courses, tmp_db, expect_token=p.token, overwrite_changed=True)
+    assert tmp_db.get(qid).bloom_level == "Evaluate"
+
+
+def test_the_banks_own_workmanship_is_still_invisible(courses, tmp_db):
+    """The other half of the contract, and the reason this list is curated
+    rather than just every field. Widening it far enough to catch an author's
+    edit must not start reporting the bank's review state as drift."""
+    course_sync.apply(courses, tmp_db, expect_token=course_sync.plan(courses, tmp_db).token)
+
+    for name in ("status", "assigned_sme", "review_history", "created_by",
+                 "reviewed_at", "approved_at", "difficulty"):
+        assert name not in course_sync._CONTENT_FIELDS, (
+            f"{name} is the bank's own, not the course file's - comparing it would "
+            "make every sync offer to undo work nobody asked to undo"
+        )
