@@ -123,7 +123,7 @@ def import_from_csv(path: Path) -> List[Question]:
                 topic=get(["topic", "subject", "category"]),
                 tags=tags,
                 difficulty=get(["difficulty", "level"], "Medium"),
-                bloom_level=get(["bloom", "bloom_level", "taxonomy"], "Understand"),
+                bloom_level=_bloom_of({k: get([k]) for k in _BLOOM_KEYS}),
                 certification_id=get(["certification_id", "certification"]),
                 source_type=get(["source_type"], "pptx"),
                 status=status,
@@ -358,7 +358,7 @@ def import_from_json(path: Path) -> List[Question]:
             explanation=item.get("explanation", ""),
             topic=item.get("topic", ""),
             difficulty=item.get("difficulty", "Medium"),
-            bloom_level=item.get("bloom_level", "Understand"),
+            bloom_level=_bloom_of(item),
             key_source_text=item.get("key_source_text", ""),
             status="draft",
             created_by="Import",
@@ -387,14 +387,27 @@ def is_pcm_exam_json(path: Path) -> bool:
     return isinstance(first, dict) and "prompt" in first and "options" in first
 
 
-def _bloom_of(item: dict) -> str:
-    """The Bloom level a PCM question states, or the default.
+#: The spellings a source may use. `bloom` is what a PCM exam.json writes,
+#: `bloom_level` what this app's own CSV and JSON exports write, and
+#: `taxonomy` what several other question-bank tools call it.
+_BLOOM_KEYS = ("bloom", "bloom_level", "taxonomy")
 
-    Accepts the same three spellings the generic importer does, and
-    ignores anything outside BLOOM_LEVELS rather than writing a value the
-    bank's own editor would refuse.
+
+def _bloom_of(item: dict) -> str:
+    """The Bloom level a question states, or the default.
+
+    Shared by the PCM, CSV and JSON importers so that all three accept the
+    same spellings, match case-insensitively, and refuse anything outside
+    BLOOM_LEVELS rather than writing it through. A bloom_level the bank's
+    own editor would reject is worse than the default, because it looks
+    deliberate.
+
+    CSV read the three spellings but neither normalised case nor validated,
+    so a file saying `apply` wrote `apply` into the column. JSON read only
+    `bloom_level`, so a file using `bloom` - the spelling CSV accepts and
+    PCM writes - silently got the default.
     """
-    for key in ("bloom", "bloom_level", "taxonomy"):
+    for key in _BLOOM_KEYS:
         value = str(item.get(key) or "").strip()
         if value:
             for level in BLOOM_LEVELS:

@@ -310,3 +310,39 @@ class TestOptionOrder:
         }]))
         q = import_from_json(path)[0]
         assert q.option_order == ["C", "A", "B"]
+
+
+class TestBloomOnImport:
+    """Every importer reads the Bloom level the same way (_bloom_of): the same
+    three spellings, any case, and nothing outside BLOOM_LEVELS written through.
+
+    Before, CSV wrote an unvalidated "apply" straight into the column, and JSON
+    read only `bloom_level`, so a file saying `bloom` - what CSV accepts and a
+    PCM exam.json writes - silently took the default."""
+
+    def _csv(self, tmp_path, header, value):
+        path = tmp_path / "b.csv"
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Stem", "Key", "Distractor 1", "Distractor 2", header])
+            writer.writerow(["Q?", "A", "B", "C", value])
+        return import_from_csv(path)[0].bloom_level
+
+    def _json(self, tmp_path, item):
+        path = tmp_path / "b.json"
+        path.write_text(json.dumps([{"stem": "Q?", "key": "A", "distractors": ["B", "C"], **item}]),
+                        encoding="utf-8")
+        return import_from_json(path)[0].bloom_level
+
+    def test_csv_normalises_case(self, tmp_path):
+        assert self._csv(tmp_path, "Bloom", "apply") == "Apply"
+
+    def test_csv_refuses_a_level_that_does_not_exist(self, tmp_path):
+        assert self._csv(tmp_path, "Bloom", "Synthesis") == "Understand"
+
+    def test_json_reads_bloom_as_well_as_bloom_level(self, tmp_path):
+        assert self._json(tmp_path, {"bloom": "Analyze"}) == "Analyze"
+        assert self._json(tmp_path, {"bloom_level": "evaluate"}) == "Evaluate"
+
+    def test_json_refuses_a_level_that_does_not_exist(self, tmp_path):
+        assert self._json(tmp_path, {"bloom_level": "Synthesis"}) == "Understand"

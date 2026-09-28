@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+
+- **Importing a CSV or JSON file reads the Bloom level the way a course
+  import does.** CSV import wrote whatever the file said straight into the
+  column, so `apply` was stored as `apply` — a level the bank's own editor
+  would refuse. JSON import read only `bloom_level`, so a file using `bloom`
+  (the spelling CSV accepts and a course's `exam.json` writes) silently took
+  the default. All three importers now share one reader: `bloom`,
+  `bloom_level` or `taxonomy`, any case, and anything that is not a Bloom
+  level falls back to the default rather than being stored. From the
+  `claude/csv-json-bloom` branch, with tests that fail without it.
 
 ## [1.6.0] - 2026-09-28
 ### Added
