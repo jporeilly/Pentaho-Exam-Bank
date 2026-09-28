@@ -233,9 +233,45 @@ export interface GenerateRequest {
   model?: string;
 }
 
-export interface DocSection {
-  document: string;
+/** A page in the Documentation screen's list. `slug` is its repo-relative
+ *  path without ".md" ("README", "docs/guides/02-courses"). */
+export interface DocItem {
+  slug: string;
+  title: string;
+  section: string;
+  summary: string;
+  words: number;
+  path: string;
+}
+
+export interface DocIndex {
+  sections: Array<{ name: string; items: DocItem[] }>;
+  count: number;
+}
+
+/** A heading and the id links use for it. Ids are decided by the backend,
+ *  once, by GitHub's rule; the screen matches each rendered heading to this
+ *  list by its source `line` rather than slugging the text a second way. */
+export interface DocHeading {
+  level: number;
+  text: string;
+  id: string;
+  line: number;
+}
+
+export interface DocPage extends DocItem {
+  /** The markdown, less the page's own "# " title line. */
+  content: string;
+  headings: DocHeading[];
+}
+
+export interface DocHit {
+  slug: string;
+  page: string;
+  section: string;
   heading: string;
+  /** Where on the page the section starts; "" is the top. */
+  anchor: string;
   snippet: string;
   score: number;
 }
@@ -246,26 +282,68 @@ export interface DocSearchResult {
    *  "not in the docs" rather than "docs not loaded", which otherwise look
    *  identical. */
   sectionsSearched: number;
-  results: DocSection[];
+  results: DocHit[];
 }
 
-export interface DocDocument {
-  document: string;
-  sections: Array<{ heading: string; text: string }>;
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
 }
 
-/** An answer, and what it was built from.
- *
- *  `answered` is false when nothing in the documentation matched — in that
- *  case the model was never called, because asked with nothing to read it
- *  answers from what it knows about apps of this kind, which reads exactly
- *  like an answer about this one. */
-export interface DocAnswer {
+/** What an answer was built from. `A1…` are this app's pages and open in
+ *  Documentation; `P1…` are docs.pentaho.com pages and open in the browser. */
+export interface ChatSource {
+  id: string;
+  kind: "app" | "pentaho";
+  title: string;
+  heading: string;
+  slug: string;
+  anchor: string;
+  url: string;
+  snippet: string;
+  /** Whether the answer cites it. One it was given and did not use is shown
+   *  fainter. */
+  cited: boolean;
+}
+
+export interface ChatGrounding {
+  app: { searched: boolean; found: number };
+  pentaho: {
+    searched: boolean;
+    found: number;
+    host: string;
+    ms?: number;
+    /** Why the search failed; the answer went ahead without it. */
+    error?: string;
+    /** Why it was not searched at all. */
+    reason?: string;
+  };
+}
+
+/** One turn's answer. `answered` is false when neither source found
+ *  anything — the model was then never called, because asked with nothing to
+ *  read it answers from what it knows in general, which reads exactly like an
+ *  answer from the documentation. */
+export interface ChatAnswer {
   answered: boolean;
   answer: string;
-  sources: DocSection[];
+  sources: ChatSource[];
+  grounding: ChatGrounding;
   provider?: string;
   model?: string;
+}
+
+export interface DocsMcpStatus {
+  enabled: boolean;
+  url: string;
+  ok: boolean;
+  server: string;
+  version: string;
+  tools: string[];
+  ms: number | null;
+  /** Whether the tool AI Chat calls is among the server's tools. */
+  searchTool: boolean;
+  error: string;
 }
 
 export interface BackupFile {
@@ -319,6 +397,8 @@ export interface Settings {
   ollama_model: string;
   ollama_enabled: boolean;
   ollama_num_ctx: number;
+  docs_mcp_enabled: boolean;
+  docs_mcp_url: string;
   pcm_courses_dir: string;
   output_folder: string;
   duplicate_threshold: number;
@@ -694,14 +774,27 @@ export const api = {
       body: JSON.stringify({ question_ids, certification_id }),
     }),
 
-  documents: () => request<DocDocument[]>("/api/docs"),
-  searchDocs: (q: string, limit = 8) =>
+  docsIndex: () => request<DocIndex>("/api/docs"),
+  docsPage: (slug: string) => request<DocPage>(`/api/docs/page${query({ slug })}`),
+  searchDocs: (q: string, limit = 20) =>
     request<DocSearchResult>(`/api/docs/search${query({ q, limit })}`),
-  askDocs: (question: string) =>
-    request<DocAnswer>("/api/docs/ask", {
+
+  chat: (
+    messages: ChatTurn[],
+    sources: { appDocs: boolean; pentahoDocs: boolean },
+    signal?: AbortSignal,
+  ) =>
+    request<ChatAnswer>("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ messages, ...sources }),
+      signal,
     }),
+  docsMcpStatus: (url = "") => request<DocsMcpStatus>(`/api/docs-mcp/status${query({ url })}`),
+  /** Opens a docs.pentaho.com page in the system browser. The window has no
+   *  way to do it itself: it is a webview without Tauri's APIs, where a
+   *  target="_blank" link goes nowhere. */
+  openUrl: (url: string) =>
+    request<void>("/api/open-url", { method: "POST", body: JSON.stringify({ url }) }),
 
   databaseStatus: () => request<DatabaseStatus>("/api/admin/database"),
   createBackup: (label = "") =>

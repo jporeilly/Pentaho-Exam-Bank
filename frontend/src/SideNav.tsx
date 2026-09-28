@@ -16,6 +16,7 @@ import {
   ChartColumn,
   Database,
   FileText,
+  LibraryBig,
   MessagesSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -33,6 +34,7 @@ export type Tab =
   | "bank"
   | "report"
   | "import"
+  | "chat"
   | "exam"
   | "publish"
   | "settings"
@@ -64,6 +66,9 @@ export function navGroups(questions?: number): NavGroup[] {
         { id: "courses", label: "Courses", icon: BookOpen },
         { id: "generate", label: "Generate", icon: Sparkles },
         { id: "import", label: "Import", icon: Upload },
+        // Last: not a stage of the work but help with all of it - how the
+        // app does a thing, or what Pentaho does, while writing a question.
+        { id: "chat", label: "AI Chat", icon: MessagesSquare },
       ],
     },
     {
@@ -82,7 +87,7 @@ export function navGroups(questions?: number): NavGroup[] {
       items: [
         { id: "settings", label: "Settings", icon: Settings },
         { id: "admin", label: "Admin", icon: Wrench },
-        { id: "docs", label: "AI & Docs", icon: MessagesSquare },
+        { id: "docs", label: "Documentation", icon: LibraryBig },
       ],
     },
   ];

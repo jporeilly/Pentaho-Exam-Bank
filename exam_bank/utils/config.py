@@ -217,7 +217,17 @@ class AppConfig:
     generation_max_reply_tokens: int = 0
     system_prompt: str = ""
 
-    # MCP documentation servers
+    # The Pentaho product documentation AI Chat searches alongside this app's
+    # own: docs.pentaho.com, through the MCP server GitBook publishes for it.
+    # On by default - it is what makes the chat useful for writing questions
+    # about the products - and one switch in Settings turns it off, after
+    # which nothing is sent to the docs site.
+    docs_mcp_enabled: bool = True
+    docs_mcp_url: str = "https://docs.pentaho.com/~gitbook/mcp"
+
+    # MCP documentation servers - the older, list-shaped setting read only by
+    # question_importer.validate_question_against_docs, which nothing calls.
+    # Not in the settings API. AI Chat uses docs_mcp_* above.
     mcp_servers: List[dict] = field(default_factory=list)
     mcp_enabled: bool = False
 

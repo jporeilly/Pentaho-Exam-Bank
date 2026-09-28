@@ -122,7 +122,8 @@ timestamped backup.
 | Thing | Needed for | Without it |
 | ----- | ---------- | ---------- |
 | **Pentaho Content Manager** `courses/` folder | adopting, generating from and publishing to courses | no course sources or publishing; the bank, import and export still work |
-| **An AI model** | Generate, AI rewrite, AI check, docs answers | no AI; everything else still works |
+| **An AI model** | Generate, AI rewrite, AI check, AI Chat | no AI; everything else still works |
+| **docs.pentaho.com** over HTTPS | AI Chat's answers about Pentaho's products | AI Chat answers from this app's own docs; Settings turns the connection off |
 | **git**, with credentials for the courses repo | *Publish and push* | publishing still writes the course; the push is not offered |
 
 **AI.** Ollama is the default, expected at `http://localhost:11434`. Install it
@@ -133,6 +134,13 @@ reasonable CPU-sized start. A hosted provider needs its key in the environment
 **git.** The push uses git on `PATH`, else the MinGit the Content Manager or the
 Content Editor ships, and the machine's own git credentials. The repo is
 `courses_repo_url` in the settings file, Pentaho-Courses by default.
+
+**docs.pentaho.com.** AI Chat searches Pentaho's product documentation through
+the docs site's MCP server, `https://docs.pentaho.com/~gitbook/mcp`, from the
+app's backend. It needs outbound HTTPS; a proxy set in Windows or in
+`HTTPS_PROXY` is used. **Settings → Pentaho documentation** shows whether the
+server answers, and turns the connection off. Details:
+[`docs/ai/02-pentaho-docs-connection.md`](docs/ai/02-pentaho-docs-connection.md).
 
 ---
 

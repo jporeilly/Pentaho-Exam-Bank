@@ -118,16 +118,25 @@ if ($LASTEXITCODE -ge 8) { throw "robocopy failed staging the UI (exit $LASTEXIT
 # the server cannot import exam_bank whatever directory it is given.
 Copy-Item -LiteralPath (Join-Path $desktopDir "boot.py") -Destination (Join-Path $stageDir "boot.py") -Force
 
-# The documentation the AI & Docs pane reads. core\docs.py loads these
-# from PROJECT_ROOT, which inside an install is the app root - so without
-# them that pane is empty and says the app has no documentation.
-foreach ($doc in @("HOW_TO_GUIDE.md", "README.md", "CHANGELOG.md")) {
+# The documentation the Documentation screen shows and AI Chat answers
+# from. core\docs.py reads it from PROJECT_ROOT, which inside an install is
+# the app root: the five root documents, plus the docs\ folders it serves
+# (ROOT_DOCS and FOLDERS there - keep the two lists in step). Anything else
+# under docs\ is developer material and is not shipped.
+foreach ($doc in @("README.md", "INSTALL.md", "HOW_TO_GUIDE.md", "CHANGELOG.md", "VERSION.md")) {
     $src = Join-Path $repoRoot $doc
     if (Test-Path -LiteralPath $src) {
         Copy-Item -LiteralPath $src -Destination (Join-Path $stageDir $doc) -Force
     } else {
-        Warn "$doc is missing - the AI & Docs pane will not find it"
+        Warn "$doc is missing - the Documentation screen will not list it"
     }
+}
+foreach ($folder in @("guides", "writing", "ai", "admin", "reference")) {
+    $src = Join-Path $repoRoot "docs\$folder"
+    $dst = Join-Path $stageDir "docs\$folder"
+    if (-not (Test-Path -LiteralPath $src)) { throw "docs\$folder is missing - the guide would ship without it" }
+    & robocopy $src $dst "*.md" "/NFL" "/NDL" "/NJH" "/NJS" "/NP" | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy failed staging docs\$folder (exit $LASTEXITCODE)" }
 }
 
 Assert-NothingPrivate "after copying"
@@ -141,6 +150,9 @@ foreach ($must in @((Join-Path $stagePkg "api\app.py"),
                     (Join-Path $stagePkg "core\publisher.py"),
                     (Join-Path $stagePkg "utils\config.py"),
                     (Join-Path $stageUi  "index.html"),
+                    (Join-Path $stageDir "HOW_TO_GUIDE.md"),
+                    (Join-Path $stageDir "docs\guides\01-getting-started.md"),
+                    (Join-Path $stageDir "docs\ai\01-ai-chat.md"),
                     (Join-Path $stageDir "boot.py"))) {
     if (-not (Test-Path -LiteralPath $must)) { throw "staging incomplete: $must is missing" }
 }

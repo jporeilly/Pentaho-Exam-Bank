@@ -6,6 +6,87 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.7.0] - 2026-09-28
+### Added
+
+- **AI Chat (Content → AI Chat): ask about the app, or about Pentaho's
+  products.** A conversation grounded in two sources at once: this app's
+  documentation, and Pentaho's product documentation at docs.pentaho.com,
+  searched through the MCP server GitBook publishes for the docs site. Each
+  retrieved section is numbered — A1, A2 for this app, P1, P2 for Pentaho —
+  and the model is told to answer only from them and cite them. Under every
+  answer the sources are listed by where they came from; one the answer did
+  not cite is shown fainter. An A source opens that page in Documentation at
+  its heading; a P source opens the Pentaho page in the browser.
+
+  The rule the old AI & Docs pane had is kept: if neither search finds
+  anything, the model is not asked, and the reply says what was searched.
+  If docs.pentaho.com cannot be reached, the answer goes ahead from this
+  app's documentation and says so under it. Follow-up questions carry the
+  conversation, and a short follow-up is searched together with the question
+  before it. Two switches choose the sources; at least one stays on. The
+  conversation is kept in the window's storage until **New conversation**;
+  it is not in the bank or its backups.
+
+  Checked live against docs.pentaho.com and gemma4:12b: "Which ports does
+  Pentaho Server use?" was answered from the *Change Ports and URLs* page
+  (8080, 9092, 10000) and cited it; a question about sending an approved
+  question back was answered from the Review page.
+
+- **Documentation (System → Documentation), laid out like OpenSight's.** A
+  sidebar of sections (Start here, Using the Exam Bank, Writing questions,
+  AI, Administration, Reference, Project) that doubles as search; each page
+  with a breadcrumb, word count and reading time; an **On this page** list
+  that follows the scroll; and Previous / Next through the whole set. Links
+  between pages move within the screen, and search opens a page at the
+  heading it matched. The last page read is remembered.
+
+- **The Pentaho docs connection in Settings.** A new **Pentaho
+  documentation** section: a switch (on by default) for whether AI Chat
+  searches docs.pentaho.com, the MCP server's address, and its state —
+  *Connected*, with the server's name and version, its tools and how long it
+  took, or the reason it is not. **Test connection** checks the address in
+  the box before it is saved. Off, nothing is sent to the docs site, and the
+  screen does not contact it on opening either.
+
+- **Three new pages**: *AI Chat*, *The Pentaho docs connection* and a
+  *Glossary* (pool, draw, headroom, Apply+, the certification bars and the
+  rest of the screens' vocabulary).
+
+### Changed
+
+- **The How-To Guide is now seventeen pages under `docs/`.** Its sections
+  were moved verbatim into `docs/guides`, `docs/writing` and `docs/admin` —
+  a script reassembled them and compared line by line — and
+  `HOW_TO_GUIDE.md` is now the hub that links every page, so the guide still
+  reads on GitHub. The *Settings* page was corrected on the way: it named two
+  sections the screen does not have ("AI", "Thresholds"; they are *The
+  model* and *Quality*) and listed them out of order.
+- **The docs are called from the backend, never the window.** GitBook's MCP
+  endpoint sends no CORS headers, so a call from the page is refused before
+  it leaves; the backend is not subject to that. `core/mcp_client.py` gains
+  `probe` and `search`, which raise with a sentence a person can act on
+  rather than returning an empty list, and parses a Server-Sent Events reply
+  whose data spans several lines.
+- **Search understands forms of a word.** "publish push courses repo"
+  ranked a Changelog list above *Publishing to a Course*, which matched none
+  of the four words exactly. A small stemmer now lets publish / publishing /
+  published, course / courses and status / statuses meet.
+- **Heading ids follow GitHub's rule** and are decided once, in the backend;
+  the page matches each heading to its id by source line. A link written as
+  `INSTALL.md#what-it-connects-to` works on GitHub and in the app alike.
+- **Links open in the system browser.** The window is a webview without
+  Tauri's APIs, where a `target="_blank"` link goes nowhere, so the backend
+  opens `https://` pages (`POST /api/open-url`); any other scheme is refused.
+- **The installer ships the whole guide**: the five root documents and the
+  `docs/` folders, and the build fails if the guide's pages are missing.
+
+### Removed
+
+- **The AI & Docs screen and `POST /api/docs/ask`**, replaced by AI Chat and
+  Documentation.
+
 ### Fixed
 
 - **Importing a CSV or JSON file reads the Bloom level the way a course

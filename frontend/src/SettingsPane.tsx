@@ -13,7 +13,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 
-import { api, ApiError, type Settings, type SettingsResponse } from "./api";
+import { api, ApiError, type DocsMcpStatus, type Settings, type SettingsResponse } from "./api";
 
 /** One labelled control.
  *
@@ -67,12 +67,32 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
+  const [mcp, setMcp] = useState<DocsMcpStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  function checkMcp(url = "") {
+    setChecking(true);
+    api
+      .docsMcpStatus(url)
+      .then(setMcp)
+      .catch((e: unknown) =>
+        setMcp({
+          enabled: false, url, ok: false, server: "", version: "", tools: [], ms: null,
+          searchTool: false, error: e instanceof ApiError ? e.message : String(e),
+        }),
+      )
+      .finally(() => setChecking(false));
+  }
+
   useEffect(() => {
     api
       .settings()
       .then((body) => {
         setLoaded(body);
         setDraft(body.settings);
+        // Checked on opening only while it is on: someone who turned it off
+        // may not want the docs site contacted. "Test connection" still asks.
+        if (body.settings.docs_mcp_enabled) checkMcp();
       })
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : String(e)));
   }, []);
@@ -111,6 +131,12 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
       setLoaded(body);
       setDraft(body.settings);
       setSaved(true);
+      if (
+        body.settings.docs_mcp_enabled &&
+        ("docs_mcp_url" in changed || "docs_mcp_enabled" in changed)
+      ) {
+        checkMcp();
+      }
       onSaved?.();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
@@ -247,6 +273,40 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
         )}
       </Section>
 
+      <Section
+        title="Pentaho documentation"
+        hint="AI Chat searches docs.pentaho.com alongside this app's own documentation, through the MCP server GitBook publishes for the docs site."
+      >
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={draft.docs_mcp_enabled}
+            onChange={(e) => set("docs_mcp_enabled", e.target.checked)}
+          />
+          Search docs.pentaho.com from AI Chat
+        </label>
+        <Field
+          label="MCP server"
+          hint={
+            <>
+              A GitBook docs site serves one at <code className="mono">/~gitbook/mcp</code>.
+              Only a question's text is sent to it.
+            </>
+          }
+        >
+          <input
+            value={draft.docs_mcp_url}
+            onChange={(e) => set("docs_mcp_url", e.target.value)}
+          />
+        </Field>
+        <McpStatus
+          status={mcp}
+          checking={checking}
+          enabled={loaded.settings.docs_mcp_enabled}
+          onTest={() => checkMcp(draft.docs_mcp_url)}
+        />
+      </Section>
+
       <Section title="Where things are">
         <Field
           label="Content Manager courses"
@@ -369,6 +429,76 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
         {saved && !dirty && <span className="muted">Saved</span>}
         {dirty && <span className="faint">Unsaved changes.</span>}
       </div>
+    </div>
+  );
+}
+
+/** The docs server's state: connected (who, how fast, which tools) or why not. */
+function McpStatus({
+  status,
+  checking,
+  enabled,
+  onTest,
+}: {
+  status: DocsMcpStatus | null;
+  checking: boolean;
+  enabled: boolean;
+  onTest: () => void;
+}) {
+  let line: React.ReactNode;
+  if (checking) {
+    line = <span className="faint">Checking…</span>;
+  } else if (!status) {
+    line = enabled ? (
+      <span className="faint">Not checked yet.</span>
+    ) : (
+      <span className="faint">Off: AI Chat does not contact the docs site.</span>
+    );
+  } else if (status.ok) {
+    line = (
+      <>
+        <span className="dot ok" />
+        <span>
+          <strong>Connected</strong> — {status.server || "MCP server"}
+          {status.version && ` ${status.version}`}, answered in {status.ms} ms
+        </span>
+      </>
+    );
+  } else {
+    line = (
+      <>
+        <span className="dot bad" />
+        <span>
+          <strong>Not connected</strong> — {status.error}
+        </span>
+      </>
+    );
+  }
+
+  return (
+    <div className="mcp-status" aria-live="polite">
+      <div className="mcp-line">
+        {line}
+        <span className="spacer" />
+        <button type="button" className="secondary" onClick={onTest} disabled={checking}>
+          Test connection
+        </button>
+      </div>
+      {status?.ok && !checking && (
+        <div className="mcp-detail faint">
+          <span className="mono">{status.url}</span>
+          <span>
+            Tools: {status.tools.join(", ") || "none"}.{" "}
+            {status.searchTool ? (
+              "Search tool available."
+            ) : (
+              <span className="advice">
+                No searchDocumentation tool, so AI Chat cannot search this server.
+              </span>
+            )}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

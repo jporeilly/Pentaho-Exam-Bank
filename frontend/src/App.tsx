@@ -4,7 +4,8 @@ import { api, ApiError, type Health } from "./api";
 import { BankPane } from "./BankPane";
 import { CoursesPane } from "./CoursesPane";
 import { AdminPane } from "./AdminPane";
-import { DocsPane } from "./DocsPane";
+import { ChatPane } from "./ChatPane";
+import { DocsPane, type DocTarget } from "./DocsPane";
 import { ExamPane } from "./ExamPane";
 import { GeneratePane } from "./GeneratePane";
 import { ImportPane } from "./ImportPane";
@@ -17,6 +18,12 @@ export function App() {
   const [tab, setTab] = useState<Tab>("courses");
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState<string>("");
+  // A page for Documentation to open, asked for by an AI Chat source.
+  const [docTarget, setDocTarget] = useState<DocTarget | null>(null);
+  const openDoc = useCallback((slug: string, anchor: string) => {
+    setDocTarget((t) => ({ slug, anchor, seq: (t?.seq ?? 0) + 1 }));
+    setTab("docs");
+  }, []);
 
   const loadHealth = useCallback(() => {
     api
@@ -135,7 +142,10 @@ export function App() {
         {tab === "publish" && <PublishPane openCourse={openCourse} />}
         {tab === "settings" && <SettingsPane onSaved={loadHealth} />}
         {tab === "admin" && <AdminPane onChanged={loadHealth} />}
-        {tab === "docs" && <DocsPane />}
+        {tab === "chat" && <ChatPane onOpenDoc={openDoc} />}
+        {tab === "docs" && (
+          <DocsPane target={docTarget} onTargetDone={() => setDocTarget(null)} />
+        )}
         </main>
       </div>
 

@@ -177,9 +177,11 @@ def chat(
     model: str = "",
     base_url: str = "",
     timeout: float = 120.0,
+    num_ctx: int = 0,
 ) -> str:
     """Multi-turn chat from the active provider. ``messages`` is a list of
-    ``{role, content}`` with roles 'user' / 'assistant'."""
+    ``{role, content}`` with roles 'user' / 'assistant'. ``num_ctx`` is
+    Ollama-only, as in :func:`generate`."""
     provider = active_provider()
     system = system or DEFAULT_SYSTEM_PROMPT
     chosen = (model or "").strip() or model_for(provider)
@@ -194,6 +196,7 @@ def chat(
                 system=system,
                 base_url=base_url or config.ollama_url,
                 timeout=timeout,
+                num_ctx=num_ctx,
             )
         except Exception as e:  # noqa: BLE001
             raise ProviderError(f"Ollama request failed: {e}")

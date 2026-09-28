@@ -3,7 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsPane } from "./SettingsPane";
-import type { Settings, SettingsResponse } from "./api";
+import type { DocsMcpStatus, Settings, SettingsResponse } from "./api";
+
+const MCP_OK: DocsMcpStatus = {
+  enabled: true, url: "https://docs.pentaho.com/~gitbook/mcp", ok: true,
+  server: "Pentaho MCP Server", version: "0.27.2",
+  tools: ["searchDocumentation", "getPage", "askQuestion", "sendFeedback"],
+  ms: 640, searchTool: true, error: "",
+};
 
 function settings(over: Partial<Settings> = {}): Settings {
   return {
@@ -15,6 +22,8 @@ function settings(over: Partial<Settings> = {}): Settings {
     ollama_model: "gemma4:12b",
     ollama_enabled: true,
     ollama_num_ctx: 8192,
+    docs_mcp_enabled: true,
+    docs_mcp_url: "https://docs.pentaho.com/~gitbook/mcp",
     pcm_courses_dir: "C:/Projects/Pentaho-Content-Manager/courses",
     output_folder: "C:/Projects/Pentaho-Exam-Bank/assets/questions",
     duplicate_threshold: 0.85,
@@ -55,10 +64,18 @@ function response(over: Partial<SettingsResponse> = {}): SettingsResponse {
 function mockApi(handlers: {
   get?: SettingsResponse;
   put?: SettingsResponse | { status: number; detail: string };
+  mcp?: DocsMcpStatus;
 } = {}) {
   const calls: Array<{ method: string; body: unknown }> = [];
-  vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => {
+  const probes: string[] = [];
+  vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
+    if (String(url).includes("/api/docs-mcp/status")) {
+      probes.push(new URL(String(url), "http://x").searchParams.get("url") ?? "");
+      return Promise.resolve(new Response(JSON.stringify(handlers.mcp ?? MCP_OK), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      }));
+    }
     calls.push({ method, body: init?.body ? JSON.parse(String(init.body)) : null });
 
     const json = (body: unknown, status = 200) =>
@@ -75,7 +92,7 @@ function mockApi(handlers: {
     }
     return json(handlers.get ?? response());
   });
-  return calls;
+  return Object.assign(calls, { probes });
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -217,5 +234,66 @@ describe("saving", () => {
 
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+});
+
+describe("the Pentaho docs connection", () => {
+  it("shows the server answering: who, how fast, which tools", async () => {
+    mockApi();
+    render(<SettingsPane />);
+
+    expect(await screen.findByText(/Pentaho MCP Server 0\.27\.2, answered in 640 ms/)).toBeInTheDocument();
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByText(/Tools: searchDocumentation, getPage, askQuestion, sendFeedback\./)).toBeInTheDocument();
+    expect(screen.getByText(/Search tool available/)).toBeInTheDocument();
+  });
+
+  it("says why it is not connected", async () => {
+    mockApi({ mcp: { ...MCP_OK, ok: false, tools: [], ms: null, searchTool: false, error: "Could not reach the server: getaddrinfo failed." } });
+    render(<SettingsPane />);
+
+    expect(await screen.findByText("Not connected")).toBeInTheDocument();
+    expect(screen.getByText(/getaddrinfo failed/)).toBeInTheDocument();
+  });
+
+  it("warns when the server has no search tool", async () => {
+    mockApi({ mcp: { ...MCP_OK, tools: ["getPage"], searchTool: false } });
+    render(<SettingsPane />);
+
+    expect(await screen.findByText(/AI Chat cannot search this server/)).toBeInTheDocument();
+  });
+
+  it("tests the address typed in the box, before it is saved", async () => {
+    const calls = mockApi();
+    render(<SettingsPane />);
+    const box = await screen.findByRole("textbox", { name: "MCP server" });
+
+    await userEvent.clear(box);
+    await userEvent.type(box, "https://other.example/~gitbook/mcp");
+    await userEvent.click(screen.getByRole("button", { name: "Test connection" }));
+
+    await screen.findByText("Connected");
+    expect(calls.probes.at(-1)).toBe("https://other.example/~gitbook/mcp");
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+  });
+
+  it("does not contact the docs site on opening when the connection is off", async () => {
+    const calls = mockApi({ get: response({ settings: settings({ docs_mcp_enabled: false }) }) });
+    render(<SettingsPane />);
+
+    expect(await screen.findByText(/Off: AI Chat does not contact the docs site/)).toBeInTheDocument();
+    expect(calls.probes).toHaveLength(0);
+    expect(screen.getByRole("checkbox", { name: "Search docs.pentaho.com from AI Chat" })).not.toBeChecked();
+  });
+
+  it("saves the switch", async () => {
+    const calls = mockApi();
+    render(<SettingsPane />);
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Search docs.pentaho.com from AI Chat" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    const put = calls.find((c) => c.method === "PUT");
+    expect(put?.body).toEqual({ settings: { docs_mcp_enabled: false } });
   });
 });

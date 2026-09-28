@@ -197,3 +197,96 @@ def test_a_snippet_is_cut_at_a_word(sections):
 
     assert long_text.snippet.endswith("…")
     assert not long_text.snippet.rstrip("…").endswith("wor")
+
+
+# --- stemming ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("a, b", [
+    ("publish", "publishing"), ("publish", "published"), ("course", "courses"),
+    ("approve", "approved"), ("status", "statuses"), ("write", "writing"),
+    ("backup", "backups"), ("class", "classes"),
+])
+def test_forms_of_one_word_meet(a, b):
+    """Found on the real docs: "publish push courses repo" ranked a Changelog
+    list above *Publishing to a Course*, which matched none of the words exactly."""
+    assert docs.stem(a) == docs.stem(b)
+
+
+@pytest.mark.parametrize("word", ["bank", "11", "api", "use"])
+def test_short_words_and_numbers_are_left_alone(word):
+    assert docs.stem(word) == word
+
+
+def test_stemming_lets_a_plural_query_find_a_singular_heading(sections):
+    assert headings(docs.search("backups", sections))[0] == "Database Backup & Restore"
+
+
+# --- pages ---------------------------------------------------------------------
+
+
+@pytest.fixture
+def tree(tmp_path):
+    (tmp_path / "README.md").write_text("# Pentaho Exam Bank\n\nWhat it is.\n", encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [1.0.0]\n\nFirst.\n", encoding="utf-8")
+    for folder, name, text in [
+        ("guides", "02-second.md", "# Second\n\nTwo.\n"),
+        ("guides", "01-first.md", "# First\n\n| a | b |\n\n**The** first [page](x.md).\n"),
+        ("admin", "01-settings.md", "No title line here.\n"),
+        ("elsewhere", "01-x.md", "# Not served\n"),
+    ]:
+        (tmp_path / "docs" / folder).mkdir(parents=True, exist_ok=True)
+        (tmp_path / "docs" / folder / name).write_text(text, encoding="utf-8")
+    return tmp_path
+
+
+def test_pages_run_start_here_then_folders_then_project(tree):
+    slugs = [p.slug for p in docs.list_pages(tree)]
+
+    assert slugs == ["README", "docs/guides/01-first", "docs/guides/02-second",
+                     "docs/admin/01-settings", "CHANGELOG"]
+
+
+def test_a_page_without_a_title_line_is_named_from_its_file(tree):
+    page = docs.find_page("docs/admin/01-settings", tree)
+
+    assert page.title == "Settings"
+
+
+def test_a_summary_skips_tables_and_strips_markdown(tree):
+    assert docs.find_page("docs/guides/01-first", tree).summary == "The first page."
+
+
+def test_find_page_only_finds_listed_pages(tree):
+    assert docs.find_page("docs/elsewhere/01-x", tree) is None
+    assert docs.find_page("../README", tree) is None
+
+
+# --- headings ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("text, anchor", [
+    ("What it connects to", "what-it-connects-to"),
+    ("Courses: Adopting a Course's Exam", "courses-adopting-a-courses-exam"),
+    ("AI & Docs", "ai--docs"),
+    ("The `exam.json` file", "the-examjson-file"),
+    ("[1.6.0] - 2026-09-28", "160---2026-09-28"),
+])
+def test_heading_ids_follow_githubs_rule(text, anchor):
+    """So README.md#what-it-connects-to works on GitHub and in the app alike."""
+    assert docs.slugify_heading(text) == anchor
+
+
+def test_a_hash_inside_a_code_block_is_not_a_heading():
+    text = "## Real\n\n```bash\n# a comment\n```\n\n### Also real\n"
+
+    assert [h["text"] for h in docs.headings(text)] == ["Real", "Also real"]
+
+
+def test_sections_carry_their_page_and_anchor():
+    found = docs.split_sections("Page", "Intro.\n\n## Deep Dive\n\nBody.\n", "docs/guides/01-x")
+
+    assert [(s.heading, s.anchor, s.slug) for s in found] == [
+        ("Page", "", "docs/guides/01-x"),
+        ("Deep Dive", "deep-dive", "docs/guides/01-x"),
+    ]

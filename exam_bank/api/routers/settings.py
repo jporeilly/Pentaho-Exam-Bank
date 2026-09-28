@@ -62,6 +62,15 @@ def _directory(value: str, label: str) -> str:
     return text
 
 
+def _web_address(value: Any, label: str) -> str:
+    """An http(s) URL, or a message saying it is not one. An empty value is
+    refused too: the switch beside it is how the connection is turned off."""
+    text = str(value or "").strip()
+    if not text.lower().startswith(("http://", "https://")) or len(text) < 12:
+        raise HTTPException(400, f"{label} must be an http:// or https:// address, not {text!r}.")
+    return text
+
+
 def _fraction(value: Any, label: str) -> float:
     number = float(value)
     if not 0.0 <= number <= 1.0:
@@ -91,6 +100,8 @@ EDITABLE: dict[str, Callable[[Any], Any]] = {
     "ollama_model": lambda v: str(v).strip(),
     "ollama_enabled": bool,
     "ollama_num_ctx": lambda v: max(0, int(v)),
+    "docs_mcp_enabled": bool,
+    "docs_mcp_url": lambda v: _web_address(v, "The Pentaho docs MCP server"),
     "pcm_courses_dir": lambda v: _directory(v, "The Content Manager courses directory"),
     "output_folder": lambda v: str(v).strip(),
     "duplicate_threshold": lambda v: _fraction(v, "The duplicate threshold"),

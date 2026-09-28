@@ -200,3 +200,31 @@ def test_nothing_is_reported_as_overridden_when_the_environment_is_clean(
         monkeypatch.delenv(name, raising=False)
 
     assert client.get("/api/settings").json()["envOverridden"] == []
+
+
+# --- the Pentaho docs connection -------------------------------------------------
+
+
+def test_the_docs_connection_is_on_by_default_and_shown():
+    from exam_bank.utils.config import AppConfig
+
+    fresh = AppConfig()
+    assert fresh.docs_mcp_enabled is True
+    assert fresh.docs_mcp_url == "https://docs.pentaho.com/~gitbook/mcp"
+
+
+def test_the_docs_connection_can_be_turned_off_and_readdressed(client):
+    response = put(client, docs_mcp_enabled=False, docs_mcp_url="https://other.example/~gitbook/mcp")
+
+    assert response.status_code == 200
+    body = response.json()["settings"]
+    assert body["docs_mcp_enabled"] is False
+    assert body["docs_mcp_url"] == "https://other.example/~gitbook/mcp"
+
+
+@pytest.mark.parametrize("url", ["", "docs.pentaho.com", "ftp://docs.pentaho.com/mcp", "file:///etc/passwd"])
+def test_a_docs_address_that_is_not_http_is_refused(client, url):
+    response = put(client, docs_mcp_url=url)
+
+    assert response.status_code == 400
+    assert "Pentaho docs MCP server" in response.json()["detail"]

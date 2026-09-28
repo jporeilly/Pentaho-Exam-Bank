@@ -11,8 +11,9 @@ learner VM: the questions it produces are, the app is not.
 
 It is a Windows desktop app — a Tauri shell over a FastAPI backend and a React
 interface, with its own Python — installed per machine. For how to use it, see
-[`HOW_TO_GUIDE.md`](HOW_TO_GUIDE.md), which the app's **AI & Docs** screen also
-reads and answers from. For installing it, see [`INSTALL.md`](INSTALL.md).
+[`HOW_TO_GUIDE.md`](HOW_TO_GUIDE.md) and the pages under [`docs/`](docs/), which
+the app shows under **System → Documentation** and **AI Chat** answers from.
+For installing it, see [`INSTALL.md`](INSTALL.md).
 
 ## What it is for
 
@@ -76,13 +77,14 @@ needs a human read before it is approved.
 | **Courses** | The Content Manager's courses and their pools; adopt their exams into the bank |
 | **Generate** | Write questions from a course with the AI model, then choose which to keep |
 | **Import** | Bring questions in from a file, with a gradeability and duplicate check first |
+| **AI Chat** | Ask about the app or about Pentaho's products; answers come from this app's docs and docs.pentaho.com, with their sources |
 | **Bank** | Search and filter the questions; edit, save, AI rewrite and check, move through review |
 | **Report** | One exam at a time against its certification bar |
 | **Exam paper** | A printable, topic-weighted PDF exam |
 | **Publish** | Write the questions into a course, and push them to the courses repo |
-| **Settings** | Your name, the AI provider and model, folders, defaults, thresholds |
+| **Settings** | Your name, the AI provider and model, the Pentaho docs connection, folders, defaults, thresholds |
 | **Admin** | Backups and restore; bulk deletion |
-| **AI & Docs** | Ask, search or read this documentation |
+| **Documentation** | This guide, page by page: sections, search, and a table of contents per page |
 
 ## Question model
 
@@ -136,7 +138,8 @@ prompt, which is dropped.
 | Thing | For | Without it |
 | ----- | --- | ---------- |
 | **Content Manager** courses folder | adopting, generating from and publishing to courses | no course sources or publishing; the bank, import and export still work |
-| **An AI model** — Ollama (local, free), or a hosted provider with its API key | Generate, AI rewrite, AI check, docs answers | no AI; everything else still works |
+| **An AI model** — Ollama (local, free), or a hosted provider with its API key | Generate, AI rewrite, AI check, AI Chat | no AI; everything else still works |
+| **docs.pentaho.com** — its GitBook MCP server | AI Chat's answers about Pentaho's products | AI Chat answers from this app's docs only; Settings turns it off |
 | **git** and the courses repo | *Publish and push* | publishing still writes the course; the push is offered only when it can succeed |
 
 The installer finds the Content Manager's courses at install time; Settings

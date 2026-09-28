@@ -315,7 +315,7 @@ deleted. Not a 22-component big bang — ported in value order:
 | 6 | Import | QTI / Moodle / CSV / spreadsheet |
 | 7 | Exam Builder | PDF papers (fpdf) |
 | 8 | Admin | DB backup/restore |
-| 9 | AI & Docs | MCP docs grounding |
+| 9 | AI & Docs | MCP docs grounding — shipped in 1.7.0 as two screens: AI Chat (grounded in the app's docs and docs.pentaho.com) and Documentation |
 
 **Exit after 4:** the app is usable end to end for course questions without the long tail.
 **Done:** all nine, plus the launcher switch. The API serves `frontend/dist` at its own root, so

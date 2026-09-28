@@ -24,9 +24,9 @@ import { SideNav, type Tab } from "./SideNav";
 
 const HEADINGS = ["Content", "Questions", "System"];
 const ITEMS = [
-  "Courses", "Generate", "Import",
+  "Courses", "Generate", "Import", "AI Chat",
   "Bank", "Report", "Exam paper", "Publish",
-  "Settings", "Admin", "AI & Docs",
+  "Settings", "Admin", "Documentation",
 ];
 
 beforeEach(() => window.localStorage.clear());
@@ -153,5 +153,24 @@ describe("when localStorage is unavailable", () => {
     mount();
     await userEvent.click(screen.getByTitle("Collapse the navigation"));
     expect(rail().className).toContain("is-collapsed");
+  });
+});
+
+describe("AI Chat and Documentation", () => {
+  it("puts AI Chat under Content and Documentation under System", async () => {
+    const { navGroups } = await import("./SideNav");
+    const groups = Object.fromEntries(navGroups().map((g) => [g.heading, g.items.map((i) => i.label)]));
+
+    expect(groups.Content).toContain("AI Chat");
+    expect(groups.System).toContain("Documentation");
+    expect(Object.values(groups).flat()).not.toContain("AI & Docs");
+  });
+
+  it("opens each with its own tab", async () => {
+    const onSelect = mount();
+    await userEvent.click(screen.getByRole("button", { name: /AI Chat/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Documentation/ }));
+
+    expect(onSelect.mock.calls.map((c) => c[0])).toEqual(["chat", "docs"]);
   });
 });
