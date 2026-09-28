@@ -7,6 +7,45 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-28
+### Fixed
+
+- **A "Choose one" typed into a question no longer reaches the learner
+  twice.** The Content Manager counts each question's correct answers and
+  adds its own "(Choose one)" / "(Choose two)", stripping any bracketed
+  count the author wrote. An unbracketed one got through: three questions
+  edited in review on 28 Sep 2026 ended "…(PDI)? ↵ Choose One.", and
+  published as they stood a learner would have read
+  "…(PDI)? Choose One. (Choose one)".
+
+  The stem is now the question only, and the count is presentation, one
+  rule in `core/stem_text.py` applied wherever a stem crosses a boundary:
+
+  - **Publish** writes the question only, whatever the stem ends with —
+    bracketed or not, "Choose", "Select" or "Pick", "Select all that
+    apply". A course file written before the rule is cleaned on its next
+    publish, and the plan lists those prompts as changed.
+  - **Course sync** compares stems as the question only, so a bank stem
+    ending "(Choose one.)" and the prompt it was published as are the same
+    question, not an edit to offer back.
+  - **The printed exam** adds its own count to a multi-select and no longer
+    prints the stem's as well.
+  - **Generation and AI assist** store the question only. The model is
+    still asked to state its count, so it says what it meant; the count is
+    dropped on the way in.
+  - **The checker** warned that a multi-select stem "should indicate how
+    many to choose", which is what pulled counts into stems in the first
+    place. It now warns the other way: a stem ending in a count is flagged,
+    because the course adds its own and Publish removes it.
+
+  A sentence that carries the question is never mistaken for a count:
+  "Choose two steps that run in parallel." stays whole, and a stem that is
+  nothing but a count is left alone rather than published empty.
+
+  Publish, sync, generation, AI assist and the checker were each watched
+  failing with their wiring removed. The printed exam has no test that
+  reads its text; it uses the same function.
+
 ## [1.5.0] - 2026-09-25
 ### Added
 

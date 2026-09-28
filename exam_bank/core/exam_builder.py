@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from fpdf import FPDF
 
 from .bank import _TOPIC_ORDER, Question, ExamBankDB
+from .stem_text import question_only
 
 
 @dataclass(frozen=True)
@@ -537,7 +538,9 @@ def generate_exam_pdf(
         # Stem text in dark
         pdf.set_text_color(30, 30, 30)
         pdf.set_font("Helvetica", "B", 10)
-        stem_text = _latin1_safe(q.stem)
+        # The paper adds its own count, so a count already in the stem
+        # would print twice.
+        stem_text = _latin1_safe(question_only(q.stem))
         if num_correct > 1:
             stem_text += f"  (Choose {num_correct})"
         pdf.multi_cell(0, 6, f" {stem_text}")

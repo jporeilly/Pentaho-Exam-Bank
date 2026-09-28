@@ -87,7 +87,8 @@ def test_a_rewrite_is_returned_and_nothing_is_saved(client, question, db_path, m
 
     r = client.post("/api/questions/q-ai/ai/rewrite", json={})
     assert r.status_code == 200
-    assert r.json()["proposed"]["stem"] == "What is a transformation responsible for? (Choose one.)"
+    # The model is asked to state its count; the bank keeps the question only.
+    assert r.json()["proposed"]["stem"] == "What is a transformation responsible for?"
 
     database = ExamBankDB(db_path)
     try:

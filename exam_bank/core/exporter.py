@@ -20,6 +20,7 @@ except ImportError:
     HAS_DOCX = False
 
 from .bank import Question
+from .stem_text import question_only
 
 
 def export_csv(questions: List[Question], path: Path):
@@ -126,6 +127,10 @@ def pcm_exam_items(
     PCM's renderer expects each question as ``{ prompt, options[],
     correct | correctIndices, ... }``. Single-select emits ``correct`` (one
     index); multi-select emits ``correctIndices`` (graded all-or-nothing).
+
+    ``prompt`` is the question only. PCM adds its own "(Choose N)" from the
+    answer count, so a count left in the stem would be shown twice - see
+    :mod:`.stem_text`.
     """
     # Honour the pool's authored order when every question carries one (a
     # pool adopted from a course). The bank returns questions newest-first,
@@ -159,7 +164,7 @@ def pcm_exam_items(
 
         correct_idx = [_idx_of(t) for t in q.correct_answers]
 
-        item = {"id": q.id, "prompt": q.stem, "options": options}
+        item = {"id": q.id, "prompt": question_only(q.stem), "options": options}
         if q.scenario:
             item["scenario"] = q.scenario
         if q.topic:

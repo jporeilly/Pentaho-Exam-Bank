@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from .stem_text import has_choose_directive
+
 
 BLOOM_LEVELS = [
     "Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create",
@@ -304,12 +306,13 @@ class Question:
                 break
 
         # ── Warnings (advisory) ──────────────────────────────
-        if self.question_type == "multi":
-            if self.keys and not any(w in self.stem.lower() for w in [
-                "choose two", "choose three", "choose four",
-                "which two", "which three", "select two", "select three",
-            ]):
-                warnings.append("Multi-select stem should indicate how many to choose")
+        # The stem is the question only. Courses and the printed exam count
+        # the keys and add their own "(Choose N)", so a count written here
+        # would be read twice; Publish removes it. Said here so the author
+        # knows before they publish, not after. See stem_text.
+        if has_choose_directive(self.stem):
+            warnings.append("Stem ends with a 'Choose …' count; the course adds its own, "
+                            "so Publish removes it")
 
         if self.source_type == "pptx":
             if not self.key_source_text:

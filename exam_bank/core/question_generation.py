@@ -10,9 +10,10 @@ from ..utils.config import config
 from .bank import Question
 from .source import SlideInfo
 from .generation_prompts import (
-    GENERATION_SYSTEM_PROMPT, _build_question_specs, build_prompt, _num_word,
+    GENERATION_SYSTEM_PROMPT, _build_question_specs, build_prompt,
 )
 from .generation_parsing import _extract_json_array, _extract_json_object, validate_key_against_notes
+from .stem_text import question_only
 
 
 # Warnings that the AI can fix by rewriting the question. Length balance is
@@ -220,17 +221,11 @@ def generate_questions(
         if q_type == "multi" and q.keys and not q.key:
             q.key = q.keys[0]
 
-        # Auto-append "(Choose N.)" to ALL stems if AI forgot it
-        stem = q.stem.strip()
-        if "choose" not in stem.lower():
-            if q_type == "multi" and q.keys and len(q.keys) >= 2:
-                choose_word = _num_word(len(q.keys))
-            else:
-                choose_word = "one"
-            if stem.endswith("?"):
-                q.stem = f"{stem} (Choose {choose_word}.)"
-            else:
-                q.stem = f"{stem} (Choose {choose_word}.)"
+        # The stem is the question only. The model is asked to end each stem
+        # with "(Choose N.)" so it states the count it meant, but the count is
+        # presentation - the course and the printed exam add their own from
+        # the keys - so it is dropped here rather than stored. See stem_text.
+        q.stem = question_only(q.stem.strip())
 
         # Anchor the question to the syllabus. key_source_text is the passage
         # showing the TOPIC is part of the course, so this checks the question

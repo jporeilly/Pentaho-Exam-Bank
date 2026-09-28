@@ -164,6 +164,29 @@ def test_approving_an_adopted_question_does_not_make_it_look_changed(courses, tm
     assert beta.changed == [] and beta.unchanged == ["b1"]
 
 
+def test_a_count_directive_alone_is_not_a_change(courses, tmp_db):
+    """Publishing drops a count from the stem (see stem_text), so a bank stem
+    and the prompt it was published as can differ by exactly that. Counted as
+    a difference, every question published from the bank would come back from
+    its own course looking edited."""
+    course_sync.apply(courses, tmp_db, expect_token=course_sync.plan(courses, tmp_db).token)
+
+    q = tmp_db.get("b1")
+    q.stem = "What is Beta?\nChoose One."
+    tmp_db.save(q)
+
+    p = course_sync.plan(courses, tmp_db)
+    beta = next(c for c in p.courses if c.slug == "beta-practitioner")
+    assert beta.changed == [] and beta.unchanged == ["b1"]
+
+    # ...while a real rewording beside the count still is one.
+    q.stem = "What is Beta, exactly?\nChoose One."
+    tmp_db.save(q)
+    p = course_sync.plan(courses, tmp_db)
+    beta = next(c for c in p.courses if c.slug == "beta-practitioner")
+    assert beta.changed == ["b1"]
+
+
 def test_a_stale_token_is_refused(courses, tmp_db):
     """Between looking and acting, somebody may have pulled the courses repo."""
     p = course_sync.plan(courses, tmp_db)

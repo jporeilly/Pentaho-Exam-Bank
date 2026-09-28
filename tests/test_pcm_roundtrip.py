@@ -40,7 +40,7 @@ EXAM = {
     "questions": [
         {
             "id": "q-preview",
-            "prompt": "Which step reads a delimited file? (Choose one.)",
+            "prompt": "Which step reads a delimited file?",
             "options": ["CSV file input", "Table output", "Sort rows", "Dummy"],
             "scenario": "A developer is building their first transformation.",
             "module": "See It Work",
@@ -50,7 +50,7 @@ EXAM = {
         },
         {
             "id": "m1-q2",
-            "prompt": "Which two steps write to a database? (Choose two.)",
+            "prompt": "Which two steps write to a database?",
             "options": ["Table output", "Insert / Update", "Sort rows", "Dummy"],
             "scenario": "A developer needs to persist rows.",
             "module": "Getting Started",
@@ -114,6 +114,22 @@ def test_round_trip_preserves_every_question(exam_path, tmp_path):
         questions_per_attempt=EXAM["questionsPerAttempt"],
         shuffle=EXAM["shuffle"],
     )
+    after = json.loads(out.read_text(encoding="utf-8"))
+
+    assert after["questions"] == EXAM["questions"]
+
+
+def test_a_count_in_a_prompt_is_the_one_thing_the_round_trip_drops(tmp_path):
+    """A prompt ending "(Choose one.)" comes back as the question only - PCM
+    adds its own count - and every other field survives untouched."""
+    exam = json.loads(json.dumps(EXAM))
+    for item in exam["questions"]:
+        item["prompt"] += " (Choose one.)"
+    src = tmp_path / "exam.json"
+    src.write_text(json.dumps(exam), encoding="utf-8")
+
+    out = tmp_path / "out.json"
+    export_pcm_exam_json(import_from_pcm_exam_json(src), out, title=EXAM["title"])
     after = json.loads(out.read_text(encoding="utf-8"))
 
     assert after["questions"] == EXAM["questions"]

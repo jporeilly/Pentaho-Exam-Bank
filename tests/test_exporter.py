@@ -228,7 +228,8 @@ class TestPCMExamJSON:
     def test_single_select_maps_to_correct_index(self, tmp_path, questions):
         exam = self._exam(tmp_path, questions)
         q = exam["questions"][0]
-        assert q["prompt"] == questions[0].stem
+        # The question only: PCM adds "(Choose one)" itself.
+        assert q["prompt"] == "Which tool is best for ETL?"
         assert q["module"] == "Data Integration"
         assert q["scenario"] == "Company A needs to migrate data."
         # key is at the index it occupies in options

@@ -75,15 +75,28 @@ class TestValidation:
         errors, _ = q.validate_detailed()
         assert any("at least 2" in e for e in errors)
 
-    def test_multi_stem_warning(self):
+    def test_a_count_in_the_stem_is_flagged(self):
+        # Courses and the printed exam add their own count; Publish drops this.
         q = Question(
-            stem="Which option is best?",
+            stem="Which options are best?\nChoose two.",
             question_type="multi",
             keys=["A", "B"],
             distractors=["C", "D"],
         )
         _, warnings = q.validate_detailed()
-        assert any("indicate how many" in w for w in warnings)
+        assert any("'Choose" in w and "Publish removes it" in w for w in warnings)
+
+    def test_a_multi_select_needs_no_count_in_its_stem(self):
+        # The old rule asked for "Choose two" in every multi-select stem,
+        # which pulled a count the learner would then read twice.
+        q = Question(
+            stem="Which options are best?",
+            question_type="multi",
+            keys=["A", "B"],
+            distractors=["C", "D"],
+        )
+        _, warnings = q.validate_detailed()
+        assert not any("Choose" in w or "how many" in w for w in warnings)
 
     def test_unbalanced_length_warning(self):
         q = Question(

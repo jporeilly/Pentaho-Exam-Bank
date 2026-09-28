@@ -23,11 +23,14 @@ EXAM = {
     "webhookUrl": "https://script.google.com/macros/s/EXAMPLE/exec",
     "webhookSecret": "pcm_exam_example",
     "intake": {"optional": True, "trackResults": True},
+    # A course prompt holds the question only - PCM adds the count. The bank's
+    # stems below still carry "(Choose one.)", as older bank questions do, so
+    # every test here also checks that a count is never mistaken for an edit.
     "questions": [
-        {"id": "m1-q0", "prompt": "Question 0? (Choose one.)",
+        {"id": "m1-q0", "prompt": "Question 0?",
          "options": ["Right", "Wrong"], "correct": 0, "module": "Getting Started",
          "source": "Lab 1 - Getting Started"},
-        {"id": "m1-q1", "prompt": "Question 1? (Choose one.)",
+        {"id": "m1-q1", "prompt": "Question 1?",
          "options": ["Right", "Wrong"], "correct": 0, "module": "Getting Started",
          "source": "Lab 1 - Getting Started"},
     ],
@@ -122,6 +125,55 @@ def test_a_plan_reports_what_would_change(client, course, cert, db_path):
     assert plan["beforeCount"] == 2 and plan["afterCount"] == 2
 
 
+def test_a_count_in_the_bank_stem_is_not_a_change(client, course, cert):
+    """The bank's stems end "(Choose one.)" and the course's prompts do not.
+    Publishing drops the count, so the two say the same thing."""
+    plan = client.post(
+        "/api/courses/demo-course/exam/questions/plan", json=body(cert)).json()
+
+    assert plan["changed"] == []
+    assert plan["isNoop"] is True
+
+
+def test_a_bare_count_typed_in_review_never_reaches_the_course(client, course, cert, db_path):
+    """Found in the live bank, 28 Sep 2026: "Choose One." typed on its own line
+    during review. PCM strips only a bracketed count, so published as it was,
+    a learner would have read "...? Choose One. (Choose one)"."""
+    database = ExamBankDB(db_path)
+    question = database.get("m1-q0")
+    question.stem = "Reworded? \nChoose One."
+    database.save(question)
+    database.close()
+
+    plan = client.post(
+        "/api/courses/demo-course/exam/questions/plan", json=body(cert)).json()
+    client.post("/api/courses/demo-course/exam/questions",
+                json=body(cert, expect_sha=plan["sourceSha"]))
+
+    after = json.loads((course / "exam.json").read_text(encoding="utf-8"))
+    assert after["questions"][0]["prompt"] == "Reworded?"
+
+
+def test_publishing_cleans_a_count_the_course_file_carried(client, course, cert):
+    """A course written before the rule holds "(Choose one.)" in its prompts.
+    The next publish leaves the question only, and says so in the plan."""
+    exam = json.loads((course / "exam.json").read_text(encoding="utf-8"))
+    for item in exam["questions"]:
+        item["prompt"] += " (Choose one.)"
+    (course / "exam.json").write_text(
+        json.dumps(exam, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+    plan = client.post(
+        "/api/courses/demo-course/exam/questions/plan", json=body(cert)).json()
+    assert plan["changed"] == [{"id": "m1-q0", "fields": ["prompt"]},
+                               {"id": "m1-q1", "fields": ["prompt"]}]
+
+    client.post("/api/courses/demo-course/exam/questions",
+                json=body(cert, expect_sha=plan["sourceSha"]))
+    after = json.loads((course / "exam.json").read_text(encoding="utf-8"))
+    assert [q["prompt"] for q in after["questions"]] == ["Question 0?", "Question 1?"]
+
+
 def test_publishing_without_a_plan_is_refused(client, course, cert):
     """expect_sha is the plan's hash, so a client cannot write without having
     asked what it was about to change."""
@@ -156,7 +208,7 @@ def test_plan_then_publish_writes_the_questions(client, course, cert, db_path):
     assert response.status_code == 200
     assert response.json()["written"] is True
     after = json.loads((course / "exam.json").read_text(encoding="utf-8"))
-    assert after["questions"][0]["prompt"] == "Reworded? (Choose one.)"
+    assert after["questions"][0]["prompt"] == "Reworded?"
 
 
 def test_the_editors_settings_survive_the_round_trip(client, course, cert):

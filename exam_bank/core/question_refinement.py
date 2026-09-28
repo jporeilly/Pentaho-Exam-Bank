@@ -10,6 +10,7 @@ from . import providers
 from .bank import Question
 from .generation_prompts import GENERATION_SYSTEM_PROMPT, _num_word
 from .generation_parsing import _extract_json_array, _extract_json_object
+from .stem_text import question_only
 
 
 def regen_stem(
@@ -59,12 +60,8 @@ Return ONLY a JSON object:
 
     if "stem" in data:
         question.scenario = data.get("scenario", question.scenario)
-        question.stem = data["stem"]
-        # Ensure "(Choose ...)" is present
-        stem = question.stem.strip()
-        if "choose" not in stem.lower():
-            word = _num_word(num_correct) if num_correct > 1 else "one"
-            question.stem = f"{stem} (Choose {word}.)"
+        # The question only: the count is presentation (see stem_text).
+        question.stem = question_only(str(data["stem"]).strip())
         return question.stem
     return None
 
@@ -257,7 +254,7 @@ Return ONLY a JSON object with these keys:
     # caller decides what to keep; this function only proposes.
     proposed = _copy.deepcopy(question)
     proposed.scenario = data.get("scenario", proposed.scenario)
-    proposed.stem = data.get("stem", proposed.stem)
+    proposed.stem = question_only(data.get("stem", proposed.stem))
     if is_multi and "keys" in data:
         proposed.keys = data["keys"]
         proposed.key = data["keys"][0] if data["keys"] else proposed.key
@@ -423,7 +420,7 @@ Return ONLY a JSON object with these keys:
     try:
         data = json.loads(text[start:end + 1])
         question.scenario = data.get("scenario", question.scenario)
-        question.stem = data.get("stem", question.stem)
+        question.stem = question_only(data.get("stem", question.stem))
         if is_multi and "keys" in data:
             question.keys = data["keys"]
             question.key = data["keys"][0] if data["keys"] else question.key

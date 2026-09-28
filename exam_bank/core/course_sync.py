@@ -34,6 +34,7 @@ from typing import Any
 
 from .bank import Certification, ExamBankDB, Question
 from .question_importer import import_from_pcm_exam_json
+from .stem_text import question_only
 from .validation import problems_with
 
 #: Only these fields are compared when deciding whether a question has moved.
@@ -69,9 +70,15 @@ _CONTENT_FIELDS = (
 
 
 def _fingerprint(q: Question) -> str:
+    # The stem is compared as the question only. Publishing drops a count
+    # directive, so a bank stem ending "(Choose one.)" and the course prompt
+    # it was published as say the same thing, and must not come back from
+    # the course looking changed.
     parts = []
     for name in _CONTENT_FIELDS:
         value = getattr(q, name, None)
+        if name == "stem":
+            value = question_only(value or "")
         parts.append(json.dumps(value, sort_keys=True, default=str))
     return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
 
