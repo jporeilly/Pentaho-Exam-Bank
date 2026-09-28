@@ -1,0 +1,13 @@
+{"course":"architect-install-certified","note":"An INSTALL certification: versions, ports and paths ARE the competence. The recall floor does most of the work here and that is correct - applying 'weighted to Apply+' bluntly would gut a valid exam.","questions":[
+{"id":"install-m1-q1","level":"Remember","verdict":"rewrite","why":"Naming two products is the weakest recall; nothing breaks if you cannot list them."},
+{"id":"install-m1-q2","level":"Remember","verdict":"keep","why":"RECALL FLOOR. Wrong OS baseline breaks the archive install outright."},
+{"id":"install-m1-q3","level":"Remember","verdict":"keep","why":"RECALL FLOOR. Evaluation licence length has commercial consequence, like pdi-2hr-lab's q-licence."},
+{"id":"install-m2-q1","level":"Remember","verdict":"keep","why":"RECALL FLOOR. Wrong Java version and the server will not start."},
+{"id":"install-m2-q2","level":"Remember","verdict":"keep","why":"RECALL FLOOR, and the scenario is doing real work - the distro default (16) is deliberately NOT the supported answer."},
+{"id":"install-m2-q3","level":"Remember","verdict":"keep","why":"RECALL FLOOR. Default Tomcat port is daily operational knowledge."},
+{"id":"install-m2-q4","level":"Remember","verdict":"rewrite","why":"Procedure recall - 'what the install procedure creates'. The account NAME is arbitrary convention, not knowledge."},
+{"id":"install-m2-q5","level":"Remember","verdict":"keep","why":"RECALL FLOOR. $PENTAHO_BASE is needed to script anything."},
+{"id":"install-m2-q6","level":"Remember","verdict":"keep","why":"RECALL FLOOR. Pan/Kitchen is the operational entry point for scheduled execution."},
+{"id":"install-m2-q7","level":"Understand","verdict":"keep","why":"BORDERLINE. Matching a role description to Carte is architectural comprehension, not naming."},
+{"id":"install-m2-q8","level":"Remember","verdict":"rewrite","why":"Recognition of plugin short-names against invented ones. Tests familiarity with a list, not architecture."},
+{"id":"install-m2-q9","level":"Understand","verdict":"keep","why":"Jackrabbit backed by an RDBMS is a real architectural fact an architect reasons from."}]}
