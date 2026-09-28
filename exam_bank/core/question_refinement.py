@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from . import providers
 from .bank import Question
-from .generation_prompts import GENERATION_SYSTEM_PROMPT, _num_word
+from .generation_prompts import GENERATION_SYSTEM_PROMPT, SCENARIO_AND_STEM_RULES
 from .generation_parsing import _extract_json_array, _extract_json_object
 from .stem_text import question_only
 
@@ -22,7 +22,6 @@ def regen_stem(
     """Regenerate only the stem (and scenario) — all choices stay locked."""
     is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
     keys_json = json.dumps(question.keys) if is_multi else json.dumps([question.key])
-    num_correct = len(question.keys) if is_multi else 1
 
     prompt = f"""Rewrite ONLY the stem and scenario for this certification exam question.
 All answer choices must remain EXACTLY the same — do NOT change them.
@@ -35,13 +34,13 @@ All answer choices must remain EXACTLY the same — do NOT change them.
 
 RULES:
 - Write a new scenario and stem that still leads to the same correct answer(s).
-- The stem must end with "(Choose {_num_word(num_correct) if num_correct > 1 else 'one'}.)"
+{SCENARIO_AND_STEM_RULES}
 - Keep the same difficulty and cognitive level.
 - The new stem must still be answerable from the key_source_text.
 
 Return ONLY a JSON object:
 ```json
-{{"scenario": "...", "stem": "...? (Choose {_num_word(num_correct) if num_correct > 1 else 'one'}.)"}}
+{{"scenario": "Statements that set the scene.", "stem": "Only the question?"}}
 ```"""
 
     try:
@@ -213,7 +212,11 @@ IMPORTANT:
 - The key_source_text must still reference the original source material.
 - ALL choices (keys + distractors) must be similar in length and detail.
 - The explanation MUST address each choice by its text content (NOT by letter A/B/C/D, since choices are shuffled).
-- For multi-select: stem must end with "(Choose N.)"
+
+The scenario and the stem do different jobs - keep them apart. If the current
+scenario asks a question, or the current stem opens with statements, move the
+statements into the scenario and leave only the question in the stem:
+{SCENARIO_AND_STEM_RULES}
 
 Return ONLY a JSON object with these keys:
 ```json
@@ -386,7 +389,7 @@ INSTRUCTIONS:
 - ALL choices (keys + distractors) must be similar in length and detail.
 - The explanation MUST address each choice by its actual text content (NOT by letter A/B/C/D).
   Format: "'choice text' — Correct/Incorrect: <reason>." for each key and distractor.
-- For multi-select: stem must end with "(Choose N.)"
+{SCENARIO_AND_STEM_RULES}
 - NEVER mention slides, speaker notes, or source material.
 
 Return ONLY a JSON object with these keys:

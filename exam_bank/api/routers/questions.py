@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from ...core import providers, question_refinement
 from ...core.bank import STATUS_TRANSITIONS, STATUSES, ExamBankDB
+from ...core.stem_text import form_notes
 from ...core.validation import problems_with
 from ...utils.config import config
 from ..deps import get_db, question_json
@@ -207,6 +208,14 @@ def ai_rewrite_question(
         "problems": [
             {"field": p.field, "message": p.message} for p in problems_with(proposed)
         ],
+        # Where the proposal breaks the house form - a question in the
+        # scenario, statements in the stem. Advice, not a block: a model can
+        # ignore the rule it was given, and the author should see that
+        # before taking the rewrite rather than after.
+        "notes": [
+            {"field": f, "message": m}
+            for f, m in form_notes(proposed.scenario, proposed.stem)
+        ],
         "unchanged": question_json(proposed) == question_json(question),
     }
 
@@ -238,5 +247,8 @@ def ai_review_question(
         # nothing to a model and is worth showing beside its opinion.
         "gradeable": [
             {"field": p.field, "message": p.message} for p in problems_with(question)
+        ],
+        "form": [
+            {"field": f, "message": m} for f, m in form_notes(question.scenario, question.stem)
         ],
     }

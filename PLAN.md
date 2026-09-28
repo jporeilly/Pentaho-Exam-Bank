@@ -1,6 +1,8 @@
 # Pentaho Exam Bank — restack and course integration
 
-**Status:** proposed, not started
+**Status:** done — delivered through 1.0.0 (the installer, 2026-09-24). Kept as
+the record of the decisions and why; for how the app behaves now, see
+[`README.md`](README.md) and [`HOW_TO_GUIDE.md`](HOW_TO_GUIDE.md).
 **Date:** 2026-09-19
 **Applies to:** `C:\Projects\Pentaho-Question-Bank` (→ `Pentaho-Exam-Bank`)
 

@@ -1,12 +1,13 @@
 # Version
 
-**Current: 1.5.1**
+**Current: 1.6.0**
 
 **Status:** released. The app is a Tauri desktop shell over a FastAPI backend
 and a React UI, shipping as a per-machine Windows installer with its own
-vendored Python. It generates certification questions from PCM course content
-or the Pentaho docs, holds them in a SQLite bank with a review lifecycle,
-publishes back into a live course's `exam.json` as a merge, and exports to QTI
+vendored Python. It adopts and generates certification questions from PCM
+course content, holds them in a SQLite bank with a review lifecycle, reports
+each exam against its certification bar, publishes back into a live course's
+`exam.json` as a merge and pushes it to the courses repo, and exports to QTI
 2.1, Moodle XML, CSV, DOCX and PDF exam papers.
 
 1.0.0 is the condition this file set out in advance and did not move: *one

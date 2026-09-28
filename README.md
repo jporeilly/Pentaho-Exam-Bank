@@ -1,29 +1,29 @@
 # Pentaho Exam Bank
 
-Writes certification exam questions from Pentaho course content, holds them in
-a reviewable bank, and publishes them where they are needed — as a Content
-Manager `exam.json`, a QTI or Moodle import, or a printed exam paper.
+Holds the certification exam questions for the Pentaho Content Manager's
+courses in a reviewable bank: adopts a course's exam, lets you generate,
+review and edit questions, reports each exam against the bar for its
+certification level, and publishes the approved questions back into the
+course — and on to the courses repo that learners' apps sync from.
 
-An **authoring tool that runs on your machine only.** It is never shipped to a
+An **authoring tool for the author's machine.** It is never shipped to a
 learner VM: the questions it produces are, the app is not.
 
-> **The restack is in progress.** The interface is now React over a FastAPI
-> backend, served as one app on one port from a checkout. What remains is the
-> Tauri packaging and a Windows installer, and PPTX and vision-model
-> generation are being dropped along the way. See
-> [`PLAN.md`](PLAN.md) for the phases and [`VERSION.md`](VERSION.md) for where
-> it is on the road to 1.0.
+It is a Windows desktop app — a Tauri shell over a FastAPI backend and a React
+interface, with its own Python — installed per machine. For how to use it, see
+[`HOW_TO_GUIDE.md`](HOW_TO_GUIDE.md), which the app's **AI & Docs** screen also
+reads and answers from. For installing it, see [`INSTALL.md`](INSTALL.md).
 
 ## What it is for
 
-A course's exam lives in its `exam.json` inside the Content Manager. Until now
-nothing owned the questions in it — the Content Editor deliberately edits only
-the delivery and grading settings, and this bank never kept what it exported.
-So a pool, once written, could not practically be changed.
+A course's exam lives in its `exam.json` inside the Content Manager. Before
+this app nothing owned the questions in it — the Content Editor deliberately
+edits only the delivery and grading settings — so a pool, once written, could
+not practically be changed.
 
 This app is the other half. It **adopts** a course's existing questions, lets
-you generate, review and edit them, and hands them back untouched in every
-respect you did not mean to change.
+you work on them, and hands them back untouched in every respect you did not
+mean to change.
 
 | Owner | Keys in a course's `exam.json` |
 | ----- | ------------------------------ |
@@ -32,56 +32,73 @@ respect you did not mean to change.
 
 Two writers, one file, no overlapping keys.
 
-## Getting started
-
-See [`INSTALL.md`](INSTALL.md). In short: Python 3.10+, then `install.bat`
-once and `run.bat` to start the app — the interface on
-<http://localhost:7777> and the HTTP API on <http://localhost:7788>, whose
-interactive documentation is at `/docs`. `run-api.bat` starts the API alone.
-
-To bring a course's existing questions into the bank:
-
-```bat
-venv\Scripts\python.exe scripts\migrate_pcm_exams.py pdi-2hr-lab
-```
-
-Ids, authored order and citations are preserved — see
-[Round-tripping a course](#round-tripping-a-course) for why that matters.
-
-For a walkthrough of the app itself, [`HOW_TO_GUIDE.md`](HOW_TO_GUIDE.md) covers
-each tab in detail. The Admin tab reads it in place, so it is available without
-leaving the app.
-
 ## Where questions come from
 
-| Source | What it reads |
-| ------ | ------------- |
-| **Content Manager course** | A course's lab `guide.md` files, split into sections. Pick a whole course or a single lab. |
-| **Pentaho docs (MCP)** | The published documentation, over the GitBook MCP endpoint. |
-| **An existing course exam** | A course's `exam.json`, adopted into the bank for editing. |
-| **PowerPoint** | Speaker notes, with slide images for vision-capable models. *Slated for removal in 0.2.0.* |
-| **Import** | CSV, JSON, Excel, QTI 2.1, Moodle XML. |
+| Source | How |
+| ------ | --- |
+| **An existing course exam** | Courses → *Check courses for questions* → *Adopt into the bank*. Ids, order and citations are kept. |
+| **A Content Manager course** | Generate: a course's lab guides, a whole course or one lab, written into questions by the configured AI model. |
+| **A file** | Import: CSV, Excel, QTI 2.1, Moodle XML, plain text, a course `exam.json`, or this bank's JSON export. |
 
-Generation is grounded: the correct answer must be traceable to the source
-text, and the model is made to quote the passage that supports it
-(`key_source_text`) so the claim can be checked rather than trusted.
+A generated question is anchored to the course: the model quotes the passage
+showing its topic is taught there (`key_source_text`). That checks the
+question is on the syllabus, not that its answer is right — every question
+needs a human read before it is approved.
 
 ## What it does
 
-- **Generate** — scenario-based questions with per-question control over
-  single/multi-select, key and distractor counts, Bloom's level and difficulty;
-  batch generation across a whole course with balanced format distribution.
-- **Refine** — regenerate just a stem, one key or one distractor; AI grammar
-  and syntax checks per field; auto-generated explanations that address every
-  choice.
-- **Review** — a lifecycle of `draft → sme_review → revised → approved →
-  retired`, every transition logged with who, when and why. Field-level version
-  history with colour-coded diffs.
-- **Guard quality** — fuzzy duplicate detection on stems, validation of the key
-  against its source, and warnings for weak distractors.
-- **Publish** — see [Export formats](#export-formats).
-- **Administer** — analytics on status, difficulty, Bloom's and topic coverage;
-  database browse, backup and restore.
+- **Adopt** a course's exam, and re-sync it later without overwriting edits
+  made in the bank unless you ask.
+- **Generate** scenario-based questions with control over single- and
+  multi-select shapes, Bloom's levels and difficulty, and review them before
+  anything is saved.
+- **Edit and review** — a lifecycle of `draft → sme_review → revised →
+  approved`, with `rejected` and `retired` beside it. An approved question can
+  be sent back to review or to draft when it changes. Every transition is
+  logged with who, when and why, and every field edit with its old and new
+  value.
+- **Guard the form** — the editor notes a scenario that asks a question, a
+  question that opens with statements, and a stray "Choose …" count, as you
+  type. AI rewrite is told the same form, and says when it broke it.
+- **Report** each exam against its certification bar: Bloom depth, scenario
+  coverage, draw headroom, the review pipeline, and findings to act on.
+- **Publish** the approved questions into a course's `exam.json` as a merge,
+  and push them to the courses repo with the course version bumped and the
+  change logged.
+- **Print** a topic-weighted PDF exam paper, and **export** to QTI 2.1, Moodle
+  XML, DOCX, CSV, JSON and text.
+- **Back up and restore** the bank, and delete in bulk with a count first.
+
+## Screens
+
+| Screen | Contents |
+| ------ | -------- |
+| **Courses** | The Content Manager's courses and their pools; adopt their exams into the bank |
+| **Generate** | Write questions from a course with the AI model, then choose which to keep |
+| **Import** | Bring questions in from a file, with a gradeability and duplicate check first |
+| **Bank** | Search and filter the questions; edit, save, AI rewrite and check, move through review |
+| **Report** | One exam at a time against its certification bar |
+| **Exam paper** | A printable, topic-weighted PDF exam |
+| **Publish** | Write the questions into a course, and push them to the courses repo |
+| **Settings** | Your name, the AI provider and model, folders, defaults, thresholds |
+| **Admin** | Backups and restore; bulk deletion |
+| **AI & Docs** | Ask, search or read this documentation |
+
+## Question model
+
+- **Scenario** — one to three statements that set the scene. Never a question.
+- **Stem** — only the question, ending in "?". No statements before it and no
+  "(Choose …)" count: the course adds its own from the number of correct
+  answers, and publishing removes any that is left in a stem.
+- **Key(s)** — the correct answer or answers: true, and about the concept.
+- **Distractors** — plausible wrong answers of similar length to the key; never
+  "All of the above".
+- **Explanation** — addresses every choice by its text rather than its letter,
+  because choices are shuffled.
+- **`key_source_text`** — for a generated question, the passage showing its
+  topic is taught. Internal; never shown to a candidate.
+- **Metadata** — topic, difficulty, Bloom's level, certification, status, tags,
+  provenance, and `pool_order` when the question came from a course pool.
 
 ## Round-tripping a course
 
@@ -96,80 +113,11 @@ A course pool carries three things that are easy to destroy and hard to notice:
 - **Order decides what gets asked** in a pool that draws N questions with
   shuffle off.
 
-All three survive adoption and export, covered by `tests/test_pcm_roundtrip.py`.
-
-> **Nothing publishes back to a course yet.** The export writes a fresh
-> `exam.json` from a fixed parameter list, so it would drop `intake` — the
-> pre-exam candidate form config the Content Editor owns. Publishing must merge
-> into the existing file instead. See [`PLAN.md`](PLAN.md) §3.4.
-
-## Layout
-
-```
-Pentaho-Exam-Bank/
-├── install.bat                  # One-click install
-├── run.bat                      # Launch the app (API + built front end, port 7788)
-├── run-api.bat                  # Launch: API alone, without opening a browser
-├── _venv.bat                    # Shared venv check/repair for both launchers
-│
-├── exam_bank/               # The package (the repo root is the source root)
-│   ├── __init__.py              #   __version__ — the source of truth
-│   ├── core/                    #   Business logic, no UI
-│   │   ├── bank.py              #     SQLite store + Question/Certification models
-│   │   ├── question_generation.py, generation_prompts.py, generation_parsing.py
-│   │   ├── question_refinement.py   #  regenerate, improve, QA, explanations
-│   │   ├── question_importer.py #     CSV/JSON/Excel/QTI/Moodle/exam.json import
-│   │   ├── exporter.py          #     every output format
-│   │   ├── exam_builder.py      #     topic-weighted PDF exam papers
-│   │   ├── pcm_reader.py        #     reads a course's guide.md as sections
-│   │   ├── ollama_client.py, mcp_client.py
-│   │   └── pptx_*.py            #     slated for removal in 0.2.0
-│   ├── api/                     #   FastAPI over core, and the app's only surface
-│   │   ├── __main__.py          #     `python -m exam_bank.api [--open]`
-│   │   ├── jobs.py              #     background jobs; generation takes minutes
-│   │   └── routers/             #     system, questions, certifications, courses,
-│   │                            #     generation, export, import, exam, publish,
-│   │                            #     settings, admin, docs
-│   └── utils/config.py          #   settings, and PROJECT_ROOT for everything else
-│
-├── frontend/                    # React + Vite; `npm run build` produces dist/,
-│   └── src/                     #   which the API serves at its own root
-│
-├── icons/                       # The app icon; see "The icon" below
-├── scripts/migrate_pcm_exams.py # Adopt a course's exam into the bank
-├── tests/                       # 278 tests
-└── assets/                      # Database, config, caches — gitignored
-```
-
-The repo root is the source root, so `exam_bank` imports as a package from
-there. **Do not add an `__init__.py` at the repo root** — that is what used to
-make `C:\Projects` itself a source root, and it made the folder name
-load-bearing.
-
-## Tabs
-
-| Tab | Contents |
-| --- | -------- |
-| **Settings** | SME identity, bulk reassignment, export defaults, display, quality thresholds, maintenance |
-| **Generate** | Source and generation settings, then the generated questions editor |
-| **Import** | File import with validation, per-question reassignment, AI actions before committing |
-| **Bank** | Dashboard, search and filters, bulk actions, export, backup/restore, student preview |
-| **AI & Docs** | Ollama and MCP server configuration, plus a documentation chat |
-| **Exam** | Exam paper builder — topic weighting, PDF options, preview |
-| **Admin** | Analytics dashboard, database browser, bulk operations, in-app documentation |
-
-## Question model
-
-- **Scenario** — realistic context, one to three sentences.
-- **Stem** — a direct question ending in "?" with an explicit "(Choose one/two.)".
-- **Key(s)** — the correct answer, which must come from the source material.
-- **Distractors** — two to four plausible wrong answers; no "All of the above".
-- **Explanation** — addresses every choice, by its text rather than its letter,
-  because choices get shuffled.
-- **`key_source_text`** — the exact quote backing the key. Internal, for
-  validation; never shown to a candidate.
-- **Metadata** — topic, difficulty, Bloom's level, certification, status, tags,
-  provenance, and `pool_order` when the question came from a course pool.
+All three survive adoption and publishing, covered by
+`tests/test_pcm_roundtrip.py`. Publishing merges into the course's existing
+file, so the Content Editor's keys — `intake` included — are left as they are.
+The one thing a round trip changes on purpose is a "(Choose …)" count in a
+prompt, which is dropped.
 
 ## Export formats
 
@@ -187,14 +135,48 @@ load-bearing.
 
 | Thing | For | Without it |
 | ----- | --- | ---------- |
-| **Content Manager** checkout | course content and course exams | course sources unavailable; everything else works |
-| **Ollama** (local, free) | generation and refinement | no AI; the bank, import and export still work |
-| **Pentaho docs MCP** | grounding in the published docs | no docs-sourced generation |
+| **Content Manager** courses folder | adopting, generating from and publishing to courses | no course sources or publishing; the bank, import and export still work |
+| **An AI model** — Ollama (local, free), or a hosted provider with its API key | Generate, AI rewrite, AI check, docs answers | no AI; everything else still works |
+| **git** and the courses repo | *Publish and push* | publishing still writes the course; the push is offered only when it can succeed |
 
-The Content Manager is found as the sibling `..\Pentaho-Content-Manager`, or at
-the path set in the config. **No resolved course slug is ever cached** — a
-stored slug that quietly stopped resolving is how this app's original
+The installer finds the Content Manager's courses at install time; Settings
+shows the folder and can change it. **No resolved course slug is ever cached**
+— a stored slug that quietly stopped resolving is how this app's original
 certifications died when the courses were renamed under them.
+
+## Layout
+
+```
+Pentaho-Exam-Bank/
+├── install.bat, run.bat, run-api.bat   # Run from a checkout (see INSTALL.md)
+│
+├── exam_bank/                   # The package (the repo root is the source root)
+│   ├── __init__.py              #   __version__ — the source of truth
+│   ├── core/                    #   Business logic, no UI
+│   │   ├── bank.py              #     SQLite store, Question/Certification, the lifecycle
+│   │   ├── course_sync.py       #     adopting and re-syncing course exams
+│   │   ├── publisher.py, distribution.py  # publish into a course; push to the courses repo
+│   │   ├── report.py            #     the Report's arithmetic and the certification bars
+│   │   ├── stem_text.py         #     the question form: counts, scenarios, statements
+│   │   ├── question_generation.py, generation_prompts.py, question_refinement.py
+│   │   ├── question_importer.py #     CSV/JSON/Excel/QTI/Moodle/text/exam.json import
+│   │   ├── exporter.py          #     every output format
+│   │   ├── exam_builder.py      #     topic-weighted PDF exam papers
+│   │   └── pcm_reader.py        #     reads a course's guide.md as sections
+│   ├── api/                     #   FastAPI over core, and the app's only surface
+│   └── utils/config.py          #   settings, and where state lives
+│
+├── frontend/                    # React + Vite; built into dist/, served by the API
+├── desktop/                     # The Tauri shell and the Windows installer build
+├── icons/                       # The app icon; see "The icon" below
+├── scripts/                     # bump.py (versions), migrate_pcm_exams.py, changelog.py
+└── tests/                       # pytest; the frontend's tests live beside its sources
+```
+
+The repo root is the source root, so `exam_bank` imports as a package from
+there. **Do not add an `__init__.py` at the repo root** — that is what used to
+make `C:\Projects` itself a source root, and it made the folder name
+load-bearing.
 
 ## The icon
 
@@ -256,6 +238,7 @@ just stops being ours.
 
 ```bat
 venv\Scripts\python.exe -m pytest -q
+cd frontend && npx vitest run
 ```
 
 Version policy and the release steps are in [`VERSION.md`](VERSION.md); the

@@ -349,10 +349,10 @@ describe("question formats", () => {
     mockApi();
     render(<GeneratePane />);
     await userEvent.click(await screen.findByRole("button", { name: "Add a format" }));
-    expect(screen.getByText("“Choose one.”")).toBeInTheDocument();
+    expect(screen.getByText("shown as “(Choose one)”")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Add a format" }));
-    expect(screen.getByText("“Choose two.”")).toBeInTheDocument();
+    expect(screen.getByText("shown as “(Choose two)”")).toBeInTheDocument();
   });
 
   it("the author sets TOTAL options, not distractors", async () => {

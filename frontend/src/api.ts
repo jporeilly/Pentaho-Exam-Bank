@@ -551,11 +551,16 @@ export interface AiReview {
   /** The bank's own deterministic validator, which owes nothing to a
    *  model and is worth showing beside its opinion. */
   gradeable: { field: string; message: string }[];
+  /** Where the question breaks the house form (core/stem_text.py): a
+   *  question in the scenario, statements or a count in the stem. */
+  form?: { field: string; message: string }[];
 }
 
 export interface AiRewrite {
   proposed: Question;
   problems: { field: string; message: string }[];
+  /** The same form notes, for the proposal: a model can ignore the rule. */
+  notes?: { field: string; message: string }[];
   unchanged: boolean;
 }
 

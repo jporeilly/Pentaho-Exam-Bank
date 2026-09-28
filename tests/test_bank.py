@@ -164,6 +164,30 @@ class TestLifecycle:
         assert sample_question.status == "rejected"
         assert sample_question.reject_reason == "Poor distractors"
 
+    @pytest.mark.parametrize("back_to", ["sme_review", "draft"])
+    def test_an_approved_question_can_be_sent_back(self, sample_question, back_to):
+        # Edited after approval, it needs reviewing again - asked for 28 Sep
+        # 2026, when approved could only be retired.
+        sample_question.transition("sme_review", sme_name="A")
+        sample_question.transition("approved", sme_name="B")
+        assert sample_question.approved_at
+
+        sample_question.transition(back_to, sme_name="C", comment="Reworded")
+
+        assert sample_question.status == back_to
+        assert sample_question.approved_at == "", "no longer approved, so no approval date"
+        last = sample_question.review_history[-1]
+        assert (last["from_status"], last["to_status"]) == ("approved", back_to)
+        assert any(h["to_status"] == "approved" for h in sample_question.review_history), (
+            "the history still says it was approved once"
+        )
+
+    def test_retiring_an_approved_question_keeps_its_approval_date(self, sample_question):
+        sample_question.transition("sme_review")
+        sample_question.transition("approved")
+        sample_question.transition("retired")
+        assert sample_question.approved_at
+
     def test_invalid_transition_raises(self, sample_question):
         with pytest.raises(ValueError, match="Cannot transition"):
             sample_question.transition("approved")  # draft -> approved not allowed

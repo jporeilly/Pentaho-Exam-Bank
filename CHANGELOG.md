@@ -7,6 +7,66 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-28
+### Added
+
+- **An approved question can be sent back.** Approved used to lead only to
+  Retired, so a question reworded after approval kept a status it no longer
+  earned. It can now go to **SME Review** or **Draft** as well. Its approval
+  date is cleared; the review history still says when it was approved and who
+  sent it back. Retiring keeps the date.
+- **The scenario and the question are kept apart — by the AI and by the
+  editor.** The house form is that a scenario is one to three statements that
+  set the scene, never a question, and the question is only the question. It is
+  now written down once (`SCENARIO_AND_STEM_RULES`) and given to every prompt
+  that writes a question: generation, AI rewrite, the AI fix and stem
+  regeneration. AI rewrite is also told to move statements out of the question
+  and into the scenario. Generation no longer asks for a "(Choose one.)" at the
+  end of each stem, which contradicted 1.5.1.
+
+  A model can ignore what it is told, so the form is also checked in code
+  (`stem_text.form_notes`, mirrored in the editor as `formNotes`): a scenario
+  that asks a question, a question that opens with statements, two questions in
+  one, a stem that is not a question, and a "Choose …" count. The editor shows
+  these in amber under the field as you type — advice, never blocking a save —
+  the AI rewrite's proposal lists any its model broke, and AI check answers
+  reports them beside its own findings. The proposal now shows its scenario
+  too; before, you saw the new scenario only after pressing *Use this*.
+
+### Fixed
+
+- **Saving a question now says so, and keeps saying so.** The editor had a
+  "Saved" label that never appeared: a save hands the updated question to the
+  Bank, the Bank hands it back, and the editor took that as a different
+  question and cleared the label in the same moment. It now shows a green
+  **✓ Saved at 10:42** that stays until your next edit, and a status move
+  shows **✓ Moved to SME Review**. Saving a question that is still approved
+  adds a reminder to send it back for review if the change needs one.
+- **Status buttons say what they do** — *Send for review*, *Mark revised*,
+  *Approve*, *Reject*, *Retire*, *Back to draft* — rather than the name of the
+  status they lead to.
+- **The Generate screen previewed a count that is no longer written.** Each
+  format row said stems would end "Choose two."; since 1.5.1 they hold only the
+  question. It now shows how candidates see it: *shown as "(Choose two)"*.
+
+### Documentation
+
+- **The How-To Guide is rewritten for the app as it is.** It still described
+  the NiceGUI interface retired before 1.0.0 — PPTX loading, a slide
+  filmstrip, Student Preview — and the AI & Docs screen answers from it, so
+  questions about the current app were being answered from one that no longer
+  exists. It now walks each screen, sets out the question form, the review
+  statuses and their moves, the Report's bars, publishing and pushing, and
+  what to do when something is refused; its sections are split so the docs
+  search finds them.
+- **README and INSTALL** no longer say there is no installer and nothing
+  publishes back to a course, list the current screens, describe the installed
+  app's per-user state, and say what a stem holds. PLAN.md is marked done.
+
+The editor's save message and status moves are tested by rendering the Bank
+with a fake server, and both the save test and the form check were watched
+failing with the fix removed.
+
 ## [1.5.1] - 2026-09-28
 ### Fixed
 

@@ -66,6 +66,86 @@ def test_empty_and_none():
     assert not has_choose_directive("")
 
 
+# ── The house form: statements in the scenario, the question in the stem ──
+
+from exam_bank.core.stem_text import form_notes  # noqa: E402
+
+
+def _fields(scenario, stem):
+    return [field for field, _ in form_notes(scenario, stem)]
+
+
+def test_a_well_formed_question_has_no_notes():
+    assert form_notes("A developer loads a supplier file. It has no header row.",
+                      "Which setting reads the first line as data?") == []
+
+
+def test_a_scenario_that_asks_a_question_is_noted():
+    notes = form_notes("What happens when a developer loads a file?",
+                       "Which step reads it?")
+    assert [f for f, _ in notes] == ["scenario"]
+    assert "statements that set the scene" in notes[0][1]
+
+
+def test_statements_before_the_question_are_noted():
+    notes = form_notes("", "The file has no header. Which setting reads it as data?")
+    assert _fields("", "The file has no header. Which setting reads it as data?") == ["stem"]
+    assert "Move them into the scenario" in notes[0][1]
+
+
+def test_an_abbreviation_is_not_a_statement():
+    assert form_notes("", "Which step reads a delimited file, e.g. a CSV export?") == []
+
+
+def test_a_stem_that_is_not_a_question_is_noted():
+    assert _fields("", "Slowly Changing Dimension Type 2 retains:") == ["stem"]
+
+
+def test_two_questions_in_one_stem_are_noted():
+    notes = form_notes("", "What is the conflict? How do you resolve it?")
+    assert [m for _, m in notes if "more than one question" in m]
+
+
+def test_a_count_is_noted_once_and_is_not_mistaken_for_a_statement():
+    # "? Choose One." has a full stop, but it is the count, not a sentence.
+    notes = form_notes("", "Which step reads the file?\nChoose One.")
+    assert _fields("", "Which step reads the file?\nChoose One.") == ["stem"]
+    assert "count" in notes[0][1]
+
+
+def test_the_ai_prompts_carry_the_rule():
+    """Every prompt that writes a question tells the model what a scenario is."""
+    from exam_bank.core.generation_prompts import (
+        GENERATION_SYSTEM_PROMPT,
+        SCENARIO_AND_STEM_RULES,
+    )
+
+    assert SCENARIO_AND_STEM_RULES in GENERATION_SYSTEM_PROMPT
+    assert "Statements only" in SCENARIO_AND_STEM_RULES
+    assert "Every stem carries" not in GENERATION_SYSTEM_PROMPT
+
+
+def test_the_ai_rewrite_is_told_to_keep_scenario_and_question_apart(monkeypatch):
+    import json
+
+    from exam_bank.core import providers
+    from exam_bank.core.bank import Question
+    from exam_bank.core.generation_prompts import SCENARIO_AND_STEM_RULES
+    from exam_bank.core.question_refinement import improve_question
+
+    seen = {}
+
+    def fake(**kw):
+        seen["prompt"] = kw["prompt"]
+        return json.dumps({"scenario": "A developer loads a file.", "stem": "Which step?"})
+
+    monkeypatch.setattr(providers, "generate", fake)
+    improve_question(Question(stem="Which step?", key="A", distractors=["B", "C"]), model="m")
+
+    assert SCENARIO_AND_STEM_RULES in seen["prompt"]
+    assert "The scenario and the stem do different jobs - keep them apart" in seen["prompt"]
+
+
 def test_generated_questions_are_stored_as_the_question_only(monkeypatch):
     """The model is told to end each stem "(Choose N.)"; the bank keeps the
     question and lets the course and the printed exam add their own count."""

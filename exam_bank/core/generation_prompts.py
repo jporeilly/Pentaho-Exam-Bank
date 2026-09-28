@@ -5,6 +5,23 @@ from typing import List, Optional
 from .source import SlideInfo
 
 
+# What a scenario is and what a stem is, in the one place every prompt that
+# writes a question reads it from: generation, the AI rewrite, the AI fix and
+# stem regeneration. The two fields do different jobs, and a model left to
+# guess puts a question in the scenario or piles the context into the stem.
+# core/stem_text.py checks the result, since a model can still ignore this.
+SCENARIO_AND_STEM_RULES = """\
+- **scenario** - one to three STATEMENTS that set the scene: a real working
+  situation, who is involved and what they are dealing with. Statements only -
+  never a question, never a "?". It gives the question the context it needs
+  without giving away the answer, and never refers to training material.
+- **stem** - ONLY the question: one direct question ending in "?". No
+  statements in front of it (context belongs in the scenario), and no
+  "(Choose ...)" count (the course adds its own from the number of correct
+  answers). A multi-select asks for its number in the words of the question -
+  "Which two ...?". Avoid negatives ("Which is NOT")."""
+
+
 GENERATION_SYSTEM_PROMPT = """\
 You are an expert certification exam item writer.
 
@@ -39,10 +56,7 @@ environment setup, a welcome page, instructions for using the guide - there is n
 certification question in any of it, and a forced one is worse than none.
 
 FORMAT - real certification exam style:
-- **scenario** - 1-3 sentences of realistic professional context. A real situation,
-  never a reference to training material.
-- **stem** - a direct question ending in "?" then "(Choose one.)" or "(Choose two.)"
-  etc. Every stem carries a "(Choose ...)" directive. Avoid negatives ("Which is NOT").
+""" + SCENARIO_AND_STEM_RULES + """
 - **key** / **keys** - the correct answer(s): true, and about the concept.
 - **distractors** - plausible but wrong. A common misconception, a confusion with a
   neighbouring feature, or a partial truth. Similar in length to the key,
@@ -57,8 +71,10 @@ Answer with the JSON array and nothing else. Do not think aloud, explain yoursel
 or add commentary before or after it.
 
 EXAMPLE of the exact format expected:
-  Stem: "What are two reasons a customer would use Pentaho Data Integration (PDI) to \
-break down application data silos in their organization? (Choose two.)"
+  Scenario: "A retailer runs separate customer, order and loyalty systems, and each \
+team keeps its own copy of the customer record."
+  Stem: "What are two reasons to use Pentaho Data Integration (PDI) to break down \
+those data silos?"
   Keys: ["PDI can provide a comprehensive 360 view of the master data, e.g customer \
 or patient.", "PDI creates a central, searchable data repository the entire data estate."]
   Distractors: ["PDI automatically classifies disparate data for easier search and \
@@ -180,11 +196,12 @@ def build_prompt(
         if spec["type"] == "multi":
             nc = spec["num_correct"]
             nd = spec["num_choices"] - nc
-            parts.append(f'  - Question {i+1}: MULTI-SELECT — stem MUST end with "(Choose {_num_word(nc)}.)" '
+            parts.append(f'  - Question {i+1}: MULTI-SELECT — the question asks for exactly {_num_word(nc)} '
+                         f'answers ("Which {_num_word(nc)} ...?") '
                          f'({nc} correct answers + {nd} distractors = {spec["num_choices"]} total choices)')
         else:
             nd = spec["num_choices"] - 1
-            parts.append(f'  - Question {i+1}: SINGLE-SELECT — stem MUST end with "(Choose one.)" '
+            parts.append(f'  - Question {i+1}: SINGLE-SELECT — the question has one correct answer '
                          f"(1 correct + {nd} distractors = {spec['num_choices']} total choices)")
 
     parts.append(f"- CRITICAL: All correct answers MUST come from the Source Material above")
@@ -206,8 +223,8 @@ For SINGLE-SELECT questions:
 ```json
 {{
   "question_type": "single",
-  "scenario": "...",
-  "stem": "...? (Choose one.)",
+  "scenario": "One to three statements that set the scene. No question here.",
+  "stem": "Only the question, ending in ?",
   "key": "the single correct answer",
   "key_source_text": "exact quote from source material",
   "distractors": ["wrong1", "wrong2", "wrong3"],
@@ -215,12 +232,12 @@ For SINGLE-SELECT questions:
 }}
 ```
 
-For MULTI-SELECT questions — stem MUST end with "(Choose two.)" or "(Choose N.)":
+For MULTI-SELECT questions — the question names how many it wants ("Which two ...?"):
 ```json
 {{
   "question_type": "multi",
-  "scenario": "...",
-  "stem": "What are two reasons ...? (Choose two.)",
+  "scenario": "One to three statements that set the scene. No question here.",
+  "stem": "What are two reasons ...?",
   "keys": ["correct answer 1", "correct answer 2"],
   "key_source_text": "exact quotes from source material supporting both answers",
   "distractors": ["wrong1", "wrong2"],

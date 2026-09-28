@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from .stem_text import has_choose_directive
+from .stem_text import form_notes
 
 
 BLOOM_LEVELS = [
@@ -20,6 +20,9 @@ DIFFICULTIES = ["Easy", "Medium", "Hard"]
 # Full question lifecycle:
 #   draft → sme_review → revised → approved → retired
 #                      ↘ rejected
+# An approved question can also go back to sme_review or draft: approval is a
+# judgment of the wording at the time, and a question edited afterwards needs
+# the same review again rather than keeping a status it no longer earns.
 STATUSES = ["draft", "sme_review", "revised", "approved", "rejected", "retired"]
 
 # Valid transitions between states
@@ -27,7 +30,7 @@ STATUS_TRANSITIONS = {
     "draft":      ["sme_review", "rejected"],
     "sme_review": ["revised", "approved", "rejected"],
     "revised":    ["sme_review", "approved", "rejected"],
-    "approved":   ["retired"],
+    "approved":   ["sme_review", "draft", "retired"],
     "rejected":   ["draft"],       # can be reworked
     "retired":    ["draft"],       # can be brought back
 }
@@ -245,6 +248,10 @@ class Question:
             self.reviewed_at = now
         if new_status == "approved":
             self.approved_at = now
+        elif self.status == "approved" and new_status in ("sme_review", "draft"):
+            # Sent back: no longer approved, so no approval date. The review
+            # history above keeps when it was approved and who sent it back.
+            self.approved_at = ""
         if new_status == "rejected":
             self.reject_reason = comment
 
@@ -306,13 +313,11 @@ class Question:
                 break
 
         # ── Warnings (advisory) ──────────────────────────────
-        # The stem is the question only. Courses and the printed exam count
-        # the keys and add their own "(Choose N)", so a count written here
-        # would be read twice; Publish removes it. Said here so the author
-        # knows before they publish, not after. See stem_text.
-        if has_choose_directive(self.stem):
-            warnings.append("Stem ends with a 'Choose …' count; the course adds its own, "
-                            "so Publish removes it")
+        # The house form: the scenario is statements that set the scene, the
+        # stem is the question only - no statements before it, no count after
+        # it (courses and the printed exam add their own; Publish removes it).
+        # Said here so the author knows before they publish. See stem_text.
+        warnings.extend(message for _field, message in form_notes(self.scenario, self.stem))
 
         if self.source_type == "pptx":
             if not self.key_source_text:

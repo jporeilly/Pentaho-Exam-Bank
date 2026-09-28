@@ -29,7 +29,7 @@ def state_dir() -> Path:
     package under a read-only directory and importing it.
 
     ``PEB_STATE_DIR`` is how the installed shell points this at
-    ``%LOCALAPPDATA%``. Unset — which is every checkout — it is the repo's
+    ``%APPDATA%\\com.pentaho.exam-bank`` (Tauri's ``app_data_dir``). Unset — which is every checkout — it is the repo's
     own ``assets/``, exactly as before, so development is unchanged.
     """
     override = os.environ.get("PEB_STATE_DIR", "").strip()

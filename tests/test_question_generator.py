@@ -121,14 +121,17 @@ class TestBuildPrompt:
         specs = [{"type": "multi", "num_correct": 2, "num_choices": 5}]
         prompt = build_prompt(slide, question_specs=specs)
         assert "MULTI-SELECT" in prompt
-        assert "(Choose two.)" in prompt
+        # The number is asked for in the question's words; a "(Choose two.)"
+        # in the stem would be shown twice (see stem_text).
+        assert "exactly two answers" in prompt
+        assert "(Choose two.)" not in prompt
 
     def test_prompt_single_select_specs(self):
         slide = SlideInfo(index=0, speaker_notes="Notes.")
         specs = [{"type": "single", "num_choices": 4}]
         prompt = build_prompt(slide, question_specs=specs)
         assert "SINGLE-SELECT" in prompt
-        assert "(Choose one.)" in prompt
+        assert "(Choose one.)" not in prompt
 
     def test_prompt_mixed_specs(self):
         slide = SlideInfo(index=0, speaker_notes="Notes.")

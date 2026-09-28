@@ -501,10 +501,11 @@ function FormatRows({
               onChange={(e) => update(i, { total: Number(e.target.value) })}
             />
             <span className="faint">
-              {/* The words the generated stem will actually end with — the
-                  backend spells small numbers out, so showing "Choose 2."
-                  here would preview something it never writes. */}
-              {`“Choose ${NUMBER_WORDS[row.keys] ?? row.keys}.”`}
+              {/* How a candidate sees the count. The stem itself holds only the
+                  question (core/stem_text.py); the Content Manager adds this
+                  from the number of correct answers, spelling small numbers
+                  out. */}
+              {`shown as “(Choose ${NUMBER_WORDS[row.keys] ?? row.keys})”`}
             </span>
             <button
               className="secondary"

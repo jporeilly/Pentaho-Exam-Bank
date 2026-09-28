@@ -9,7 +9,7 @@
  * good one. Without the second half, deleting the rule still passes.
  */
 import { describe, expect, it } from "vitest";
-import { problemsWith } from "./QuestionEditor";
+import { formNotes, problemsWith, questionOnly } from "./QuestionEditor";
 import type { Question } from "./api";
 
 function q(over: Partial<Question> = {}): Question {
@@ -130,5 +130,60 @@ describe("the type switch", () => {
 
   it("reads key for single and ignores keys[]", () => {
     expect(problemsWith(q({ question_type: "single", keys: ["stale", "values"] }))).toEqual([]);
+  });
+});
+
+// The house form. The same cases as tests/test_stem_text.py, because the
+// editor's copy of the rule and the server's must agree.
+describe("the house form: statements in the scenario, the question in the stem", () => {
+  const fields = (scenario: string, stem: string) =>
+    formNotes({ scenario, stem }).map((n) => n.field);
+
+  it("is silent on a well-formed question", () => {
+    expect(
+      formNotes({
+        scenario: "A developer loads a supplier file. It has no header row.",
+        stem: "Which setting reads the first line as data?",
+      }),
+    ).toEqual([]);
+  });
+
+  it("notes a scenario that asks a question", () => {
+    const notes = formNotes({ scenario: "What happens when a developer loads a file?", stem: "Which step reads it?" });
+    expect(notes.map((n) => n.field)).toEqual(["scenario"]);
+    expect(notes[0].message).toMatch(/statements that set the scene/);
+  });
+
+  it("notes statements before the question", () => {
+    expect(fields("", "The file has no header. Which setting reads it as data?")).toEqual(["stem"]);
+  });
+
+  it("does not take an abbreviation for a statement", () => {
+    expect(formNotes({ scenario: "", stem: "Which step reads a delimited file, e.g. a CSV export?" })).toEqual([]);
+  });
+
+  it("notes a stem that is not a question", () => {
+    expect(fields("", "Slowly Changing Dimension Type 2 retains:")).toEqual(["stem"]);
+  });
+
+  it("notes two questions in one stem", () => {
+    const notes = formNotes({ scenario: "", stem: "What is the conflict? How do you resolve it?" });
+    expect(notes.some((n) => /more than one question/.test(n.message))).toBe(true);
+  });
+
+  it("notes a count once, and does not take it for a statement", () => {
+    const notes = formNotes({ scenario: "", stem: "Which step reads the file?\nChoose One." });
+    expect(notes.map((n) => n.field)).toEqual(["stem"]);
+    expect(notes[0].message).toMatch(/count/);
+  });
+
+  it("strips the same counts the server strips", () => {
+    expect(questionOnly("Which step? (Choose one.)")).toBe("Which step?");
+    expect(questionOnly("Which step? \nChoose One.")).toBe("Which step?");
+    expect(questionOnly("Which steps? Select all that apply.")).toBe("Which steps?");
+    expect(questionOnly("The job runs nightly. Choose two steps that run in parallel.")).toBe(
+      "The job runs nightly. Choose two steps that run in parallel.",
+    );
+    expect(questionOnly("(Choose one.)")).toBe("(Choose one.)");
   });
 });

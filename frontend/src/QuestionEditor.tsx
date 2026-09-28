@@ -29,6 +29,31 @@ import {
 // so two declarations would be two names for one contract.
 export type { Problem };
 
+/** Which moves exist comes from /api/lifecycle; what a button SAYS is ours.
+ *  A verb for what pressing it does, not the name of where it lands. */
+const MOVE_LABEL: Record<string, string> = {
+  sme_review: "Send for review",
+  draft: "Back to draft",
+  revised: "Mark revised",
+  approved: "Approve",
+  rejected: "Reject",
+  retired: "Retire",
+};
+
+const STATUS_NAME: Record<string, string> = {
+  draft: "Draft",
+  sme_review: "SME Review",
+  revised: "Revised",
+  approved: "Approved",
+  rejected: "Rejected",
+  retired: "Retired",
+};
+
+/** HH:MM, so a second save visibly says something new. */
+function clock(): string {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 /**
  * Everything wrong with a question, as the grader would see it.
  *
@@ -94,6 +119,73 @@ export function problemsWith(q: Question): Problem[] {
   return out;
 }
 
+// ── The house form ───────────────────────────────────────────────────────
+//
+// The scenario is statements that set the scene; the question is the
+// question and nothing else. Mirrors core/stem_text.py (form_notes), so the
+// author sees it while typing rather than after a round trip; the same cases
+// are pinned on both sides (tests/test_stem_text.py, QuestionEditor.test.tsx).
+// Advice, not a problem: it does not stop a save.
+
+const COUNT_WORDS =
+  "(?:one|two|three|four|five|six|seven|eight|nine|ten|\\d+" +
+  "|all(?:\\s+that\\s+apply)?|the\\s+(?:best|correct)\\s+(?:answer|option|response)s?)";
+const COUNT_NOUN = "(?:\\s+(?:correct\\s+|best\\s+)?(?:answer|option|response|choice)s?)?";
+const DIRECTIVE = new RegExp(
+  "(?:\\s*[([]\\s*(?:choose|select|pick)\\b[^)\\]]*[)\\]]" +
+    "|(?<=[?.!:)\\s])\\s*(?:choose|select|pick)\\s+" + COUNT_WORDS + COUNT_NOUN + "\\b" +
+    ")\\s*[.!]?\\s*$",
+  "i",
+);
+const ABBREVIATIONS = /\b(?:e\.g|i\.e|etc|vs|approx|incl|no)\./gi;
+
+/** The stem without a trailing "(Choose one.)" / "Choose One." count. */
+export function questionOnly(stem: string): string {
+  let text = (stem ?? "").trimEnd();
+  for (;;) {
+    const cut = text.replace(DIRECTIVE, "").trimEnd();
+    if (cut === text) return text;
+    if (!cut) return (stem ?? "").trimEnd();
+    text = cut;
+  }
+}
+
+export function formNotes(q: Pick<Question, "scenario" | "stem">): Problem[] {
+  const out: Problem[] = [];
+  if ((q.scenario ?? "").includes("?")) {
+    out.push({
+      field: "scenario",
+      message:
+        "The scenario asks a question. A scenario is statements that set the scene; " +
+        "the question belongs in the Question field.",
+    });
+  }
+  const stem = q.stem ?? "";
+  const question = questionOnly(stem).trim();
+  if (question !== stem.trimEnd().trim()) {
+    out.push({
+      field: "stem",
+      message: "Stem ends with a 'Choose …' count; the course adds its own, so Publish removes it",
+    });
+  }
+  if (!question) return out;
+  const body = question.replace(ABBREVIATIONS, "");
+  if ((body.match(/\?/g) ?? []).length > 1) {
+    out.push({ field: "stem", message: "The Question field asks more than one question. Ask one." });
+  } else if (!question.endsWith("?")) {
+    out.push({ field: "stem", message: "The question should be a question, ending in “?”." });
+  }
+  if (/[.!]\s+\S/.test(body)) {
+    out.push({
+      field: "stem",
+      message:
+        "The question opens with statements. Move them into the scenario and keep only " +
+        "the question here.",
+    });
+  }
+  return out;
+}
+
 function Field({
   label,
   hint,
@@ -136,21 +228,32 @@ export function QuestionEditor({
   const [lifecycle, setLifecycle] = useState<Lifecycle | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  // What the last save or status move did, said until the next edit. It used
+  // to be a flag the effect below cleared: a save hands the updated question
+  // to the parent, the parent hands it back, and "Saved" was gone before it
+  // was ever drawn.
+  const [notice, setNotice] = useState("");
 
   // A different question replaces the draft outright. Merging would keep
   // edits from the previous one and silently write them onto this one.
   useEffect(() => {
     setDraft(question);
     setError("");
-    setSaved(false);
   }, [question]);
+
+  // The notice belongs to the question it was about: cleared when a
+  // DIFFERENT question opens, not when this one comes back updated.
+  useEffect(() => {
+    setNotice("");
+  }, [question.id]);
 
   useEffect(() => {
     api.lifecycle().then(setLifecycle).catch(() => setLifecycle(null));
   }, []);
 
   const problems = useMemo(() => problemsWith(draft), [draft]);
+  const notes = useMemo(() => formNotes(draft), [draft]);
+  const notesFor = (name: string) => notes.filter((n) => n.field === name);
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(question),
     [draft, question],
@@ -158,7 +261,7 @@ export function QuestionEditor({
 
   function set<K extends keyof Question>(field: K, value: Question[K]) {
     setDraft((d) => ({ ...d, [field]: value }));
-    setSaved(false);
+    setNotice("");
   }
 
   function setDistractor(i: number, value: string) {
@@ -184,7 +287,11 @@ export function QuestionEditor({
         bloom_level: draft.bloom_level,
       });
       setDraft(updated);
-      setSaved(true);
+      setNotice(
+        updated.status === "approved"
+          ? `Saved at ${clock()}. Still approved: send it back for review if this change needs one.`
+          : `Saved at ${clock()}`,
+      );
       onSaved(updated);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
@@ -199,6 +306,7 @@ export function QuestionEditor({
     try {
       const updated = await api.setStatus(draft.id, status);
       setDraft(updated);
+      setNotice(`Moved to ${STATUS_NAME[updated.status] ?? updated.status}`);
       onSaved(updated);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
@@ -270,20 +378,36 @@ export function QuestionEditor({
 
       {error && <div className="banner">{error}</div>}
 
-      <Field label="Scenario" hint="Optional context shown above the question.">
+      <Field
+        label="Scenario"
+        hint="Statements that set the scene, shown above the question. Not a question."
+      >
         <textarea
           rows={2}
           value={draft.scenario}
           onChange={(e) => set("scenario", e.target.value)}
         />
       </Field>
+      {notesFor("scenario").map((n) => (
+        <div key={n.message} className="advice">
+          {n.message}
+        </div>
+      ))}
 
-      <Field label="Question">
+      <Field
+        label="Question"
+        hint="Only the question, ending in “?”. The number to choose is added for you."
+      >
         <textarea rows={3} value={draft.stem} onChange={(e) => set("stem", e.target.value)} />
       </Field>
       {forField("stem").map((p) => (
         <div key={p.message} className="problem">
           {p.message}
+        </div>
+      ))}
+      {notesFor("stem").map((n) => (
+        <div key={n.message} className="advice">
+          {n.message}
         </div>
       ))}
 
@@ -380,7 +504,11 @@ export function QuestionEditor({
         <button onClick={save} disabled={busy || !dirty || problems.length > 0}>
           {busy ? "Saving…" : "Save"}
         </button>
-        {saved && !dirty && <span className="muted">Saved</span>}
+        {notice && (
+          <span className="saved-notice" role="status">
+            ✓ {notice}
+          </span>
+        )}
         {problems.length > 0 && (
           <span className="muted">
             {problems.length} problem{problems.length > 1 ? "s" : ""} to fix first
@@ -392,7 +520,7 @@ export function QuestionEditor({
         {/* Only the moves the model will accept. See /api/lifecycle. */}
         {moves.map((m) => (
           <button key={m} className="secondary" onClick={() => move(m)} disabled={busy || dirty}>
-            {m === "sme_review" ? "Send for review" : m.charAt(0).toUpperCase() + m.slice(1)}
+            {MOVE_LABEL[m] ?? m}
           </button>
         ))}
         {dirty && moves.length > 0 && (
@@ -429,6 +557,9 @@ export function QuestionEditor({
           {proposal.unchanged && (
             <p className="muted">The model returned this unchanged.</p>
           )}
+          {proposal.proposed.scenario && (
+            <p className="muted" style={{ marginTop: 8 }}>{proposal.proposed.scenario}</p>
+          )}
           <p style={{ marginTop: 8 }}>{proposal.proposed.stem}</p>
           <ul className="muted" style={{ fontSize: "0.9em" }}>
             <li>Key: {proposal.proposed.key}</li>
@@ -436,6 +567,12 @@ export function QuestionEditor({
               <li key={i}>{d}</li>
             ))}
           </ul>
+          {(proposal.notes ?? []).map((n) => (
+            <div key={n.message} className="advice">
+              {n.field === "scenario" ? "Scenario: " : "Question: "}
+              {n.message}
+            </div>
+          ))}
           {proposal.problems.length > 0 && (
             <div className="banner" style={{ marginTop: 8 }}>
               This rewrite could not be graded:{" "}
@@ -460,7 +597,7 @@ export function QuestionEditor({
         <div className="card" style={{ marginTop: 12 }}>
           <strong>Answer check</strong>
           {review.answers.length === 0 && review.prose.length === 0 &&
-            review.gradeable.length === 0 && (
+            review.gradeable.length === 0 && (review.form ?? []).length === 0 && (
               <p className="muted">
                 Nothing found. That is a second opinion, not a guarantee.
               </p>
@@ -471,6 +608,16 @@ export function QuestionEditor({
                 <li key={`g${i}`} className="warn">
                   <strong>{g.field}:</strong> {g.message}{" "}
                   <span className="muted">(the bank&rsquo;s own check)</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(review.form ?? []).length > 0 && (
+            <ul>
+              {(review.form ?? []).map((f, i) => (
+                <li key={`f${i}`} className="warn">
+                  <strong>{f.field === "scenario" ? "scenario" : "question"}:</strong>{" "}
+                  {f.message} <span className="muted">(the bank&rsquo;s own check)</span>
                 </li>
               ))}
             </ul>
