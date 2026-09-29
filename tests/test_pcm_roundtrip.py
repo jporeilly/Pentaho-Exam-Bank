@@ -47,6 +47,7 @@ EXAM = {
             "correct": 0,
             "explanation": "'CSV file input' reads delimited text.",
             "source": "Lab 1 — Your First Win",
+            "bloom": "Apply",
         },
         {
             "id": "m1-q2",
@@ -57,6 +58,7 @@ EXAM = {
             "correctIndices": [0, 1],
             "explanation": "Both write; the others do not.",
             "source": "Pentaho Developer - Practitioner: Getting Started",
+            "bloom": "Analyze",
         },
     ],
 }

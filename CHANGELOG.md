@@ -7,6 +7,25 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-09-29
+### Fixed
+
+- **Publishing writes each question's Bloom level.** It never had, and the
+  first publish from the bank (PDI in 2 Hours, course 0.1.12, 2026-09-29)
+  stripped all 30 levels from the course file and from Pentaho-Courses. The
+  Content Manager does not read them, so no learner saw a difference; but the
+  course file is where a question's level is recorded, the bank adopts from
+  it, and the sync compares it — so all 30 then showed as Changed. The next
+  publish of that course puts them back, and changes nothing else.
+- **A publish that changes nothing now rewrites nothing.** Questions are
+  written with their keys in the order every course's exam.json uses (id,
+  module, bloom, scenario, prompt, options, the answer, explanation,
+  source). The exporter wrote prompt and options second, so every publish
+  reordered every question in the file: the 2hr publish changed 433 lines for
+  a handful of real edits. Checked on this machine's bank: publishing BA
+  Practitioner, RD Practitioner or Installation, whose questions match their
+  course, now leaves each file byte for byte as it was.
+
 ## [1.7.1] - 2026-09-29
 ### Fixed
 

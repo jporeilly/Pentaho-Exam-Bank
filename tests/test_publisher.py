@@ -42,19 +42,23 @@ EXAM = {
         "lead": "Tell us who you are.",
     },
     "questions": [
+        # Keys in the order every course's exam.json writes them, so a
+        # publish that changes nothing rewrites nothing.
         {
             "id": "m1-q1",
+            "module": "See It Work",
+            "bloom": "Apply",
             "prompt": "Which step reads a delimited file?",
             "options": ["CSV file input", "Table output", "Sort rows"],
-            "module": "See It Work",
             "correct": 0,
             "source": "Lab 1 - Your First Win",
         },
         {
             "id": "m1-q2",
+            "module": "Getting Started",
+            "bloom": "Analyze",
             "prompt": "Which two steps write to a database?",
             "options": ["Table output", "Insert / Update", "Sort rows"],
-            "module": "Getting Started",
             "correctIndices": [0, 1],
             "source": "Lab 2 - Loading",
         },
@@ -96,6 +100,7 @@ def pool():
             "m1-q1", "CSV file input", ["Table output", "Sort rows"],
             order=0,
             option_order=["CSV file input", "Table output", "Sort rows"],
+            bloom_level="Apply",
         ),
         adopted(
             "m1-q2", "", ["Sort rows"],
@@ -106,6 +111,7 @@ def pool():
             option_order=["Table output", "Insert / Update", "Sort rows"],
             topic="Getting Started",
             source_file="Lab 2 - Loading",
+            bloom_level="Analyze",
         ),
     ]
 
@@ -200,6 +206,37 @@ def test_publishing_an_unchanged_pool_is_a_noop(tmp_path, pool):
     assert made.is_noop
     apply(made)
     assert path.read_bytes() == before, "a no-op publish rewrote the file"
+
+
+def test_a_publish_puts_back_bloom_levels_a_course_file_lost(tmp_path, pool):
+    """The first publish from the bank (pdi-2hr-lab, course 0.1.12) wrote no
+    Bloom levels and stripped all 30 from the course. The next publish must
+    restore them from the bank - and change nothing else."""
+    stripped = json.loads(json.dumps(EXAM))
+    for item in stripped["questions"]:
+        item.pop("bloom")
+    path = write_exam(tmp_path, stripped)
+
+    made = plan(path, pool)
+    assert [(c.id, c.fields) for c in made.changed] == [("m1-q1", ["bloom"]), ("m1-q2", ["bloom"])]
+
+    apply(made)
+    assert [q["bloom"] for q in json.loads(path.read_text(encoding="utf-8"))["questions"]] == ["Apply", "Analyze"]
+    expected = tmp_path / "as-the-course-had-it"
+    expected.mkdir()
+    assert path.read_bytes() == write_exam(expected, EXAM).read_bytes(), \
+        "restoring the levels must give back exactly the file the course had"
+
+
+def test_questions_are_written_in_the_course_files_key_order(tmp_path, pool):
+    """Every course's exam.json writes id, module, bloom, scenario, prompt,
+    options, the answer, explanation, source. Written in any other order, a
+    publish rewrites every question in the file for no change at all."""
+    path = write_exam(tmp_path)
+    apply(plan(path, pool))
+
+    first = json.loads(path.read_text(encoding="utf-8"))["questions"][0]
+    assert list(first) == ["id", "module", "bloom", "prompt", "options", "correct", "source"]
 
 
 # --- the diff -------------------------------------------------------------

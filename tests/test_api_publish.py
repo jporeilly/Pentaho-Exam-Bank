@@ -29,10 +29,10 @@ EXAM = {
     "questions": [
         {"id": "m1-q0", "prompt": "Question 0?",
          "options": ["Right", "Wrong"], "correct": 0, "module": "Getting Started",
-         "source": "Lab 1 - Getting Started"},
+         "source": "Lab 1 - Getting Started", "bloom": "Apply"},
         {"id": "m1-q1", "prompt": "Question 1?",
          "options": ["Right", "Wrong"], "correct": 0, "module": "Getting Started",
-         "source": "Lab 1 - Getting Started"},
+         "source": "Lab 1 - Getting Started", "bloom": "Understand"},
     ],
 }
 
@@ -85,6 +85,7 @@ def cert(db_path):
             distractors=["Wrong"], option_order=["Right", "Wrong"],
             topic="Getting Started", certification_id=certification.id,
             pool_order=i, status="approved", source_type="pcm",
+            bloom_level=["Apply", "Understand"][i],
             # The authored citation an adopted question carries. Without it
             # the exporter builds one from the course and section, and every
             # question reads as changed on the first publish.

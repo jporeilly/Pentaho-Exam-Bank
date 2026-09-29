@@ -5,4 +5,4 @@ carrier copies it, and ``tests/test_version.py`` fails when they disagree.
 See VERSION.md for the bump policy.
 """
 
-__version__ = "1.7.1"
+__version__ = "1.7.2"

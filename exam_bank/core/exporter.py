@@ -171,11 +171,27 @@ def pcm_exam_items(
 
         correct_idx = [_idx_of(t) for t in q.correct_answers]
 
-        item = {"id": q.id, "prompt": question_only(q.stem), "options": options}
-        if q.scenario:
-            item["scenario"] = q.scenario
+        # Keys in the order the course files write them - id, module, bloom,
+        # scenario, prompt, options, the answer, explanation, source - which
+        # is the order every course's exam.json uses. Until 1.7.2 this wrote
+        # prompt and options second, so publishing reordered every question
+        # in the file: the first publish from the bank (pdi-2hr-lab, course
+        # 0.1.12) changed 433 lines for a handful of real edits.
+        item = {"id": q.id}
         if q.topic:
             item["module"] = q.topic
+        # The Bloom level, as the course files state it. The Content Manager
+        # does not read it, but the course file is where a question's level is
+        # recorded, the Exam Bank adopts it from there, and the sync compares
+        # it. Until 1.7.2 it was not written, so that same publish stripped
+        # all 30 levels from the course, and every question then showed as
+        # Changed.
+        if q.bloom_level:
+            item["bloom"] = q.bloom_level
+        if q.scenario:
+            item["scenario"] = q.scenario
+        item["prompt"] = question_only(q.stem)
+        item["options"] = options
         if q.question_type == "multi" or len(correct_idx) > 1:
             item["correctIndices"] = sorted(set(correct_idx))
         else:
