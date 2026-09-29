@@ -55,6 +55,16 @@ def courses_dir() -> Path:
     return path
 
 
+def courses_dir_if_any() -> Path | None:
+    """The courses directory, or None - for work that is better with the
+    courses than without them but must not fail for want of them (filing an
+    imported question still gets an id and a place without its SUMMARY.md)."""
+    try:
+        return courses_dir()
+    except HTTPException:
+        return None
+
+
 def question_json(question: Question) -> dict[str, Any]:
     """A question as JSON.
 

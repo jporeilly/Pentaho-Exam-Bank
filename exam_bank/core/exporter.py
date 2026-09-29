@@ -132,14 +132,21 @@ def pcm_exam_items(
     answer count, so a count left in the stem would be shown twice - see
     :mod:`.stem_text`.
     """
-    # Honour the pool's authored order when every question carries one (a
-    # pool adopted from a course). The bank returns questions newest-first,
-    # so writing them in that order would reshuffle the whole array on every
-    # publish — an unreadable diff, and in a pool that draws N questions with
-    # shuffle off it silently changes which ones get asked. A generated
-    # question has pool_order -1 and the caller's order is left alone.
-    if questions and all(getattr(q, "pool_order", -1) >= 0 for q in questions):
-        questions = sorted(questions, key=lambda q: q.pool_order)
+    # Honour the pool's authored order. The bank returns questions
+    # newest-first, so writing them in that order would reshuffle the whole
+    # array on every publish — an unreadable diff, and in a pool that draws N
+    # questions with shuffle off it silently changes which ones get asked.
+    #
+    # Questions with a place go in that order; any without one (pool_order
+    # -1) follow, in the caller's order. Until 1.7.1 this sorted only when
+    # EVERY question had a place, so one generated question switched the
+    # course order off for the whole pool. Filing now gives a question filed
+    # under a course its place (core/course_filing); this is what keeps a
+    # question that somehow has none from costing the rest theirs.
+    questions = sorted(
+        questions,
+        key=lambda q: (0, q.pool_order) if getattr(q, "pool_order", -1) >= 0 else (1, 0),
+    )
 
     items = []
     for q in questions:

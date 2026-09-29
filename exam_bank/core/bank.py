@@ -588,6 +588,37 @@ class ExamBankDB:
         self.conn.execute("DELETE FROM questions WHERE id = ?", (question_id,))
         self.conn.commit()
 
+    def all_ids(self) -> set[str]:
+        """Every question id in the bank, in any certification."""
+        return {r[0] for r in self.conn.execute("SELECT id FROM questions")}
+
+    def rename_question(self, old_id: str, new_id: str) -> None:
+        """Give a question a new id. The row keeps everything else.
+
+        Only for an id the bank made up (see course_filing): an id a course
+        gave is how the course and the bank recognise the same question, and
+        changing it would make the course's copy look new.
+        """
+        if old_id == new_id:
+            return
+        if self.conn.execute("SELECT 1 FROM questions WHERE id = ?", (new_id,)).fetchone():
+            raise ValueError(f"A question '{new_id}' already exists")
+        self.conn.execute("UPDATE questions SET id = ? WHERE id = ?", (new_id, old_id))
+        self.conn.commit()
+
+    def set_pool_orders(self, orders: dict[str, int]) -> None:
+        """Move questions along their course's order.
+
+        A direct update, not a save: making room for a question is not an edit
+        to the ones that move, so it neither bumps their version nor lands in
+        their history.
+        """
+        self.conn.executemany(
+            "UPDATE questions SET pool_order = ? WHERE id = ?",
+            [(order, qid) for qid, order in orders.items()],
+        )
+        self.conn.commit()
+
     def search(
         self,
         text: str = "",

@@ -20,6 +20,25 @@ from a course's own material.
    what is wrong and press **Save N to the bank**. Nothing is saved until you
    do.
 
+## Filed like the course's own questions
+
+Saved under a course's certification, each question is filed the way the
+course files its own:
+
+- **Its id follows the course's scheme** — the next number in its module's
+  family where the course numbers them (`m3-q14`, `install-ai-q20`), or the
+  course's prefix and the question's key words where it names them
+  (`q-metadata-injection`). Never an id another question, or another course's
+  exam, already uses.
+- **Its topic is the course's module** — the heading in the course's contents
+  its lab sits under (*See It Scale*), and the lab (*One Pipeline, Many
+  Files*) becomes its citation, which the course shows with the results.
+- **It takes a place in the course order**, straight after the last question
+  of its module, so the Bank's **Order** column, *Course order* and the
+  published exam all have it where it belongs. A slot a deleted question left
+  is filled; otherwise the questions after it move up one, as far as the next
+  free slot.
+
 A question marked *not anchored to the course material* could not be matched
 to anything in the course, so it may be about something the course does not
 teach. Every generated question needs a human read before it is trusted: the

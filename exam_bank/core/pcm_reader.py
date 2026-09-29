@@ -125,6 +125,38 @@ def list_pcm_labs(courses_dir, slug: str) -> List[dict]:
     return out
 
 
+_SUMMARY_HEADING = re.compile(r"^##\s+(\S.*?)\s*$")
+_SUMMARY_LAB_LINK = re.compile(r"\]\(\s*(?:\./)?([^/)\s]+)/guide\.md")
+_SUMMARY_TOPIC_PAGE = re.compile(r"<!--\s*topic-page:\s*([^\s>]+)\s*-->")
+
+
+def summary_modules(courses_dir, slug: str) -> dict:
+    """``{lab dir: module}`` from the course's SUMMARY.md.
+
+    The module is the `##` heading a lab is listed under, which is what the
+    courses' exams file their questions under ("See It Scale", not the lab
+    "One Pipeline, Many Files"). A `###` sub-topic belongs to the `##` above
+    it. A `<!-- topic-page: lab -->` marker names a lab as well. Empty when
+    the course has no readable SUMMARY.md.
+    """
+    summary = Path(courses_dir) / slug / "SUMMARY.md" if courses_dir else None
+    try:
+        text = summary.read_text(encoding="utf-8") if summary else ""
+    except (OSError, UnicodeDecodeError):
+        return {}
+    out: dict = {}
+    module = ""
+    for line in text.splitlines():
+        m = _SUMMARY_HEADING.match(line)
+        if m:
+            module = m.group(1)
+            continue
+        if module:
+            for lab in _SUMMARY_LAB_LINK.findall(line) + _SUMMARY_TOPIC_PAGE.findall(line):
+                out.setdefault(lab, module)
+    return out
+
+
 def _lab_title(lab_dir: Path) -> str:
     mf = lab_dir / "manifest.json"
     if mf.is_file():
@@ -245,6 +277,7 @@ def load_pcm_course(
     slides: List[SlideInfo] = []
     if not course_dir.is_dir():
         return slides
+    modules = summary_modules(courses_dir, slug)
     idx = 0
     for lab_dir in sorted(course_dir.iterdir(), key=lambda p: p.name):
         if not lab_dir.is_dir():
@@ -270,6 +303,7 @@ def load_pcm_course(
                 notes = f"{piece_heading}\n\n{prose}" if piece_heading else prose
                 slides.append(SlideInfo(
                     index=idx, speaker_notes=notes, title=title, group=lab_title,
+                    module=modules.get(lab_dir.name, ""),
                 ))
                 idx += 1
     return slides

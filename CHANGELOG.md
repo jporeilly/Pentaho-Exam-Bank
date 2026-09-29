@@ -7,6 +7,48 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-09-29
+### Fixed
+
+- **A question generated for a course is filed the way the course files its
+  own.** Found in use: a question generated for PDI in 2 Hours and saved into
+  the course came in as `03f2c063-39c7-…` among `q-preview` and `q-mi`, with
+  no place in the course order, and the lab's title (*One Pipeline, Many
+  Files*) where the course files questions under the module (*See It
+  Scale*). Saved under a course's certification, a question now gets:
+
+  - **an id in the course's scheme** — the next number in its module's family
+    where the course numbers them (`m3-q14`), or the course's prefix and the
+    question's key words where it names them (`q-metadata-injection`); never
+    an id used in the bank or in any course's `exam.json`;
+  - **the course's module as its topic** — the `##` heading of SUMMARY.md its
+    lab sits under, which is what the exams use — with the lab as its
+    citation and `pcm` as its source type (it was `pptx`);
+  - **a place in the course order**, after the last question of its module:
+    into a free slot if there is one (a deleted question leaves one),
+    otherwise the questions after it move up one, only as far as the next
+    free slot. Moving a question to make room is not recorded as an edit.
+
+  The same applies to questions imported into a course from a file that gave
+  them no id. An id a file carried, or a course gave, is never changed.
+  (`core/course_filing.py`.)
+
+- **One unplaced question no longer scrambles a published exam.** The
+  exporter wrote the course order only when EVERY question had a place, so a
+  single generated question switched it off for the whole pool and the exam
+  would have been written back newest-first. Placed questions now go in
+  course order, and any without a place follow.
+
+### Added
+
+- **`scripts/file_into_courses.py`** files the questions an earlier version
+  saved with a random id or no place. A dry run by default (on a copy of the
+  bank); `--apply` takes a backup first and records each id and module change
+  in the question's history. A question already published under its id is left
+  alone. Run on this machine's bank, it filed the one such question
+  (`q-metadata-injection`, See It Scale, position 27 — the slot `q-hidden-data`
+  left), still approved.
+
 ## [1.7.0] - 2026-09-28
 ### Added
 

@@ -210,12 +210,22 @@ def generate_questions(
             source_file=source_file,
             source_slides=[slide.index],
             key_source_slide=slide.index,
-            topic=topic or slide.title or "",
+            topic=topic or slide.module or slide.title or "",
             difficulty=difficulty,
             bloom_level=bloom_level,
             certification_id=certification_id,
             status="draft",
         )
+
+        # From a course: file it the way the course files its own questions -
+        # the module as its topic (above), the lab as its citation, and "pcm"
+        # as its source, which is what the exporter reads a citation from.
+        # Left as the default "pptx", the citation would be built from the
+        # topic, and now that the topic is the module that is too coarse to
+        # say which lab to look in.
+        if source_file.startswith("pcm:"):
+            q.source_type = "pcm"
+            q.source_file = slide.group or source_file
 
         # For multi-select, also set key to first correct for backward compat
         if q_type == "multi" and q.keys and not q.key:

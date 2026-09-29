@@ -16,10 +16,11 @@ from ...core.context_budget import source_budget_chars
 from ...core.generation_prompts import specs_from_rows
 from ...core.pcm_reader import list_pcm_courses, load_pcm_course
 from ...core.bank import BLOOM_LEVELS, DIFFICULTIES, ExamBankDB
+from ...core.course_filing import file_into_course, taken_ids
 from ...core.question_generation import generate_questions_batch
 from ...utils.config import config
 from .. import jobs
-from ..deps import courses_dir, get_db, question_json
+from ..deps import courses_dir, courses_dir_if_any, get_db, question_json
 
 router = APIRouter(tags=["generation"])
 
@@ -176,9 +177,20 @@ def commit_job(
     if missing:
         raise HTTPException(404, f"Job has no question(s) {sorted(missing)}")
 
+    # Filed under a course, a question takes the course's id scheme, module
+    # and a place in its order, as an adopted question has - see
+    # core/course_filing. One set of taken ids for the whole commit, so two
+    # questions saved together cannot mint the same id.
+    root = courses_dir_if_any()
+    taken = taken_ids(db, root)
+    filed = []
     for question in chosen:
         if body.certification_id:
             question.certification_id = body.certification_id
+        cert = db.get_certification(question.certification_id) if question.certification_id else None
+        result = file_into_course(db, question, cert, courses_dir=root, taken=taken) if cert else None
         db.save(question)
+        if result:
+            filed.append({"id": result.id_to, "poolOrder": result.pool_order, "topic": result.topic_to})
 
-    return {"ok": True, "saved": len(chosen), "jobId": job_id}
+    return {"ok": True, "saved": len(chosen), "jobId": job_id, "filed": filed}

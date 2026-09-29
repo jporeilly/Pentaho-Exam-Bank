@@ -24,7 +24,8 @@ from pydantic import BaseModel
 from ...core.bank import Question, ExamBankDB
 from ...core.importing import SUPPORTED, UnsupportedFile, import_any
 from ...core.validation import problems_with
-from ..deps import get_db, question_json
+from ...core.course_filing import file_into_course, taken_ids
+from ..deps import courses_dir_if_any, get_db, question_json
 
 router = APIRouter(tags=["import"])
 
@@ -158,6 +159,12 @@ def commit_import(
     if body.certification_id and db.get_certification(body.certification_id) is None:
         raise HTTPException(404, f"No certification '{body.certification_id}'.")
 
+    # A question filed under a course takes the course's id scheme and a place
+    # in its order (core/course_filing). Only an id the importer made up is
+    # replaced; one the file carried - a Content Manager exam.json, this
+    # bank's own export - is kept.
+    root = courses_dir_if_any()
+    taken = taken_ids(db, root)
     saved, refused = [], []
     for raw in body.questions:
         try:
@@ -186,6 +193,9 @@ def commit_import(
             question.topic = body.topic
         question.status = body.status
 
+        certification = db.get_certification(question.certification_id) if question.certification_id else None
+        if certification:
+            file_into_course(db, question, certification, courses_dir=root, taken=taken)
         db.save(question)
         saved.append(question.id)
 

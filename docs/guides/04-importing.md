@@ -12,6 +12,12 @@ Content Manager `exam.json`, or this bank's own JSON export.
    a deliberate tick.
 4. Press **Import N of M**. Questions arrive as drafts.
 
+Imported into a course's certification, a question takes a place in the
+course order. If the file gave it no id, it also gets one in the course's
+scheme, as a generated question does (see
+[Generating questions](03-generating.md#filed-like-the-courses-own-questions));
+an id the file carried is kept.
+
 A plain-text file carries no marked answers, so its correct answers are
 guessed from their position. The preview says so; check them before relying
 on them.

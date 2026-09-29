@@ -40,3 +40,9 @@ class SlideInfo:
     # split. Generation balances over this instead. Empty when the source has
     # no grouping, in which case the sections are treated as one flat run.
     group: str = ""
+    # The course module the lab sits under - the `##` heading of its
+    # SUMMARY.md, which is what the course's exam files questions under. A
+    # generated question takes it as its topic, so it lands in the course's
+    # module ("See It Scale") rather than a topic of its own named after the
+    # lab ("One Pipeline, Many Files"). Empty for sources with no modules.
+    module: str = ""

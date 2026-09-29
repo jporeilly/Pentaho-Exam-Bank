@@ -6,7 +6,7 @@
 # the bank as not installed. "-desktop" was the first name here and
 # matched neither.
 name = "pentaho-exam-bank"
-version = "1.7.0"
+version = "1.7.1"
 description = "Desktop shell for the Pentaho Exam Bank"
 edition = "2021"
 rust-version = "1.77"

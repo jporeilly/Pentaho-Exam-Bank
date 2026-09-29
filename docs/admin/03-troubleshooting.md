@@ -19,7 +19,15 @@ courses folder in Settings.
 **"The model did not return a usable question."** Try again, or a larger model.
 
 **A sync shows questions as Changed.** They were edited in the bank after they
-came from the course. They are left alone unless you tick *Replace*.
+came from the course, or moved along the course order to make room for a new
+question. They are left alone unless you tick *Replace*, and publishing the
+course brings them level.
+
+**A question has an id like `03f2c063-39c7-…` and no Order.** It was generated
+or imported into a course before 1.7.1, which filed it with a random id and no
+place. From a checkout, `scripts\file_into_courses.py` shows what it would
+change and `--apply` files every such question (after a backup); one already
+published under its id is left alone.
 
 **Publish is refused.** The plan says why: too few questions for the draw with
 the chosen statuses, or, for a push, one of the reasons under
