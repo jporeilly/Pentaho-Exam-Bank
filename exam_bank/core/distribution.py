@@ -41,9 +41,12 @@ Three hazards learned the hard way, each guarded here:
 from __future__ import annotations
 
 import os
+import os
 import re
 import shutil
+import stat
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -103,6 +106,34 @@ def find_git() -> Optional[str]:
         if candidate.is_file():
             return str(candidate)
     return None
+
+
+def _remove_tree(path: Path) -> None:
+    """Delete a previous clone, read-only files and all, or refuse.
+
+    git writes its object files read-only, and on Windows ``shutil.rmtree``
+    cannot delete a read-only file. With ``ignore_errors=True`` - what this
+    used - it said nothing and left the ``.git`` folder behind, so the clone
+    that followed found its destination "not an empty directory" and failed:
+    every publish-and-push after the machine's first one. Found 2026-09-29,
+    re-publishing pdi-2hr-lab, with 76 object files left over from the first.
+    """
+    def writable_then_retry(func, p, _exc):
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+
+    if not path.exists():
+        return
+    try:
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(path, onexc=writable_then_retry)
+        else:  # pragma: no cover - the vendored runtime is 3.12
+            shutil.rmtree(path, onerror=writable_then_retry)
+    except OSError as e:
+        raise DistributionRefused(
+            f"Could not clear the previous copy of the courses repo at {path}: {e}. "
+            "Nothing was pushed. Close anything that has a file open there and try again."
+        ) from e
 
 
 def _run(git: str, args: list[str], cwd: Path) -> str:
@@ -207,7 +238,9 @@ def preflight(courses_dir: Path, slug: str, *, repo_url: str, repo_ref: str,
         raise DistributionRefused(
             "These have uncommitted changes in the Content Manager repository, and a "
             "push would commit them along with the exam: "
-            + ", ".join(line[3:] for line in dirty.splitlines())
+            # Split, not sliced: the output is stripped, so the first line has
+            # lost its leading space and `line[3:]` cut "courses" to "ourses".
+            + ", ".join(line.split(maxsplit=1)[-1] for line in dirty.splitlines())
             + ". Commit or discard them first."
         )
 
@@ -275,7 +308,7 @@ def release(pre: Preflight, slug: str, title: str, summary: dict[str, Any],
 
     # ── the distribution clone: sparse, this course only ──
     clone = Path(cache_dir) / "courses-repo"
-    shutil.rmtree(clone, ignore_errors=True)
+    _remove_tree(clone)
     clone.parent.mkdir(parents=True, exist_ok=True)
     _run(git, ["clone", "--quiet", "--filter=blob:none", "--no-checkout", "--branch",
                pre.repo_ref, pre.repo_url, str(clone)], clone.parent)

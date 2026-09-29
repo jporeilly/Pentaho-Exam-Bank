@@ -1,6 +1,6 @@
 # Version
 
-**Current: 1.7.2**
+**Current: 1.7.3**
 
 **Status:** released. The app is a Tauri desktop shell over a FastAPI backend
 and a React UI, shipping as a per-machine Windows installer with its own

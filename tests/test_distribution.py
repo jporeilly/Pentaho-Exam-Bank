@@ -8,7 +8,9 @@ installed app syncs from.
 """
 
 import json
+import os
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -114,8 +116,10 @@ def test_preflight_names_the_version_it_will_publish(repos):
 def test_preflight_refuses_uncommitted_changes_a_commit_would_sweep_in(repos):
     cj = repos["authoring"] / "courses/lab/course.json"
     cj.write_bytes(cj.read_bytes().replace(b'"The Lab"', b'"Edited in the editor"'))
-    with pytest.raises(DistributionRefused, match="uncommitted changes"):
+    with pytest.raises(DistributionRefused, match="uncommitted changes") as refused:
         pre(repos)
+    # The file is named whole: it once read "ourses/lab/course.json".
+    assert "them along with the exam: courses/lab/course.json." in str(refused.value)
 
 
 def test_preflight_refuses_when_the_repo_is_behind_its_remote(repos, tmp_path):
@@ -165,6 +169,40 @@ def test_the_push_carries_exactly_the_exam_and_the_version(repos):
     assert published == {"id": "lab", "title": "The Lab (as published)", "version": "0.1.11",
                          "analytics": {"apiSecret": PUBLIC_SECRET}}
     assert json.loads(remote_show(repos["c_remote"], "lab/exam.json"))["questions"][0]["prompt"] == "New?"
+
+
+def test_a_second_publish_from_the_same_machine_pushes_too(repos):
+    """Found re-publishing pdi-2hr-lab (2026-09-29): the first push left its
+    clone in the cache, git's object files in it are read-only, and the old
+    `rmtree(ignore_errors=True)` could not delete them - so the next clone
+    found a non-empty folder and every later push failed."""
+    cache = repos["tmp"] / "cache"
+    once = pre(repos)  # the preflight runs before the write, as in the app
+    publish_new_exam(repos)
+    first = release(once, "lab", "The Lab", SUMMARY, cache)
+    assert first["courses"]["pushed"], first
+
+    again = pre(repos)  # the preflight runs before the write, as in the app
+    publish_new_exam(repos, [{"id": "q1", "prompt": "Newer?"}])
+    second = release(again, "lab", "The Lab", SUMMARY, cache)
+
+    assert second["courses"]["pushed"] and "error" not in second, second
+    assert json.loads(remote_show(repos["c_remote"], "lab/exam.json"))["questions"][0]["prompt"] == "Newer?"
+    assert json.loads(remote_show(repos["c_remote"], "lab/course.json"))["version"] == "0.1.12"
+
+
+def test_a_previous_clone_is_cleared_read_only_files_and_all(tmp_path):
+    from exam_bank.core.distribution import _remove_tree
+
+    old = tmp_path / "courses-repo" / ".git" / "objects" / "ab"
+    old.mkdir(parents=True)
+    locked = old / "cdef"
+    locked.write_text("x")
+    os.chmod(locked, stat.S_IREAD)
+
+    _remove_tree(tmp_path / "courses-repo")
+
+    assert not (tmp_path / "courses-repo").exists()
 
 
 def test_the_authoring_course_json_keeps_its_line_endings(repos):

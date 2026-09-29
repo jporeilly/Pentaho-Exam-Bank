@@ -13,7 +13,7 @@ the course you were editing: the Generate and Bank screens start on that course.
   Report, Exam paper and Publish (working with them); Settings, Admin and
   Documentation (the app itself). The Bank entry shows how many questions the
   bank holds.
-- **The status bar** along the bottom reads *Exam Bank v1.7.2 · Content Manager
+- **The status bar** along the bottom reads *Exam Bank v1.7.3 · Content Manager
   v0.5.0*: this app's version, and the version of the Content Manager whose
   courses it reads. If the interface and the backend ever report different
   versions, the Exam Bank part turns red — restart the app.

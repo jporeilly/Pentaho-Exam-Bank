@@ -7,6 +7,27 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-09-29
+### Fixed
+
+- **A second Publish and push from the same machine pushes too.** Each push
+  clones the courses repo into the app's cache, clearing the previous clone
+  first. git writes its object files read-only, and on Windows the clearing
+  (`shutil.rmtree(..., ignore_errors=True)`) could not delete them and said
+  nothing, so the next clone found a non-empty folder and failed: every push
+  after a machine's first. Found re-publishing PDI in 2 Hours, with 76 object
+  files left from the morning's push; the exam was written, nothing was
+  committed or pushed. The clearing now makes read-only files writable and
+  retries, and refuses in words if it still cannot. A test publishes twice from
+  one machine; with the old clearing put back it fails with the same message.
+- **A refusal over uncommitted files names them whole.** The list lost its
+  first character ("ourses/pdi-2hr-lab/exam.json").
+
+With this fix, PDI in 2 Hours was re-published from the bank: course 0.1.13,
+its 30 Bloom levels back in the course file and in Pentaho-Courses, each as it
+was before the 0.1.12 publish, and every question's keys back in the course's
+own order.
+
 ## [1.7.2] - 2026-09-29
 ### Fixed
 
