@@ -34,8 +34,22 @@ function answer(over: Partial<ChatAnswer> = {}): ChatAnswer {
   };
 }
 
+/** An answer as /api/chat/stream sends it: sources, the text in two pieces, done. */
+function ndjson(a: ChatAnswer): string {
+  const half = Math.floor(a.answer.length / 2);
+  const events = [
+    { type: "sources", sources: a.sources.map((s) => ({ ...s, cited: false })), grounding: a.grounding },
+    ...(a.answered ? [{ type: "token", text: a.answer.slice(0, half) },
+                      { type: "token", text: a.answer.slice(half) }] : []),
+    { type: "done", ...a },
+  ];
+  return events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+}
+
 function mockApi(handlers: {
   chat?: ChatAnswer | { status: number; detail: string } | "hang";
+  /** A stream the test feeds by hand, to see the answer while it is written. */
+  stream?: ReadableStream<Uint8Array>;
   settings?: Partial<Settings>;
 } = {}) {
   const chats: Array<{ messages: Array<{ role: string; content: string }>; appDocs: boolean; pentahoDocs: boolean }> = [];
@@ -48,13 +62,34 @@ function mockApi(handlers: {
       }));
     if (path.includes("/api/chat")) {
       chats.push(JSON.parse(String(init?.body)));
+      if (handlers.stream) {
+        // As fetch does: aborting the request errors the body mid-read.
+        const source = handlers.stream.getReader();
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () =>
+              controller.error(new DOMException("aborted", "AbortError")));
+          },
+          async pull(controller) {
+            const { done, value } = await source.read();
+            if (done) controller.close();
+            else controller.enqueue(value);
+          },
+        });
+        return Promise.resolve(new Response(body, {
+          status: 200, headers: { "Content-Type": "application/x-ndjson" },
+        }));
+      }
       const r = handlers.chat ?? answer();
       if (r === "hang") {
         return new Promise((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
         });
       }
-      return "status" in r ? json({ detail: r.detail }, r.status) : json(r);
+      if ("status" in r) return json({ detail: r.detail }, r.status);
+      return Promise.resolve(new Response(ndjson(r), {
+        status: 200, headers: { "Content-Type": "application/x-ndjson" },
+      }));
     }
     if (path.includes("/api/open-url")) {
       opened.push(JSON.parse(String(init?.body)).url);
@@ -283,5 +318,60 @@ describe("the source switches", () => {
     await askIt();
     await screen.findByText(/Answered by/);
     expect(chats[0].pentahoDocs).toBe(false);
+  });
+});
+
+describe("while it is written", () => {
+  // The answer used to appear only when all of it was written - a minute or
+  // more on a local model, with nothing on screen but "Searching...".
+  function feed() {
+    const enc = new TextEncoder();
+    let push!: (event: unknown) => void;
+    let close!: () => void;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        push = (event) => controller.enqueue(enc.encode(JSON.stringify(event) + "\n"));
+        close = () => controller.close();
+      },
+    });
+    return { stream, push: (e: unknown) => push(e), close: () => close() };
+  }
+
+  it("shows the text as the model writes it, then the finished answer", async () => {
+    const f = feed();
+    mockApi({ stream: f.stream });
+    render(<ChatPane onOpenDoc={() => {}} />);
+    await askIt();
+
+    const a = answer();
+    f.push({ type: "sources", sources: a.sources, grounding: a.grounding });
+    f.push({ type: "token", text: "Use **Publish and push**" });
+    expect(await screen.findByText(/Use/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Stop/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Answered by/)).not.toBeInTheDocument();
+
+    f.push({ type: "token", text: " [A1]. The server listens on 8080 [P1]." });
+    f.push({ type: "done", ...a });
+    f.close();
+
+    expect(await screen.findByText(/Answered by gemma4:12b/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Ask$/ })).toBeInTheDocument();
+  });
+
+  it("keeps what was written when stopped, marked, and leaves it out of the follow-up", async () => {
+    const f = feed();
+    const { chats } = mockApi({ stream: f.stream });
+    render(<ChatPane onOpenDoc={() => {}} />);
+    await askIt();
+
+    const a = answer();
+    f.push({ type: "sources", sources: a.sources, grounding: a.grounding });
+    f.push({ type: "token", text: "Use Publish and push" });
+    await screen.findByText(/Use Publish and push/);
+    await userEvent.click(screen.getByRole("button", { name: /Stop/ }));
+
+    expect(await screen.findByText(/Stopped before it finished/)).toBeInTheDocument();
+    expect(screen.getByText(/Use Publish and push/)).toBeInTheDocument();
+    expect(chats).toHaveLength(1);
   });
 });

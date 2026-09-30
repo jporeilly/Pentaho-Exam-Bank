@@ -72,6 +72,7 @@ function mockApi(handlers: {
   get?: SettingsResponse;
   put?: SettingsResponse | { status: number; detail: string };
   mcp?: DocsMcpStatus;
+  gpu?: unknown;
 } = {}) {
   const calls: Array<{ method: string; body: unknown }> = [];
   const probes: string[] = [];
@@ -82,6 +83,11 @@ function mockApi(handlers: {
       return Promise.resolve(new Response(JSON.stringify(handlers.mcp ?? MCP_OK), {
         status: 200, headers: { "Content-Type": "application/json" },
       }));
+    }
+    if (String(url).includes("/api/settings/gpu")) {
+      return Promise.resolve(new Response(JSON.stringify(handlers.gpu ?? {
+        ollama: true, model: "gemma4:12b", gpus: [], largestGpuGb: 0, models: [], loaded: [], advice: [],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
     }
     calls.push({ method, body: init?.body ? JSON.parse(String(init.body)) : null });
 
@@ -325,5 +331,37 @@ describe("export and backups", () => {
     const sent = (calls.find((c) => c.method === "PUT")!.body as { settings: Record<string, unknown> }).settings;
     expect(sent).toMatchObject({ auto_backup_enabled: true, auto_backup_interval_hours: 6,
                                  default_export_format: "docx" });
+  });
+});
+
+describe("GPU advice", () => {
+  // get_gpu_info and a model catalogue sat in the code since the NiceGUI days
+  // with nothing on screen; the catalogue also added the two cards together.
+  it("says what the machine can run, and lists every pulled model's fit", async () => {
+    mockApi({ gpu: {
+      ollama: true, model: "gemma4:12b", largestGpuGb: 12,
+      gpus: [{ name: "NVIDIA GeForce RTX 3060", totalGb: 12, freeGb: 11 },
+             { name: "NVIDIA GeForce RTX 3060", totalGb: 12, freeGb: 10 }],
+      models: [
+        { name: "gemma4:12b", sizeGb: 7, needGb: 8.7, fit: "fits", selected: true },
+        { name: "gemma3:27b", sizeGb: 16.2, needGb: 18.8, fit: "split", selected: false },
+      ],
+      loaded: [],
+      advice: ["2 × NVIDIA GeForce RTX 3060, 12 GB each. A model has to fit on ONE card to run at full speed.",
+               "gemma4:12b needs about 8.7 GB and fits on one 12 GB card, so it runs on the GPU at full speed."],
+    } });
+    render(<SettingsPane />);
+
+    expect(await screen.findByText(/has to fit on ONE card/)).toBeInTheDocument();
+    expect(screen.getByText("gemma4:12b (in use)")).toBeInTheDocument();
+    expect(screen.getByText("Needs more than one card")).toBeInTheDocument();
+  });
+
+  it("is not shown for a hosted provider", async () => {
+    mockApi({ get: response({ settings: settings({ ai_provider: "anthropic" }) }) });
+    render(<SettingsPane />);
+
+    await screen.findByText("The model");
+    expect(screen.queryByText("GPU advice")).not.toBeInTheDocument();
   });
 });

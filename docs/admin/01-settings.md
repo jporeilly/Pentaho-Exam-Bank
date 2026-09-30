@@ -8,6 +8,12 @@
   and AI Chat. For Ollama, its URL and context window; for a hosted provider,
   whether its API key is present. Keys are read from the environment
   (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) and never stored or shown.
+- **GPU advice** (Ollama) — what this machine's GPUs can run, read from
+  `nvidia-smi` and Ollama: the cards, whether the saved model fits on ONE card
+  (a model that does not is spread over the cards or onto the CPU and runs
+  several times slower), which of your pulled models fit, and how much of a
+  loaded model is on the CPU. Each model's need is estimated from its size;
+  **Check again** re-reads it after you pull or load one.
 - **Pentaho documentation** — whether AI Chat also searches docs.pentaho.com,
   the address of the docs site's MCP server, and whether that server is
   answering right now. See

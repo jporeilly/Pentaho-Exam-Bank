@@ -19,6 +19,15 @@ asked at all, and the reply says what was searched and that nothing covered
 the question. An answer from outside the documentation would read exactly like
 one from inside it.
 
+## The answer as it is written
+
+The sources are listed as soon as the searches are done, and the answer then
+appears as the model writes it, rather than all at once when it has finished -
+which on a local model can take a minute. **Stop** ends it there: what was
+written stays on screen, marked *Stopped before it finished*, and is not sent
+back with a follow-up question. With Ollama, stopping also stops the model
+working on it.
+
 ## Sources under an answer
 
 Every answer lists what the model was given, numbered the way the answer cites

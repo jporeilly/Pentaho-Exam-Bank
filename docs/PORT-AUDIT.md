@@ -54,34 +54,38 @@ which is now more useful than it was, because the Content Manager shuffles
 options at render and the bank's stored order is no longer what a learner
 sees.
 
-### 4. Import validation against the source — `import_validation.py`, 547 lines
+### 4. Import validation against the source — done in 1.10.0
 
-`core/question_importer.py` still has `validate_question_against_pptx`,
-`validate_question_against_docs` and `validate_batch`, all unreachable. The
-Import pane previews and reports duplicates and ungradeable questions, but
-does not check an imported question against the material it claims to come
-from.
+Import's preview has **Check answers against docs.pentaho.com**
+(`core/docs_check.py`): each question is looked up through the docs
+connection AI Chat uses and marked Backed, Not found or Not checked. The old
+`validate_question_against_docs` (a server list nothing set, every word
+counted, the match written onto the question) went with it; the PPTX
+validators went in 1.9.0.
 
-### 5. Ollama settings — `ollama_settings.py`, 299 lines
+### 5. Ollama settings — GPU advice done in 1.10.0
 
-`core/ollama_client.py` has `get_gpu_info`, `recommend_models` and
-`recommend_num_ctx`, none of them reachable. The Settings pane lets you type
-a model name and a context size; it cannot tell you what the machine will
-actually run. On a two-card box this matters: a model that does not fit one
-GPU spills to CPU and runs several times slower.
+Settings > The model shows **GPU advice** (`core/gpu_advice.py`): the cards
+from `nvidia-smi`, each pulled model judged against the largest SINGLE card,
+and how much of a loaded model sits on the CPU (Ollama's `/api/ps`).
+`recommend_models` (a catalogue of models this machine did not have) and
+`recommend_num_ctx` added the cards' memory together, which on a two-card box
+is the wrong answer; both were replaced.
 
-### 6. MCP settings — `mcp_settings.py`, 141 lines
+### 6. MCP settings — done
 
-`core/mcp_client.py` has `search_documentation` and
-`search_multiple_servers_structured` with no caller. The settings API
-mentions MCP once; the Settings pane does not mention it at all.
+Settings > Pentaho documentation (1.7.0) holds the docs connection and its
+live status. The unused `search_documentation` and multi-server searches went
+in 1.10.0.
 
-### 7. Streaming model output
+### 7. Streaming model output — AI Chat done in 1.10.0
 
-`ollama_client.py` has `generate_stream`, `chat_stream` and six `async_*`
-variants, all unreachable. Everything is a blocking call today — the AI
-answer-check takes **171 seconds** against the local model because it makes
-two sequential requests and shows nothing until both finish.
+AI Chat streams (`providers.chat_stream`, `POST /api/chat/stream`): the
+sources, then the answer as it is written, for Ollama, Anthropic and OpenAI;
+Stop keeps what was written. The AI buttons in the editor still wait for the
+whole reply - they return JSON a proposal is built from, which has nothing to
+show until it is complete. `generate_stream` and the six `async_*` variants
+are still unused.
 
 ## Probably just dead code
 

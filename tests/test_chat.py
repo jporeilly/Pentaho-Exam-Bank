@@ -360,3 +360,68 @@ def test_nothing_but_an_https_page_is_opened(client, monkeypatch, url):
 
     assert response.status_code == 400
     assert opened == []
+
+# --- the streamed answer (1.10.0) ------------------------------------------------------------
+#
+# The same turn, delivered as it is written: the sources first, then the text
+# piece by piece, then the answer whole. Grounded exactly as /api/chat is -
+# the two share the search - so only the delivery is tested here.
+
+
+import json as _json
+
+
+@pytest.fixture
+def streamed(monkeypatch):
+    asked = {}
+
+    def fake_stream(messages, **kwargs):
+        asked["messages"] = messages
+        if "error" in asked:
+            yield "Use Publish "
+            raise asked["error"]
+        yield from asked.get("pieces", ["Use Publish ", "and push [A1]. ", "It listens on 8080 [P2]."])
+
+    monkeypatch.setattr(chat_router, "chat_stream", fake_stream)
+    return asked
+
+
+def stream(client, question, **body):
+    response = client.post("/api/chat/stream",
+                           json={"messages": [{"role": "user", "content": question}], **body})
+    return response, [_json.loads(line) for line in response.text.splitlines() if line.strip()]
+
+
+def test_the_stream_sends_sources_then_the_text_then_the_whole_answer(client, streamed, pentaho):
+    response, events = stream(client, "How do I publish and push an exam?")
+
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    assert [e["type"] for e in events] == ["sources", "token", "token", "token", "done"]
+    assert {s["id"] for s in events[0]["sources"]} >= {"A1", "P1", "P2"}
+    assert "".join(e["text"] for e in events if e["type"] == "token") == \
+        "Use Publish and push [A1]. It listens on 8080 [P2]."
+    done = events[-1]
+    assert done["answered"] is True and done["answer"].endswith("[P2].")
+    assert {s["id"] for s in done["sources"] if s["cited"]} == {"A1", "P2"}
+
+
+def test_nothing_found_streams_the_reason_and_never_calls_the_model(client, streamed, pentaho):
+    pentaho["hits"] = []
+    _, events = stream(client, "What colour is the sky on Mars?")
+
+    assert [e["type"] for e in events] == ["sources", "done"]
+    assert events[-1]["answered"] is False
+    assert "messages" not in streamed
+
+
+def test_a_model_that_fails_part_way_says_so_in_the_stream(client, streamed, pentaho):
+    streamed["error"] = ProviderError("Ollama request failed: connection reset")
+    _, events = stream(client, "How do I publish and push an exam?")
+
+    assert [e["type"] for e in events] == ["sources", "token", "error"]
+    assert "connection reset" in events[-1]["message"]
+
+
+def test_a_turn_that_cannot_be_asked_is_refused_before_the_stream(client, streamed, pentaho):
+    response, _ = stream(client, "Anything?", appDocs=False, pentahoDocs=False)
+    assert response.status_code == 400

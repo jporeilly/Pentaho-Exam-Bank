@@ -19,18 +19,20 @@ this anyway: a JSON POST needs a CORS preflight, which only localhost passes.)
 
 from __future__ import annotations
 
+import json
 import time
 import webbrowser
 from typing import Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ...core import chat as chat_core
 from ...core import docs as docs_core
 from ...core import mcp_client
-from ...core.providers import ProviderError, active_provider, chat, model_for
+from ...core.providers import ProviderError, active_provider, chat, chat_stream, model_for
 from ...utils.config import config
 
 router = APIRouter(tags=["chat"])
@@ -55,9 +57,10 @@ def _docs_host() -> str:
     return (urlparse(config.docs_mcp_url).hostname or "docs.pentaho.com").lower()
 
 
-@router.post("/api/chat")
-def answer(body: ChatRequest) -> dict[str, Any]:
-    """One turn: search both sources, then answer from what they found."""
+def _gather(body: ChatRequest):
+    """Check the turn and search both sources: (earlier, question, sources,
+    grounding, host). Shared by the plain and the streamed answer, so both
+    are grounded the same way."""
     *earlier, last = [m.model_dump() for m in body.messages]
     question = last["content"].strip()
     if last["role"] != "user" or not question:
@@ -98,6 +101,23 @@ def answer(body: ChatRequest) -> dict[str, Any]:
                 sources += chat_core.pentaho_sources(hits)
                 grounding["pentaho"]["found"] = len(hits)
             grounding["pentaho"]["ms"] = round((time.monotonic() - started) * 1000)
+    return earlier, question, sources, grounding, host
+
+
+def _ask(earlier, question, sources) -> dict[str, Any]:
+    return dict(
+        messages=chat_core.build_messages(earlier, question, sources),
+        system=chat_core.SYSTEM,
+        base_url=config.ollama_url,
+        timeout=float(config.generation_timeout_seconds or 600),
+        num_ctx=int(getattr(config, "ollama_num_ctx", 0) or 0),
+    )
+
+
+@router.post("/api/chat")
+def answer(body: ChatRequest) -> dict[str, Any]:
+    """One turn: search both sources, then answer from what they found."""
+    earlier, question, sources, grounding, host = _gather(body)
 
     if not sources:
         # Deliberately not a model call. Asked with nothing to read, the model
@@ -111,13 +131,7 @@ def answer(body: ChatRequest) -> dict[str, Any]:
         }
 
     try:
-        reply = chat(
-            chat_core.build_messages(earlier, question, sources),
-            system=chat_core.SYSTEM,
-            base_url=config.ollama_url,
-            timeout=float(config.generation_timeout_seconds or 600),
-            num_ctx=int(getattr(config, "ollama_num_ctx", 0) or 0),
-        )
+        reply = chat(**_ask(earlier, question, sources))
     except ProviderError as e:
         # The provider's own message names the thing to fix — an absent key, a
         # model that was never pulled — so it is passed through.
@@ -132,6 +146,54 @@ def answer(body: ChatRequest) -> dict[str, Any]:
         "provider": active_provider(),
         "model": model_for(active_provider()),
     }
+
+
+@router.post("/api/chat/stream")
+def answer_streamed(body: ChatRequest) -> StreamingResponse:
+    """The same turn as ``/api/chat``, streamed as it is written.
+
+    Newline-delimited JSON, one event per line:
+
+    - ``{"type": "sources", "sources", "grounding"}`` - what the answer is
+      being built from, as soon as the searches are done;
+    - ``{"type": "token", "text"}`` - the answer, piece by piece;
+    - ``{"type": "done", ...}`` - the whole answer in ``/api/chat``'s shape,
+      with which sources it cited;
+    - ``{"type": "error", "message"}`` - the model failed part-way.
+
+    A turn that cannot be answered at all (no question, no source switched
+    on) is refused before the stream starts, with the same status codes.
+    """
+    earlier, question, sources, grounding, host = _gather(body)
+
+    def line(event: dict[str, Any]) -> str:
+        return json.dumps(event) + "\n"
+
+    def events():
+        yield line({"type": "sources", "sources": [s.to_json(set()) for s in sources],
+                    "grounding": grounding})
+        if not sources:
+            yield line({"type": "done", "answered": False,
+                        "answer": _not_covered(body, grounding, host),
+                        "sources": [], "grounding": grounding})
+            return
+        parts: list[str] = []
+        try:
+            for piece in chat_stream(**_ask(earlier, question, sources)):
+                parts.append(piece)
+                yield line({"type": "token", "text": piece})
+        except ProviderError as e:
+            yield line({"type": "error", "message": str(e)})
+            return
+        reply = "".join(parts)
+        cited = chat_core.cited_ids(reply)
+        yield line({
+            "type": "done", "answered": True, "answer": reply.strip(),
+            "sources": [s.to_json(cited) for s in sources], "grounding": grounding,
+            "provider": active_provider(), "model": model_for(active_provider()),
+        })
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
 
 
 def _not_covered(body: ChatRequest, grounding: dict[str, Any], host: str) -> str:

@@ -61,7 +61,9 @@ function saveJson(key: string, value: unknown) {
 export function historyOf(turns: Turn[]): ChatTurn[] {
   return turns.flatMap((t): ChatTurn[] => {
     if (t.role === "user") return [{ role: "user", content: t.content }];
-    if (t.role === "assistant" && t.answer.answered) return [{ role: "assistant", content: t.content }];
+    if (t.role === "assistant" && t.answer.answered && !t.answer.stopped) {
+      return [{ role: "assistant", content: t.content }];
+    }
     return [];
   });
 }
@@ -85,6 +87,9 @@ export function ChatPane({
   });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // The answer being written: its sources as soon as the search is done, then
+  // the text as the model writes it. Moved into `turns` when it is finished.
+  const [live, setLive] = useState<ChatAnswer | null>(null);
   const controller = useRef<AbortController | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -112,7 +117,7 @@ export function ChatPane({
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [turns, busy]);
+  }, [turns, busy, live]);
 
   const pentahoOn = sources.pentahoDocs && mcp.enabled;
   const noSource = !sources.appDocs && !pentahoOn;
@@ -126,20 +131,52 @@ export function ChatPane({
     setBusy(true);
     const ac = new AbortController();
     controller.current = ac;
+    let current = null as ChatAnswer | null;
+    let finished = false;
+    // What was written before a stop or a failure stays on screen, marked.
+    const keep = (why: string) => {
+      const partial = current;
+      if (partial && partial.answer.trim()) {
+        setTurns((t) => [...t, { role: "assistant", content: partial.answer,
+                                 answer: { ...partial, stopped: true } }]);
+      }
+      if (why) setTurns((t) => [...t, { role: "error", content: why }]);
+    };
     try {
-      const answer = await api.chat(
+      await api.chatStream(
         [...history, { role: "user", content: question }],
         { appDocs: sources.appDocs, pentahoDocs: pentahoOn },
+        (event) => {
+          if (event.type === "sources") {
+            current = { answered: true, answer: "", sources: event.sources, grounding: event.grounding };
+            setLive(current);
+          } else if (event.type === "token" && current) {
+            current = { ...current, answer: current.answer + event.text };
+            setLive(current);
+          } else if (event.type === "done") {
+            finished = true;
+            const { type: _type, ...answer } = event;
+            setTurns((t) => [...t, { role: "assistant", content: answer.answer, answer }]);
+            setLive(null);
+          } else if (event.type === "error") {
+            finished = true;
+            setLive(null);
+            keep(event.message);
+          }
+        },
         ac.signal,
       );
-      setTurns((t) => [...t, { role: "assistant", content: answer.answer, answer }]);
+      if (!finished) {
+        setLive(null);
+        keep("The answer broke off before it finished.");
+      }
     } catch (e) {
-      const content = ac.signal.aborted
-        ? "Stopped. Nothing was answered."
-        : e instanceof ApiError
-          ? e.message
-          : String(e);
-      setTurns((t) => [...t, { role: "error", content }]);
+      setLive(null);
+      if (ac.signal.aborted) {
+        keep(current && current.answer.trim() ? "" : "Stopped. Nothing was answered.");
+      } else {
+        keep(e instanceof ApiError ? e.message : String(e));
+      }
     } finally {
       setBusy(false);
       controller.current = null;
@@ -227,7 +264,12 @@ export function ChatPane({
           return <Answer key={i} answer={t.answer} onOpen={openSource} />;
         })}
 
-        {busy && <div className="turn busy faint">Searching the documentation, then asking the model…</div>}
+        {live && <Answer answer={live} onOpen={openSource} writing />}
+        {busy && !live?.answer && (
+          <div className="turn busy faint">
+            {live ? "Asking the model…" : "Searching the documentation, then asking the model…"}
+          </div>
+        )}
       </div>
 
       <form
@@ -264,7 +306,16 @@ export function ChatPane({
   );
 }
 
-function Answer({ answer, onOpen }: { answer: ChatAnswer; onOpen: (s: ChatSource) => void }) {
+function Answer({
+  answer,
+  onOpen,
+  writing = false,
+}: {
+  answer: ChatAnswer;
+  onOpen: (s: ChatSource) => void;
+  /** Still being written: the text grows, and there is nothing to sign off. */
+  writing?: boolean;
+}) {
   const byId = new Map(answer.sources.map((s) => [s.id, s]));
   const app = answer.sources.filter((s) => s.kind === "app");
   const pentaho = answer.sources.filter((s) => s.kind === "pentaho");
@@ -287,6 +338,10 @@ function Answer({ answer, onOpen }: { answer: ChatAnswer; onOpen: (s: ChatSource
         </p>
       )}
 
+      {answer.stopped && (
+        <p className="advice">Stopped before it finished. It is not sent back with a follow-up.</p>
+      )}
+
       {answer.answered && failed && (
         <p className="advice">
           {host} could not be searched: {failed} This answer is from this app's
@@ -297,7 +352,7 @@ function Answer({ answer, onOpen }: { answer: ChatAnswer; onOpen: (s: ChatSource
       {app.length > 0 && <SourceList title="From this app's documentation" items={app} onOpen={onOpen} />}
       {pentaho.length > 0 && <SourceList title={`From ${host}`} items={pentaho} onOpen={onOpen} />}
 
-      {answer.answered && answer.model && (
+      {answer.answered && answer.model && !writing && !answer.stopped && (
         <div className="turn-meta faint">
           Answered by {answer.model} via {answer.provider}
         </div>

@@ -25,7 +25,7 @@ from typing import Any, Callable
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ...core import auto_backup, auto_export
+from ...core import auto_backup, auto_export, gpu_advice
 from ...core.bank import BLOOM_LEVELS, DIFFICULTIES
 from ...core.exporter import FORMATS
 from ...core.providers import key_status
@@ -208,3 +208,10 @@ def update_settings(body: SettingsUpdate) -> dict[str, Any]:
 
     config.save()
     return _current()
+
+
+@router.get("/api/settings/gpu")
+def gpu() -> dict[str, Any]:
+    """What this machine's GPUs can run, for choosing an Ollama model.
+    Reads nvidia-smi and Ollama; changes nothing. See core/gpu_advice."""
+    return gpu_advice.advise(config.ollama_url, config.ollama_model)

@@ -141,3 +141,40 @@ class TestHealth:
         result = providers.health()
         assert result["ok"] is False
         assert "ANTHROPIC_API_KEY" in result["detail"]
+
+# --- streaming (1.10.0) ------------------------------------------------------------------------
+
+
+def test_the_ollama_stream_arrives_in_pieces(monkeypatch):
+    from exam_bank.core import ollama_client, providers
+    monkeypatch.setattr(providers, "active_provider", lambda: "ollama")
+    monkeypatch.setattr(providers, "model_for", lambda _p: "gemma4:12b")
+    seen = {}
+
+    def fake(messages, model, system, base_url, timeout, num_ctx):
+        seen["model"] = model
+        yield from ["Pentaho ", "Server ", "listens on 8080."]
+
+    monkeypatch.setattr(ollama_client, "chat_stream", fake)
+
+    pieces = list(providers.chat_stream([{"role": "user", "content": "port?"}]))
+
+    assert pieces == ["Pentaho ", "Server ", "listens on 8080."] and seen["model"] == "gemma4:12b"
+
+
+def test_an_ollama_stream_that_breaks_is_a_provider_error(monkeypatch):
+    import pytest as _pytest
+    from exam_bank.core import ollama_client, providers
+    monkeypatch.setattr(providers, "active_provider", lambda: "ollama")
+    monkeypatch.setattr(providers, "model_for", lambda _p: "gemma4:12b")
+
+    def broken(**_kw):
+        yield "Pentaho "
+        raise ConnectionResetError("reset by peer")
+
+    monkeypatch.setattr(ollama_client, "chat_stream", broken)
+
+    stream = providers.chat_stream([{"role": "user", "content": "port?"}])
+    assert next(stream) == "Pentaho "
+    with _pytest.raises(providers.ProviderError, match="reset by peer"):
+        next(stream)

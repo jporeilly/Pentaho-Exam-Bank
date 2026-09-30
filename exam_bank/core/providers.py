@@ -28,7 +28,7 @@ which this one otherwise mirrors:
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
 from . import ollama_client
 from ..utils.config import config
@@ -204,6 +204,90 @@ def chat(
         return _anthropic_chat(chosen, messages, system, timeout)
     if provider == "openai":
         return _openai_chat(chosen, messages, system, timeout)
+    raise ProviderError(f"Unknown provider '{provider}'")
+
+
+def _anthropic_stream(model: str, messages: List[dict], system: str, timeout: float) -> Iterator[str]:
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise ProviderError("ANTHROPIC_API_KEY is not set in the environment.")
+    try:
+        from anthropic import Anthropic
+    except ImportError:
+        raise ProviderError("The `anthropic` package isn't installed: pip install anthropic")
+    try:
+        client = Anthropic(api_key=key, timeout=timeout)
+        with client.messages.stream(model=model, max_tokens=8000, system=system,
+                                    messages=messages) as stream:
+            yield from stream.text_stream
+    except ProviderError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise ProviderError(f"Anthropic request failed: {e}")
+
+
+def _openai_stream(model: str, messages: List[dict], system: str, timeout: float) -> Iterator[str]:
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        raise ProviderError("OPENAI_API_KEY is not set in the environment.")
+    try:
+        from openai import OpenAI
+    except ImportError:
+        raise ProviderError("The `openai` package isn't installed: pip install openai")
+    try:
+        client = OpenAI(api_key=key, timeout=timeout)
+        full = ([{"role": "system", "content": system}] if system else []) + messages
+        for chunk in client.chat.completions.create(model=model, messages=full, stream=True):
+            piece = chunk.choices[0].delta.content if chunk.choices else None
+            if piece:
+                yield piece
+    except ProviderError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise ProviderError(f"OpenAI request failed: {e}")
+
+
+def chat_stream(
+    messages: List[dict],
+    system: str = "",
+    model: str = "",
+    base_url: str = "",
+    timeout: float = 120.0,
+    num_ctx: int = 0,
+) -> Iterator[str]:
+    """:func:`chat`, but the reply arrives piece by piece as the model writes it.
+
+    AI Chat reads this so an answer starts showing in a second or two rather
+    than after the whole of it has been written. Stopping early is closing the
+    generator: the HTTP response to the model is closed with it, and Ollama
+    stops generating when its client goes. Errors are ProviderError, as in
+    :func:`chat`, raised where the stream breaks.
+    """
+    provider = active_provider()
+    system = system or DEFAULT_SYSTEM_PROMPT
+    chosen = (model or "").strip() or model_for(provider)
+
+    if provider == "ollama":
+        if not chosen:
+            raise ProviderError("No Ollama model is configured.")
+        try:
+            yield from ollama_client.chat_stream(
+                messages=messages,
+                model=chosen,
+                system=system,
+                base_url=base_url or config.ollama_url,
+                timeout=timeout,
+                num_ctx=num_ctx,
+            )
+        except Exception as e:  # noqa: BLE001
+            raise ProviderError(f"Ollama request failed: {e}")
+        return
+    if provider == "anthropic":
+        yield from _anthropic_stream(chosen, messages, system, timeout)
+        return
+    if provider == "openai":
+        yield from _openai_stream(chosen, messages, system, timeout)
+        return
     raise ProviderError(f"Unknown provider '{provider}'")
 
 

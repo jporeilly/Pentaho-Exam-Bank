@@ -13,7 +13,14 @@
  */
 import { useEffect, useMemo, useState } from "react";
 
-import { api, ApiError, type DocsMcpStatus, type Settings, type SettingsResponse } from "./api";
+import {
+  api,
+  ApiError,
+  type DocsMcpStatus,
+  type GpuAdvice,
+  type Settings,
+  type SettingsResponse,
+} from "./api";
 
 /** One labelled control.
  *
@@ -247,6 +254,8 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
             </>
           )}
         </div>
+
+        {loaded.settings.ai_provider === "ollama" && draft.ai_provider === "ollama" && <GpuPanel />}
 
         {draft.ai_provider === "ollama" && (
           <div className="field-row">
@@ -590,5 +599,79 @@ function KeyStatus({ present, variable }: { present: boolean; variable: string }
         </>
       )}
     </span>
+  );
+}
+
+const FIT_LABEL: Record<string, string> = {
+  fits: "Fits one card",
+  tight: "Just fits one card",
+  split: "Needs more than one card",
+  "too-big": "Too big for the GPUs",
+  "no-gpu": "No GPU",
+};
+
+/** What the GPUs can run, read from nvidia-smi and Ollama. For the SAVED
+ *  model: advice about a name still being typed would be about nothing. */
+function GpuPanel() {
+  const [advice, setAdvice] = useState<GpuAdvice | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const check = () => {
+    setBusy(true);
+    setError("");
+    api
+      .gpuAdvice()
+      .then(setAdvice)
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  useEffect(check, []);
+
+  return (
+    <div className="gpu-advice card" style={{ marginTop: 10 }}>
+      <div className="toolbar">
+        <strong>GPU advice</strong>
+        <span className="spacer" />
+        <button className="secondary" onClick={check} disabled={busy}>
+          {busy ? "Checking…" : "Check again"}
+        </button>
+      </div>
+      {error && <div className="banner">{error}</div>}
+      {advice && (
+        <>
+          <ul>
+            {(advice.advice ?? []).map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+          {(advice.models ?? []).length > 0 && (
+            <details>
+              <summary className="faint">Every model pulled into Ollama</summary>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th style={{ textAlign: "right" }}>Size</th>
+                    <th style={{ textAlign: "right" }}>Needs about</th>
+                    <th>On this machine</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(advice.models ?? []).map((m) => (
+                    <tr key={m.name} className={m.selected ? "selected" : ""}>
+                      <td className="mono">{m.name}{m.selected ? " (in use)" : ""}</td>
+                      <td className="num">{m.sizeGb} GB</td>
+                      <td className="num">{m.needGb} GB</td>
+                      <td>{FIT_LABEL[m.fit] ?? m.fit}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          )}
+        </>
+      )}
+    </div>
   );
 }

@@ -331,7 +331,17 @@ export interface ChatAnswer {
   grounding: ChatGrounding;
   provider?: string;
   model?: string;
+  /** Stopped (or broken off) before the model finished: what was written is
+   *  kept on screen, marked, and not sent back as part of the conversation. */
+  stopped?: boolean;
 }
+
+/** One event of a streamed answer (POST /api/chat/stream, one JSON per line). */
+export type ChatEvent =
+  | { type: "sources"; sources: ChatSource[]; grounding: ChatGrounding }
+  | { type: "token"; text: string }
+  | ({ type: "done" } & ChatAnswer)
+  | { type: "error"; message: string };
 
 export interface DocsMcpStatus {
   enabled: boolean;
@@ -653,6 +663,20 @@ export interface AiReview {
   form?: { field: string; message: string }[];
 }
 
+/** What this machine's GPUs can run (GET /api/settings/gpu). */
+export interface GpuAdvice {
+  ollama: boolean;
+  model: string;
+  gpus: { name: string; totalGb: number; freeGb: number }[];
+  largestGpuGb: number;
+  /** Pulled models: `fit` against the largest single card. */
+  models: { name: string; sizeGb: number; needGb: number;
+            fit: "fits" | "tight" | "split" | "too-big" | "no-gpu"; selected: boolean }[];
+  /** Loaded now, with how much of each is on the GPU. */
+  loaded: { name: string; sizeGb: number; gpuPercent: number }[];
+  advice: string[];
+}
+
 /** The bank's fixed lists, as the server validates them. */
 export interface Vocabulary {
   statuses: string[];
@@ -792,6 +816,7 @@ export const api = {
 
   lifecycle: () => request<Lifecycle>("/api/lifecycle"),
   vocabulary: () => request<Vocabulary>("/api/vocabulary"),
+  gpuAdvice: () => request<GpuAdvice>("/api/settings/gpu"),
 
   certifications: () => request<Certification[]>("/api/certifications"),
 
@@ -821,6 +846,56 @@ export const api = {
   docsPage: (slug: string) => request<DocPage>(`/api/docs/page${query({ slug })}`),
   searchDocs: (q: string, limit = 20) =>
     request<DocSearchResult>(`/api/docs/search${query({ q, limit })}`),
+
+  /** The same turn as `chat`, delivered as the model writes it. Each event
+   *  goes to `onEvent`; resolves when the stream ends. */
+  chatStream: async (
+    messages: ChatTurn[],
+    sources: { appDocs: boolean; pentahoDocs: boolean },
+    onEvent: (event: ChatEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    let response: Response;
+    try {
+      response = await fetch(`${BASE}/api/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, ...sources }),
+        signal,
+      });
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      throw new ApiError(0, "Can't reach the Exam Bank API. Is it running?");
+    }
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const body = await response.json();
+        if (typeof body?.detail === "string") detail = body.detail;
+      } catch {
+        /* the status line stands */
+      }
+      throw new ApiError(response.status, detail);
+    }
+    const reader = response.body?.getReader();
+    if (!reader) throw new ApiError(0, "The answer could not be read.");
+    const decoder = new TextDecoder();
+    let buffered = "";
+    const emit = (line: string) => {
+      if (line.trim()) onEvent(JSON.parse(line) as ChatEvent);
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffered += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffered.indexOf("\n")) >= 0) {
+        emit(buffered.slice(0, nl));
+        buffered = buffered.slice(nl + 1);
+      }
+    }
+    emit(buffered + decoder.decode());
+  },
 
   chat: (
     messages: ChatTurn[],

@@ -118,152 +118,20 @@ def get_gpu_info() -> list:
         return []
 
 
-def recommend_num_ctx(model: str, base_url: str = DEFAULT_URL) -> dict:
-    """Auto-recommend num_ctx based on model context limit and available GPU memory.
-
-    Returns dict with recommended, max_model, gpu_free_mb, reasoning.
-    """
-    info = get_model_info(model, base_url)
-    gpus = get_gpu_info()
-
-    max_model = info.get("context_length", 0)
-    param_size = info.get("parameter_size", "")
-    total_gpu_free_mb = sum(g["free_mb"] for g in gpus) if gpus else 0
-    total_gpu_mb = sum(g["total_mb"] for g in gpus) if gpus else 0
-    gpu_names = ", ".join(g["name"] for g in gpus) if gpus else "No GPU detected"
-
-    # Estimate: each token in context needs ~0.5-2 KB of KV cache depending on model size
-    # For a 27B Q4 model: ~1 KB per token. For 7B: ~0.5 KB per token.
-    # Conservative: allocate ~50% of free GPU memory for KV cache
-    if total_gpu_free_mb > 0:
-        # Parse param size to get rough scale
-        param_billions = 0
-        if param_size:
-            import re
-            m = re.search(r'([\d.]+)', param_size)
-            if m:
-                param_billions = float(m.group(1))
-
-        kb_per_token = 0.5 if param_billions < 10 else 1.0 if param_billions < 30 else 1.5
-        available_for_ctx_mb = total_gpu_free_mb * 0.4  # 40% of free VRAM for KV cache
-        max_from_gpu = int((available_for_ctx_mb * 1024) / kb_per_token)
-        # Round to nearest 1024
-        max_from_gpu = (max_from_gpu // 1024) * 1024
-        max_from_gpu = max(2048, min(max_from_gpu, max_model or 131072))
-    else:
-        # CPU only — be conservative
-        max_from_gpu = 8192
-
-    # Pick a sensible default: min of model max and GPU-derived max, capped reasonably
-    recommended = min(max_from_gpu, max_model) if max_model else max_from_gpu
-    recommended = max(4096, min(recommended, 65536))  # floor 4096, cap 65536
-
-    reasoning = f"GPU: {gpu_names} ({total_gpu_free_mb:,} MB free of {total_gpu_mb:,} MB)"
-    if max_model:
-        reasoning += f" | Model max: {max_model:,} tokens"
-    reasoning += f" | Recommended: {recommended:,} tokens"
-
-    return {
-        "recommended": recommended,
-        "max_model": max_model,
-        "gpu_free_mb": total_gpu_free_mb,
-        "gpu_total_mb": total_gpu_mb,
-        "gpu_names": gpu_names,
-        "param_size": param_size,
-        "reasoning": reasoning,
-    }
-
-
-# ── Model recommendation catalog ──────────────────────────
-
-MODEL_CATALOG = [
-    # Chat / General
-    {"name": "gemma3:27b", "category": "All-Rounder", "vram_gb": 18, "params": "27B", "quality": 5, "speed": 3, "notes": "Excellent all-round, vision capable"},
-    {"name": "gemma3:12b", "category": "All-Rounder", "vram_gb": 8, "params": "12B", "quality": 4, "speed": 4, "notes": "Great balance of quality and speed"},
-    {"name": "gemma3:4b", "category": "All-Rounder", "vram_gb": 3, "params": "4B", "quality": 3, "speed": 5, "notes": "Fast, good for low-end hardware"},
-    {"name": "llama3.1:70b", "category": "All-Rounder", "vram_gb": 40, "params": "70B", "quality": 5, "speed": 1, "notes": "Top quality, needs high-end GPU"},
-    {"name": "llama3.1:8b", "category": "All-Rounder", "vram_gb": 5, "params": "8B", "quality": 4, "speed": 4, "notes": "Solid general-purpose model"},
-    {"name": "llama3.2:3b", "category": "All-Rounder", "vram_gb": 2, "params": "3B", "quality": 3, "speed": 5, "notes": "Lightweight, very fast"},
-    {"name": "mistral", "category": "All-Rounder", "vram_gb": 5, "params": "7B", "quality": 4, "speed": 4, "notes": "Fast and efficient general model"},
-    {"name": "mixtral", "category": "All-Rounder", "vram_gb": 28, "params": "47B", "quality": 5, "speed": 2, "notes": "MoE architecture, high quality"},
-    {"name": "qwen3:32b", "category": "All-Rounder", "vram_gb": 20, "params": "32B", "quality": 5, "speed": 3, "notes": "Strong reasoning and multilingual"},
-    {"name": "qwen3:8b", "category": "All-Rounder", "vram_gb": 5, "params": "8B", "quality": 4, "speed": 4, "notes": "Good quality, efficient"},
-    {"name": "phi4:14b", "category": "All-Rounder", "vram_gb": 9, "params": "14B", "quality": 4, "speed": 4, "notes": "Microsoft, strong reasoning"},
-
-    # Chat / Conversational
-    {"name": "llama3.1:8b", "category": "Chat", "vram_gb": 5, "params": "8B", "quality": 4, "speed": 4, "notes": "Natural conversational style"},
-    {"name": "gemma3:12b", "category": "Chat", "vram_gb": 8, "params": "12B", "quality": 4, "speed": 4, "notes": "Excellent chat with vision"},
-    {"name": "command-r:35b", "category": "Chat", "vram_gb": 22, "params": "35B", "quality": 5, "speed": 3, "notes": "Cohere, built for RAG and chat"},
-
-    # Code
-    {"name": "qwen2.5-coder:32b", "category": "Code", "vram_gb": 20, "params": "32B", "quality": 5, "speed": 3, "notes": "Top code model, many languages"},
-    {"name": "qwen2.5-coder:7b", "category": "Code", "vram_gb": 5, "params": "7B", "quality": 4, "speed": 4, "notes": "Good code assistant, fast"},
-    {"name": "codellama:13b", "category": "Code", "vram_gb": 8, "params": "13B", "quality": 4, "speed": 4, "notes": "Meta, solid code completion"},
-    {"name": "codellama:7b", "category": "Code", "vram_gb": 5, "params": "7B", "quality": 3, "speed": 5, "notes": "Lightweight code model"},
-    {"name": "deepseek-coder-v2:16b", "category": "Code", "vram_gb": 10, "params": "16B", "quality": 5, "speed": 3, "notes": "Strong code generation"},
-    {"name": "starcoder2:15b", "category": "Code", "vram_gb": 10, "params": "15B", "quality": 4, "speed": 3, "notes": "BigCode, 600+ languages"},
-
-    # Vision (multimodal)
-    {"name": "gemma3:27b", "category": "Vision", "vram_gb": 18, "params": "27B", "quality": 5, "speed": 3, "notes": "Image understanding + text"},
-    {"name": "gemma3:12b", "category": "Vision", "vram_gb": 8, "params": "12B", "quality": 4, "speed": 4, "notes": "Vision capable, good balance"},
-    {"name": "gemma3:4b", "category": "Vision", "vram_gb": 3, "params": "4B", "quality": 3, "speed": 5, "notes": "Lightweight vision model"},
-    {"name": "llava:13b", "category": "Vision", "vram_gb": 8, "params": "13B", "quality": 4, "speed": 3, "notes": "Image captioning and Q&A"},
-    {"name": "llava:7b", "category": "Vision", "vram_gb": 5, "params": "7B", "quality": 3, "speed": 4, "notes": "Fast image understanding"},
-    {"name": "moondream:1.8b", "category": "Vision", "vram_gb": 2, "params": "1.8B", "quality": 3, "speed": 5, "notes": "Tiny vision model, very fast"},
-
-    # Exam / Education (best for this app)
-    {"name": "gemma3:27b", "category": "Exam Writing", "vram_gb": 18, "params": "27B", "quality": 5, "speed": 3, "notes": "Best for certification exam questions"},
-    {"name": "qwen3:32b", "category": "Exam Writing", "vram_gb": 20, "params": "32B", "quality": 5, "speed": 3, "notes": "Strong structured output, reasoning"},
-    {"name": "llama3.1:8b", "category": "Exam Writing", "vram_gb": 5, "params": "8B", "quality": 4, "speed": 4, "notes": "Good quality at lower VRAM"},
-    {"name": "phi4:14b", "category": "Exam Writing", "vram_gb": 9, "params": "14B", "quality": 4, "speed": 4, "notes": "Strong at structured tasks"},
-    {"name": "mistral", "category": "Exam Writing", "vram_gb": 5, "params": "7B", "quality": 4, "speed": 4, "notes": "Fast, decent question quality"},
-
-    # Embedding / Analysis
-    {"name": "nomic-embed-text", "category": "Embedding", "vram_gb": 1, "params": "137M", "quality": 4, "speed": 5, "notes": "Text embeddings for search"},
-    {"name": "mxbai-embed-large", "category": "Embedding", "vram_gb": 1, "params": "335M", "quality": 5, "speed": 5, "notes": "High-quality embeddings"},
-]
-
-
-def recommend_models(gpu_total_mb: int = 0) -> dict:
-    """Recommend models by category based on available GPU VRAM.
-
-    Returns dict of {category: [models]} where models fit in the GPU.
-    Each model dict includes a 'fits' bool and 'fit_label' string.
-    """
-    if gpu_total_mb <= 0:
-        gpus = get_gpu_info()
-        gpu_total_mb = sum(g["total_mb"] for g in gpus) if gpus else 0
-
-    gpu_total_gb = gpu_total_mb / 1024 if gpu_total_mb else 0
-
-    categories = {}
-    seen = set()  # dedupe by (name, category)
-    for m in MODEL_CATALOG:
-        key = (m["name"], m["category"])
-        if key in seen:
-            continue
-        seen.add(key)
-        cat = m["category"]
-        fits = m["vram_gb"] <= gpu_total_gb if gpu_total_gb > 0 else m["vram_gb"] <= 8
-        tight = m["vram_gb"] > gpu_total_gb * 0.7 if gpu_total_gb > 0 else False
-        if fits and not tight:
-            fit_label = "Fits well"
-            fit_color = "positive"
-        elif fits:
-            fit_label = "Tight fit"
-            fit_color = "warning"
-        else:
-            fit_label = "Too large"
-            fit_color = "negative"
-
-        entry = {**m, "fits": fits, "fit_label": fit_label, "fit_color": fit_color}
-        categories.setdefault(cat, []).append(entry)
-
-    # Sort each category: fits first, then by quality desc, then speed desc
-    for cat in categories:
-        categories[cat].sort(key=lambda x: (not x["fits"], -x["quality"], -x["speed"]))
-
-    return categories
+def list_running(base_url: str = DEFAULT_URL, timeout: float = 5.0) -> List[dict]:
+    """The models loaded now (``/api/ps``): name, size, and ``size_vram`` - how
+    much of it is on the GPU. [] when Ollama does not answer."""
+    try:
+        req = urllib.request.Request(f"{base_url}/api/ps", method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+            return [
+                {"name": m.get("name", ""), "size": int(m.get("size", 0) or 0),
+                 "size_vram": int(m.get("size_vram", 0) or 0)}
+                for m in data.get("models", [])
+            ]
+    except Exception:
+        return []
 
 
 def _encode_image(image_path: str) -> Optional[str]:
