@@ -20,10 +20,10 @@ Replies come as JSON or as Server-Sent Events (GitBook sends SSE: an
 ``event: message`` line and one ``data:`` line). Both are handled, including a
 ``data`` value split over several lines, which the SSE format allows.
 
-Two layers: ``probe`` and ``search`` RAISE :class:`McpError` with a sentence a
-person can act on, for callers that must say what went wrong; the older
-``check_connection`` / ``search_documentation`` swallow everything and return
-False / [] for the callers written against them.
+``probe`` and ``search`` RAISE :class:`McpError` with a sentence a person can
+act on. (An older layer that swallowed every error and returned False / [] -
+``check_connection``, ``search_documentation`` and two multi-server searches -
+went in 1.10.0 with the import validator that was its last caller.)
 """
 
 from __future__ import annotations
@@ -175,92 +175,3 @@ def search(query: str, url: str, limit: int = 5, timeout: float = 15.0) -> List[
         raise McpError("The search tool reported an error.")
     return _hits(result)[:limit]
 
-
-# --- the original, error-swallowing interface --------------------------------
-
-
-def check_connection(mcp_url: str, timeout: float = 5.0) -> bool:
-    try:
-        result = _post_jsonrpc(mcp_url, "initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "exam-bank", "version": "1.0"},
-        }, timeout=timeout)
-        return "result" in result
-    except Exception:
-        return False
-
-
-def search_documentation(query: str, mcp_url: str, timeout: float = 20.0) -> List[SearchResult]:
-    try:
-        data = _post_jsonrpc(mcp_url, "tools/call", {
-            "name": SEARCH_TOOL,
-            "arguments": {"query": query},
-        }, msg_id=3, timeout=timeout)
-        return _hits(data.get("result", {}) or {})
-    except Exception:
-        return []
-
-
-def search_multiple_servers(query: str, servers: list, max_results: int = 4,
-                            max_chars: int = 3000, timeout: float = 20.0) -> str:
-    all_results: List[SearchResult] = []
-    for server in servers:
-        url = server.get("url", "")
-        name = server.get("name", url)
-        if not url:
-            continue
-        try:
-            results = search_documentation(query, url, timeout=timeout)
-            for r in results:
-                r.title = f"{r.title} [{name}]"
-            all_results.extend(results)
-        except Exception:
-            pass
-    if not all_results:
-        return ""
-    parts, total = [], 0
-    for r in all_results[:max_results]:
-        snippet = r.content[:600] if len(r.content) > 600 else r.content
-        entry = f"[{r.title}]({r.link})\n{snippet}"
-        if total + len(entry) > max_chars:
-            break
-        parts.append(entry)
-        total += len(entry)
-    if not parts:
-        return ""
-    return "--- Relevant Documentation ---\n" + "\n\n".join(parts) + "\n--- End Documentation ---"
-
-
-def search_multiple_servers_structured(query: str, servers: list, max_results: int = 4,
-                                       max_chars: int = 3000, timeout: float = 20.0) -> list:
-    """Like search_multiple_servers but returns structured results.
-
-    Returns list of dicts: [{"title": ..., "link": ..., "content": ..., "server": ...}]
-    """
-    all_results = []
-    for server in servers:
-        url = server.get("url", "")
-        name = server.get("name", url)
-        if not url:
-            continue
-        try:
-            results = search_documentation(query, url, timeout=timeout)
-            for r in results:
-                all_results.append({
-                    "title": r.title,
-                    "link": r.link,
-                    "content": r.content,
-                    "server": name,
-                })
-        except Exception:
-            pass
-    # Truncate to max_results and max_chars
-    out, total = [], 0
-    for r in all_results[:max_results]:
-        snippet = r["content"][:600] if len(r["content"]) > 600 else r["content"]
-        if total + len(snippet) > max_chars:
-            break
-        out.append({**r, "content": snippet})
-        total += len(snippet)
-    return out

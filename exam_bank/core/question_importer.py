@@ -10,7 +10,6 @@ from typing import List, Optional, Tuple
 from .bank import BLOOM_LEVELS, Question
 from .pcm_reader import read_course_json
 from .source import SlideInfo
-from . import mcp_client
 from ..utils.config import config as _config
 
 
@@ -675,79 +674,3 @@ def import_from_moodle_xml(path: Path) -> List[Question]:
 
     return questions
 
-
-def validate_question_against_docs(
-    question: Question,
-    servers: list,
-) -> Tuple[bool, str, str]:
-    """Validate a question's key against MCP documentation servers.
-
-    Searches configured MCP servers for the question stem + key and checks
-    whether the documentation supports the correct answer.
-
-    Args:
-        question: The question to validate.
-        servers: List of MCP server dicts [{"name": ..., "url": ...}, ...].
-
-    Returns:
-        (passed, match_text, details)
-        - passed: True if key text was found in documentation
-        - match_text: the matching snippet from docs
-        - details: human-readable validation result
-    """
-    if not servers:
-        return False, "", "No MCP servers configured"
-
-    answers_to_check = question.correct_answers
-    if not answers_to_check:
-        return False, "", "No correct answer to validate"
-
-    def normalize(s):
-        return " ".join(s.lower().split())
-
-    # Search docs using the stem as query (most relevant context)
-    search_query = question.stem[:200]
-    try:
-        doc_text = mcp_client.search_multiple_servers(
-            search_query, servers, max_results=6, max_chars=5000
-        )
-    except Exception as ex:
-        return False, "", f"MCP search failed: {ex}"
-
-    if not doc_text:
-        return False, "", "No documentation found for this question"
-
-    norm_docs = normalize(doc_text)
-
-    best_overlap = 0.0
-    best_answer = ""
-    best_match = ""
-
-    for answer in answers_to_check:
-        norm_ans = normalize(answer)
-        if not norm_ans:
-            continue
-
-        # Exact substring match
-        if norm_ans in norm_docs:
-            question.key_source_text = answer
-            return True, answer, "Exact match found in documentation"
-
-        # Fuzzy word overlap
-        ans_words = set(norm_ans.split())
-        doc_words = set(norm_docs.split())
-        if ans_words:
-            overlap = len(ans_words & doc_words) / len(ans_words)
-            if overlap > best_overlap:
-                best_overlap = overlap
-                best_answer = answer
-                matched_words = ans_words & doc_words
-                best_match = " ".join(sorted(matched_words))
-
-    # Accept if 70%+ word overlap
-    if best_overlap >= _config.validation_threshold:
-        question.key_source_text = best_match
-        return True, best_match, f"Fuzzy match ({best_overlap:.0%} overlap) in documentation"
-
-    detail = f"No match found in docs (best: {best_overlap:.0%} overlap)"
-    return False, "", detail

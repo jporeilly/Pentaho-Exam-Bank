@@ -15,6 +15,7 @@ for an hour cannot commit something the server has since forgotten.
 from __future__ import annotations
 
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +25,9 @@ from pydantic import BaseModel
 from ...core.bank import Question, ExamBankDB
 from ...core.importing import SUPPORTED, UnsupportedFile, import_any
 from ...core.validation import problems_with
+from ...core import docs_check
 from ...core.intake import take_in
+from ...utils.config import config
 from ..deps import courses_dir_if_any, get_db, question_json
 
 router = APIRouter(tags=["import"])
@@ -177,3 +180,35 @@ def commit_import(
                    source_type_from_certification=True)
     return {"saved": len(done.saved), "ids": [q.id for q in done.saved],
             "refused": refused + done.refused}
+
+
+class DocsCheckRequest(BaseModel):
+    questions: list[dict[str, Any]]
+
+
+@router.post("/api/import/check-docs")
+def check_against_docs(body: DocsCheckRequest) -> dict[str, Any]:
+    """Look each question up in docs.pentaho.com. Writes nothing.
+
+    One result per question, in order: ``supported`` when the docs carry every
+    correct answer, ``not-found`` when they do not (a prompt to look, not a
+    verdict), ``error`` when the search could not be made. See core/docs_check.
+    """
+    if not config.docs_mcp_enabled:
+        raise HTTPException(409, "The Pentaho docs connection is off in Settings.")
+    if not body.questions:
+        raise HTTPException(400, "No questions to check.")
+    questions, results = [], {}
+    for i, raw in enumerate(body.questions):
+        try:
+            questions.append((i, Question(**raw)))
+        except TypeError as e:
+            results[i] = {"status": "error", "detail": f"Not a question: {e}", "answers": [], "sources": []}
+    started = time.monotonic()
+    for (i, _), result in zip(questions, docs_check.check_many([q for _, q in questions])):
+        results[i] = result
+    return {
+        "results": [results[i] for i in range(len(body.questions))],
+        "threshold": config.validation_threshold,
+        "ms": round((time.monotonic() - started) * 1000),
+    }

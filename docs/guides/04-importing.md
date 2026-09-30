@@ -10,7 +10,26 @@ Content Manager `exam.json`, or this bank's own JSON export.
 3. Tick the questions to keep. **Select all gradeable** is the usual choice; a
    question that cannot be graded cannot be ticked, and a near-duplicate needs
    a deliberate tick.
-4. Press **Import N of M**. Questions arrive as drafts.
+4. Optionally press **Check answers against docs.pentaho.com** (see below).
+5. Press **Import N of M**. Questions arrive as drafts.
+
+## Checking answers against docs.pentaho.com
+
+A file from somewhere else arrives with answers nobody here has checked.
+**Check answers against docs.pentaho.com** looks each question up in Pentaho's
+documentation, through the same connection AI Chat uses, and adds a column to
+the preview:
+
+- **Backed** — the docs carry every correct answer: all of it word for word,
+  or enough of its meaningful words (not "the", "of", "a") to reach the **Docs
+  check threshold** in [Settings](../admin/01-settings.md). The pages it
+  found are linked.
+- **Not found** — the docs may say it differently, or not at all. A prompt to
+  look, not a verdict.
+- **Not checked** — the search could not be made; the reason is shown.
+
+It changes nothing and imports nothing; you still choose what to import. It
+needs the Pentaho docs connection switched on in Settings.
 
 Imported into a course's certification, a question takes a place in the
 course order and an id in the course's format, `<course>-m<module>-q<question>`,

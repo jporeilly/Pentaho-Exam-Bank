@@ -225,12 +225,6 @@ class AppConfig:
     docs_mcp_enabled: bool = True
     docs_mcp_url: str = "https://docs.pentaho.com/~gitbook/mcp"
 
-    # MCP documentation servers - the older, list-shaped setting read only by
-    # question_importer.validate_question_against_docs, which nothing calls.
-    # Not in the settings API. AI Chat uses docs_mcp_* above.
-    mcp_servers: List[dict] = field(default_factory=list)
-    mcp_enabled: bool = False
-
     # Defaults for question generation
     default_difficulty: str = "Medium"
     default_bloom_level: str = "Apply"
@@ -262,8 +256,10 @@ class AppConfig:
     # Duplicate detection
     duplicate_threshold: float = 0.85       # 0.0–1.0, stem similarity for duplicate detection
 
-    # Validation
-    validation_threshold: float = 0.70      # 0.0–1.0, word overlap for import validation
+    # The docs check on import (core/docs_check): the share of a correct
+    # answer's meaningful words that must appear in what docs.pentaho.com
+    # returns for the question to count as supported. 0.0-1.0.
+    validation_threshold: float = 0.70
 
     # Pagination
     questions_per_page: int = 25            # 10, 25, 50, or 100

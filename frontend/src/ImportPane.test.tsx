@@ -54,6 +54,7 @@ function preview(over: Partial<ImportPreview> = {}): ImportPreview {
 function mockApi(handlers: {
   preview?: ImportPreview | { status: number; detail: string };
   commit?: unknown;
+  docs?: unknown;
 } = {}) {
   const calls: Array<{ path: string; body: unknown }> = [];
   vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
@@ -75,6 +76,9 @@ function mockApi(handlers: {
     if (path.includes("/import/preview")) {
       const r = handlers.preview ?? preview();
       return "status" in r ? json({ detail: r.detail }, r.status) : json(r);
+    }
+    if (path.includes("/import/check-docs")) {
+      return json(handlers.docs ?? { results: [], threshold: 0.7, ms: 10 });
     }
     if (path.includes("/import/commit")) {
       return json(handlers.commit ?? { saved: 1, ids: ["q1"], refused: [] });
@@ -322,5 +326,49 @@ describe("saving", () => {
     await screen.findByText("Imported");
 
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+});
+
+describe("checking against docs.pentaho.com", () => {
+  // The docs check existed since the NiceGUI days with no button anywhere.
+  it("says per question whether the docs back the answer, and imports nothing", async () => {
+    const calls = mockApi({
+      preview: preview({ questions: [item(), item({ question: question({ id: "q2", stem: "Which reads Access?",
+                                                                          key: "Access input" }) })] }),
+      docs: { threshold: 0.7, ms: 900, results: [
+        { status: "supported", detail: "CSV file input: 100%", answers: [],
+          sources: [{ title: "Text File Input", link: "https://docs.pentaho.com/pdi/text-file-input" }] },
+        { status: "not-found", detail: "Access input: 50%", answers: [], sources: [] },
+      ] },
+    });
+    render(<ImportPane />);
+    await upload();
+    await screen.findByText("Which reads Access?");
+
+    await userEvent.click(screen.getByRole("button", { name: "Check answers against docs.pentaho.com" }));
+
+    expect(await screen.findByText(/backs 1 of 2 answers; 1 not found there/)).toBeInTheDocument();
+    expect(screen.getByText("Backed")).toBeInTheDocument();
+    expect(screen.getByText("Not found")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Text File Input" })).toBeInTheDocument();
+    const sent = calls.find((c) => c.path.includes("/import/check-docs"))!.body as { questions: unknown[] };
+    expect(sent.questions).toHaveLength(2);
+    expect(calls.some((c) => c.path.includes("/import/commit"))).toBe(false);
+  });
+
+  it("shows why the check could not run", async () => {
+    mockApi();
+    vi.stubGlobal("fetch", ((orig) => (url: string, init?: RequestInit) =>
+      String(url).includes("/import/check-docs")
+        ? Promise.resolve(new Response(JSON.stringify({ detail: "The Pentaho docs connection is off in Settings." }),
+                                       { status: 409, headers: { "Content-Type": "application/json" } }))
+        : orig(url, init))(globalThis.fetch as (u: string, i?: RequestInit) => Promise<Response>));
+    render(<ImportPane />);
+    await upload();
+    await screen.findByText("Which step reads a delimited file?");
+
+    await userEvent.click(screen.getByRole("button", { name: "Check answers against docs.pentaho.com" }));
+
+    expect(await screen.findByText(/connection is off in Settings/)).toBeInTheDocument();
   });
 });

@@ -434,6 +434,19 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
               onChange={(e) => set("duplicate_threshold", Number(e.target.value))}
             />
           </Field>
+          <Field
+            label="Docs check threshold"
+            hint="How much of a correct answer's wording docs.pentaho.com must carry for Import's docs check to count it as backed."
+          >
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={draft.validation_threshold}
+              onChange={(e) => set("validation_threshold", Number(e.target.value))}
+            />
+          </Field>
         </div>
       </Section>
 

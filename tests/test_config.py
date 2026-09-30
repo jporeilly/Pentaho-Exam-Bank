@@ -63,8 +63,3 @@ class TestAppConfig:
         with patch("exam_bank.utils.config.CONFIG_FILE", config_file):
             loaded = AppConfig.load()
             assert loaded.default_difficulty == "Medium"  # default
-
-    def test_mcp_servers_default(self):
-        cfg = AppConfig()
-        assert cfg.mcp_servers == []
-        assert cfg.mcp_enabled is False

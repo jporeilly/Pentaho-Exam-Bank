@@ -108,12 +108,12 @@ def test_the_active_sme_joins_the_saved_list(client):
 
 
 def test_a_field_the_app_manages_itself_cannot_be_written(client):
-    """`mcp_servers` is config the app keeps but no screen edits. Nothing
-    would report it being clobbered."""
-    response = put(client, mcp_servers=[{"url": "http://evil"}])
+    """`courses_repo_url` is where Publish pushes a course. No screen edits it,
+    and nothing would report it being pointed somewhere else."""
+    response = put(client, courses_repo_url="https://example.com/evil.git")
 
     assert response.status_code == 400
-    assert "mcp_servers" in response.json()["detail"]
+    assert "courses_repo_url" in response.json()["detail"]
 
 
 def test_an_unknown_field_is_refused_rather_than_ignored(client):

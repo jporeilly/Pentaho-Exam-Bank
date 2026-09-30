@@ -16,7 +16,9 @@
   and config file paths.
 - **Export and backups** — see below.
 - **Quality** — how alike two questions must be before import calls them
-  duplicates, from 0 to 1; higher is stricter.
+  duplicates, and how much of a correct answer's wording docs.pentaho.com must
+  carry for Import's docs check to count it as backed. Both run from 0 to 1;
+  higher is stricter.
 - **Defaults** — how many questions the Bank shows to a page, and the default
   difficulty and Bloom level.
 

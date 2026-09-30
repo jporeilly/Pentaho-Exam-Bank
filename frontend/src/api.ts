@@ -494,6 +494,14 @@ export interface Problem {
 
 /** One question read out of an uploaded file, with everything known against
  *  it: whether it can be graded, and whether the bank already has it. */
+/** Whether docs.pentaho.com backs a question's answer (core/docs_check). */
+export interface DocsCheckResult {
+  status: "supported" | "not-found" | "error";
+  detail: string;
+  answers: { answer: string; score: number }[];
+  sources: { title: string; link: string }[];
+}
+
 export interface ImportedQuestion {
   question: Question;
   problems: Problem[];
@@ -932,6 +940,12 @@ export const api = {
     });
   },
   /** Save the chosen questions. They land as drafts whatever the file said. */
+  /** Look each question up in docs.pentaho.com. Writes nothing. */
+  checkImportDocs: (questions: Question[]) =>
+    request<{ results: DocsCheckResult[]; threshold: number; ms: number }>("/api/import/check-docs", {
+      method: "POST",
+      body: JSON.stringify({ questions }),
+    }),
   commitImport: (
     questions: Question[],
     certification_id = "",

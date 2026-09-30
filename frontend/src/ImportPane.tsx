@@ -19,6 +19,7 @@ import {
   api,
   ApiError,
   type Certification,
+  type DocsCheckResult,
   type ImportedQuestion,
   type ImportPreview,
   type ImportResult,
@@ -44,6 +45,10 @@ export function ImportPane({ onImported }: { onImported?: () => void } = {}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<ImportResult | null>(null);
+  // The docs check, one result per preview row, once asked for.
+  const [docs, setDocs] = useState<DocsCheckResult[] | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [docsError, setDocsError] = useState("");
 
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -60,6 +65,8 @@ export function ImportPane({ onImported }: { onImported?: () => void } = {}) {
     setError("");
     setDone(null);
     setPreview(null);
+    setDocs(null);
+    setDocsError("");
     try {
       const result = await api.previewImport(file);
       setPreview(result);
@@ -81,6 +88,29 @@ export function ImportPane({ onImported }: { onImported?: () => void } = {}) {
       if (fileInput.current) fileInput.current.value = "";
     }
   }
+
+  /** Ask docs.pentaho.com about every question in the file. Changes nothing. */
+  async function checkDocs() {
+    if (!preview) return;
+    setChecking(true);
+    setDocsError("");
+    try {
+      const { results } = await api.checkImportDocs(preview.questions.map((q) => q.question));
+      setDocs(results);
+    } catch (e: unknown) {
+      setDocsError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  const tally = docs
+    ? {
+        supported: docs.filter((d) => d.status === "supported").length,
+        missing: docs.filter((d) => d.status === "not-found").length,
+        failed: docs.filter((d) => d.status === "error").length,
+      }
+    : null;
 
   function toggle(index: number) {
     setKeep((current) => {
@@ -239,8 +269,25 @@ export function ImportPane({ onImported }: { onImported?: () => void } = {}) {
             >
               Select none
             </button>
+            <button
+              className="secondary"
+              onClick={checkDocs}
+              disabled={busy || checking}
+              title="Look each question up in docs.pentaho.com and say whether the docs back its answer. Nothing is imported or changed."
+            >
+              {checking ? "Checking the docs…" : "Check answers against docs.pentaho.com"}
+            </button>
             {keep.size === 0 && <span className="faint">Nothing selected.</span>}
           </div>
+
+          {docsError && <div className="banner">{docsError}</div>}
+          {tally && (
+            <p className="muted" role="status">
+              docs.pentaho.com backs {tally.supported} of {docs!.length} answers
+              {tally.missing > 0 && `; ${tally.missing} not found there - worth a look`}
+              {tally.failed > 0 && `; ${tally.failed} could not be checked`}.
+            </p>
+          )}
 
           <table>
             <thead>
@@ -248,6 +295,7 @@ export function ImportPane({ onImported }: { onImported?: () => void } = {}) {
                 <th style={{ width: 34 }} />
                 <th>Question</th>
                 <th style={{ width: 200 }}>Correct answer</th>
+                {docs && <th style={{ width: 220 }}>In the docs</th>}
               </tr>
             </thead>
             <tbody>
@@ -257,6 +305,7 @@ export function ImportPane({ onImported }: { onImported?: () => void } = {}) {
                   item={q}
                   checked={keep.has(i)}
                   onToggle={() => toggle(i)}
+                  docs={docs ? docs[i] : undefined}
                 />
               ))}
             </tbody>
@@ -271,10 +320,13 @@ function Row({
   item,
   checked,
   onToggle,
+  docs,
 }: {
   item: ImportedQuestion;
   checked: boolean;
   onToggle: () => void;
+  /** The docs check for this row, when one has been run. */
+  docs?: DocsCheckResult;
 }) {
   const broken = item.problems.length > 0;
   const answers =
@@ -310,6 +362,28 @@ function Row({
         )}
       </td>
       <td className="faint">{answers || <span className="problem-inline">none</span>}</td>
+      {docs && (
+        <td>
+          {docs.status === "supported" && <span className="pill approved">Backed</span>}
+          {docs.status === "not-found" && <span className="pill sme_review">Not found</span>}
+          {docs.status === "error" && <span className="pill rejected">Not checked</span>}
+          <div className="faint" style={{ fontSize: 12 }}>{docs.detail}</div>
+          {docs.sources.map((s) => (
+            <div key={s.link} style={{ fontSize: 12 }}>
+              <a
+                href={s.link}
+                onClick={(e) => {
+                  // The webview opens no new windows; the app opens the page.
+                  e.preventDefault();
+                  api.openUrl(s.link).catch(() => {});
+                }}
+              >
+                {s.title}
+              </a>
+            </div>
+          ))}
+        </td>
+      )}
     </tr>
   );
 }
