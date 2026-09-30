@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-30
+
 ### Added
 
 - **AI explanation.** A button in the question editor that proposes the
@@ -36,8 +38,50 @@ given and read the answer count from a "(Choose two)" note that stems no
 longer carry. Both now propose and write nothing, like the AI rewrite and
 check, and both follow the house item-writing rules.
 
+### Changed
+
+- **One set of rules decides whether a question can be graded.** The editor
+  and import already shared `core/validation.py` (pinned to one fixture for
+  Python and TypeScript); generation's auto-fix read a third, older set
+  (`Question.validate_detailed`) that disagreed with them - it wanted two
+  distractors and passed a stem ending in ".". The auto-fix now reads the
+  shared rules, and the old set is gone.
+- **Every new question comes in one way** (`core/intake.py`): generation's
+  commit and import's commit shared the loop - check, stamp the
+  certification, file into the course, save - in two copies that disagreed
+  on the check. Import refused a question that could not be graded;
+  generation saved it. Now both refuse it and say why, and the Generate
+  screen names what was not saved. The editor's Save is refused on the same
+  rules server-side, as it already was in the browser.
+- **Statuses, difficulties and Bloom levels come from the server**
+  (`GET /api/vocabulary`, `frontend/src/vocabulary.ts`). Five screens typed
+  seven copies of these lists, and the Admin bulk delete's had drifted. The
+  Bank and Admin filters now show the statuses' names ("SME Review").
+- `QB_API_PORT` is now `PEB_API_PORT` in `run.bat` and `run-api.bat`; the
+  old name still works.
+
+### Fixed
+
+- **Generation's auto-fix no longer asks for explanations "by letter".** Its
+  prompt told the model to address each option "(A, B, C, D) individually by
+  letter" - in exams whose options are shuffled, so a letter names a
+  different option for every candidate. It now asks for every option by its
+  text.
+
 ### Removed
 
+- **Code a decision had already retired** - about 1,200 lines. PowerPoint
+  (dropped as a product decision): `pptx_exporter.py`,
+  `pptx_exporter_fallback.py`, `pptx_reader.py`, the PowerPoint answer
+  validation in `question_importer`, and the `python-pptx` dependency, which
+  the installer no longer ships. `core/question_generator.py`, a re-export
+  shim only the tests imported. `spreadsheet_converter.convert_xlsx_to_csv`
+  and its command line (xlsx import goes through `import_from_xlsx`). Five
+  config fields only the NiceGUI screens used (`theme_color`, `dark_mode`,
+  `recent_files`, `file_certifications`, `mermaid_enabled`); an older
+  `config.json` still loads. Unbuilt features were left in place: Ollama
+  streaming and GPU advice, validating an import against the docs site,
+  auto-backup, auto-export and a default export format.
 - `regen_stem`, `regen_key`, `regen_distractor` (the AI rewrite covers them)
   and `qa_fix_question`: four AI operations that came across from the NiceGUI
   app and were never reachable from any screen.
