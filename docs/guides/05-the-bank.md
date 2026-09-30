@@ -6,7 +6,9 @@ The **Bank** screen lists the questions, 25 to a page by default.
 - Filter by **certification** and **status**.
 - **Course order** sorts a course's questions in the order its exam was
   written, lab by lab; **Recently updated** puts the latest edits first.
-- **Export CSV** downloads what the filters currently show.
+- **Export** downloads what the filters currently show, in the format chosen
+  beside it: CSV, JSON, QTI 2.1, Moodle XML, plain text or Word. It starts on
+  the default export format set in [Settings](../admin/01-settings.md).
 
 Click a row to open the editor. It holds the scenario, the question, the type
 (one correct answer, or several), the correct answer(s), the distractors, the

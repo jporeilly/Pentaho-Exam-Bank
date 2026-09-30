@@ -25,7 +25,9 @@ from typing import Any, Callable
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from ...core import auto_backup, auto_export
 from ...core.bank import BLOOM_LEVELS, DIFFICULTIES
+from ...core.exporter import FORMATS
 from ...core.providers import key_status
 from ...utils.config import CONFIG_FILE, DB_PATH, config
 
@@ -88,6 +90,16 @@ def _one_of(value: Any, allowed, label: str):
     return value
 
 
+def _between(value: Any, low: int, high: int, label: str) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(400, f"{label} must be a whole number, not {value!r}.")
+    if not low <= number <= high:
+        raise HTTPException(400, f"{label} must be between {low} and {high}, not {number}.")
+    return number
+
+
 #: field -> how to validate and coerce it. The allowlist and the validation
 #: are one table, so a field cannot be made writable without saying what a
 #: valid value is.
@@ -110,6 +122,10 @@ EDITABLE: dict[str, Callable[[Any], Any]] = {
     "default_difficulty": lambda v: _one_of(v, DIFFICULTIES, "The default difficulty"),
     "default_bloom_level": lambda v: _one_of(v, BLOOM_LEVELS, "The default Bloom level"),
     "auto_export_on_save": bool,
+    "default_export_format": lambda v: _one_of(v, list(FORMATS), "The default export format"),
+    "auto_backup_enabled": bool,
+    "auto_backup_interval_hours": lambda v: _between(v, 1, 168, "Hours between backups"),
+    "auto_backup_max_count": lambda v: _between(v, 1, 100, "The number of automatic backups kept"),
 }
 
 
@@ -129,7 +145,12 @@ def _current() -> dict[str, Any]:
             "difficulties": list(DIFFICULTIES),
             "bloomLevels": list(BLOOM_LEVELS),
             "pageSizes": list(PAGE_SIZES),
+            "exportFormats": [{"format": k, "label": v[3]} for k, v in FORMATS.items()],
         },
+        # What the two background features last did, and where auto-export
+        # writes now - so the author can see them working, or why not.
+        "autoExport": {"target": str(auto_export.target()), **auto_export.last},
+        "autoBackup": dict(auto_backup.last),
         # Where the app is reading and writing. Shown, never set: moving the
         # database from a settings form would leave the running app holding a
         # handle to the old one.

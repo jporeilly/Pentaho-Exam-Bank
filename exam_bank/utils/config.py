@@ -268,11 +268,14 @@ class AppConfig:
     # Pagination
     questions_per_page: int = 25            # 10, 25, 50, or 100
 
-    # Default export format
-    default_export_format: str = "csv"      # csv, json, qti, moodle, text, docx
+    # Default export format: what the Bank's Export offers first, and what
+    # auto-export writes. One of core.exporter.FORMATS.
+    default_export_format: str = "csv"
 
-    # Auto-export CSV on save
-    auto_export_on_save: bool = True        # auto-export questions to assets/questions/ on save
+    # Auto-export on save (core/auto_export): the whole bank, in the default
+    # export format, to output_folder after each change. Off for a new
+    # install - it writes files - and a saved config keeps its own value.
+    auto_export_on_save: bool = False
 
     def save(self):
         """Save config to disk.

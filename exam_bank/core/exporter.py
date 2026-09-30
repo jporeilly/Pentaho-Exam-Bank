@@ -510,3 +510,19 @@ def export_docx(questions: List[Question], path: Path):
             hr_run.font.color.rgb = RGBColor(0xAA, 0xAA, 0xAA)
 
     doc.save(str(path))
+
+
+#: Every export format: name -> (writer, file extension, media type, label).
+#: The Bank's Export, auto-export and Settings all read this one table.
+FORMATS = {
+    "csv": (export_csv, "csv", "text/csv", "CSV"),
+    "json": (export_json, "json", "application/json", "JSON"),
+    "qti": (export_qti21, "xml", "application/xml", "QTI 2.1"),
+    "moodle": (export_moodle_xml, "xml", "application/xml", "Moodle XML"),
+    "text": (export_text, "txt", "text/plain", "Plain text"),
+    "docx": (
+        export_docx, "docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Word (.docx)",
+    ),
+}

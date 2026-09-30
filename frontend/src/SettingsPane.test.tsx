@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -32,6 +32,10 @@ function settings(over: Partial<Settings> = {}): Settings {
     default_difficulty: "Medium",
     default_bloom_level: "Apply",
     auto_export_on_save: true,
+    default_export_format: "csv",
+    auto_backup_enabled: false,
+    auto_backup_interval_hours: 24,
+    auto_backup_max_count: 5,
     ...over,
   };
 }
@@ -52,11 +56,14 @@ function response(over: Partial<SettingsResponse> = {}): SettingsResponse {
       difficulties: ["Easy", "Medium", "Hard"],
       bloomLevels: ["Remember", "Understand", "Apply"],
       pageSizes: [10, 25, 50, 100],
+      exportFormats: [{ format: "csv", label: "CSV" }, { format: "docx", label: "Word (.docx)" }],
     },
     paths: {
       database: "C:/Projects/Pentaho-Exam-Bank/assets/db/exam_bank.db",
       config: "C:/Projects/Pentaho-Exam-Bank/assets/config/config.json",
     },
+    autoExport: { target: "C:/Exports/exam-bank.csv", at: "2026-09-30T10:00:00", path: "", count: 311, error: "" },
+    autoBackup: { at: "", path: "", pruned: 0, error: "" },
     ...over,
   };
 }
@@ -295,5 +302,28 @@ describe("the Pentaho docs connection", () => {
 
     const put = calls.find((c) => c.method === "PUT");
     expect(put?.body).toEqual({ settings: { docs_mcp_enabled: false } });
+  });
+});
+
+describe("export and backups", () => {
+  // Three settings with nothing behind them until 1.10.0.
+  it("shows where auto-export writes, and saves the backup schedule", async () => {
+    const calls = mockApi();
+    render(<SettingsPane />);
+
+    expect(await screen.findByText("C:/Exports/exam-bank.csv")).toBeInTheDocument();
+    expect(screen.getByText(/Last written 2026-09-30 10:00:00: 311 questions/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText("Back up the bank automatically"));
+    const every = screen.getByLabelText("Every (hours)");
+    await userEvent.clear(every);
+    await userEvent.type(every, "6");
+    await userEvent.selectOptions(screen.getByLabelText("Default export format"), "docx");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    const sent = (calls.find((c) => c.method === "PUT")!.body as { settings: Record<string, unknown> }).settings;
+    expect(sent).toMatchObject({ auto_backup_enabled: true, auto_backup_interval_hours: 6,
+                                 default_export_format: "docx" });
   });
 });

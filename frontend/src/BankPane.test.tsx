@@ -157,7 +157,7 @@ describe("BankPane", () => {
     await userEvent.selectOptions(screen.getByDisplayValue("Any status"), "draft");
 
     await waitFor(() => {
-      const link = screen.getByRole("button", { name: "Export CSV" })
+      const link = screen.getByRole("button", { name: "Export" })
         .closest("a") as HTMLAnchorElement;
       expect(link.getAttribute("href")).toContain("status=draft");
     });
@@ -196,5 +196,30 @@ describe("paging and sorting", () => {
     await userEvent.selectOptions(screen.getByDisplayValue("Course order"), "updated");
 
     await waitFor(() => expect(calls.some((c) => c.includes("sort=updated"))).toBe(true));
+  });
+});
+
+describe("export", () => {
+  // Settings saved a default export format and nothing read it; the Bank only
+  // ever exported CSV.
+  it("starts on the default format from Settings, and exports in any other", async () => {
+    vi.stubGlobal("fetch", (url: string) => {
+      const u = String(url);
+      const body = u.includes("/api/settings")
+        ? { settings: { questions_per_page: 25, default_export_format: "docx" },
+            choices: { exportFormats: [{ format: "csv", label: "CSV" },
+                                       { format: "docx", label: "Word (.docx)" }] } }
+        : u.includes("/api/certifications") ? [] : { items: [question()], total: 1, limit: 25, offset: 0 };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } }),
+      );
+    });
+    render(<BankPane />);
+    const href = () => (screen.getByRole("button", { name: "Export" }).closest("a") as HTMLAnchorElement)
+      .getAttribute("href") ?? "";
+
+    await waitFor(() => expect(href()).toContain("/api/export/docx"));
+    await userEvent.selectOptions(screen.getByLabelText("Export format"), "csv");
+    expect(href()).toContain("/api/export/csv");
   });
 });

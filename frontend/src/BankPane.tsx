@@ -52,6 +52,9 @@ export function BankPane({
   // contiguous blocks without the bank knowing anything about labs.
   const [sort, setSort] = useState<"course" | "updated">("course");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE);
+  // Export in any format, starting on the default set in Settings.
+  const [exportFormat, setExportFormat] = useState("csv");
+  const [exportFormats, setExportFormats] = useState([{ format: "csv", label: "CSV" }]);
   const vocabulary = useVocabulary();
 
   useEffect(() => {
@@ -60,6 +63,10 @@ export function BankPane({
       .then((r) => {
         const n = r?.settings?.questions_per_page;
         if (typeof n === "number" && n > 0) setPageSize(n);
+        const formats = r?.choices?.exportFormats;
+        if (Array.isArray(formats) && formats.length) setExportFormats(formats);
+        const preferred = r?.settings?.default_export_format;
+        if (preferred) setExportFormat(preferred);
       })
       .catch(() => {});
   }, []);
@@ -183,8 +190,20 @@ export function BankPane({
             </option>
           ))}
         </select>
-        <a href={api.exportUrl("csv", { text, certification_id: certification, status })}>
-          <button className="secondary">Export CSV</button>
+        <select
+          value={exportFormat}
+          onChange={(e) => setExportFormat(e.target.value)}
+          title="The format to export in. The default is set in Settings."
+          aria-label="Export format"
+        >
+          {exportFormats.map((f) => (
+            <option key={f.format} value={f.format}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+        <a href={api.exportUrl(exportFormat, { text, certification_id: certification, status })}>
+          <button className="secondary">Export</button>
         </a>
       </div>
 

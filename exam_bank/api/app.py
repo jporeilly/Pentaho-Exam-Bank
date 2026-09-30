@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
+from ..core import auto_backup, auto_export
 from ..core.providers import ProviderError
 from .routers import (
     admin, certifications, chat, courses, docs, exam, export, generation, importing,
@@ -77,7 +78,11 @@ def _adopt_courses_on_first_run() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _adopt_courses_on_first_run()
+    # Automatic backups (Settings): checked now and every few minutes. The
+    # thread reads the setting each time, so switching it on needs no restart.
+    stop_backups = auto_backup.start()
     yield
+    stop_backups.set()
 
 
 app = FastAPI(
@@ -98,6 +103,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def export_after_changes(request: Request, call_next):
+    """Auto-export on save (Settings): after a request that changed the bank
+    succeeds, export the whole bank a moment later (core/auto_export)."""
+    response = await call_next(request)
+    if response.status_code < 400 and auto_export.changes_bank(request.method, request.url.path):
+        auto_export.schedule()
+    return response
 
 
 @app.exception_handler(ProviderError)

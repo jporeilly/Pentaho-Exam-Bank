@@ -14,6 +14,7 @@
   [The Pentaho docs connection](../ai/02-pentaho-docs-connection.md).
 - **Where things are** — the Content Manager courses folder, and the database
   and config file paths.
+- **Export and backups** — see below.
 - **Quality** — how alike two questions must be before import calls them
   duplicates, from 0 to 1; higher is stricter.
 - **Defaults** — how many questions the Bank shows to a page, and the default
@@ -32,3 +33,20 @@ here, and names the variable. Press **Save**; *Saved* confirms it.
   name and version, the tools it offers and how long it took to answer, or the
   reason it could not be reached. **Test connection** checks the address in the
   box, so a new address can be tried before it is saved.
+
+## Export and backups
+
+- **Default export format** — what the Bank's **Export** offers first, and what
+  auto-export writes: CSV, JSON, QTI 2.1, Moodle XML, plain text or Word.
+- **Export folder** — where auto-export writes. It is created the first time
+  it is needed.
+- **Export the whole bank to that folder after each change** — a couple of
+  seconds after the last change (an edit, a status move, a delete, an import,
+  a commit from Generate, a course sync, a restored backup), the whole bank is
+  written to the folder in the default format, replacing the previous copy:
+  `exam-bank.csv`, `exam-bank.json`, `exam-bank-qti.xml`,
+  `exam-bank-moodle.xml`, `exam-bank-text.txt` or `exam-bank.docx`. It is a
+  copy for people and tools outside the app. The line under the switch names
+  the file and says when it was last written, or why it could not be.
+- **Back up the bank automatically**, **Every (hours)**, **Keep the newest** —
+  see [Backups](02-backups-and-deletion.md).

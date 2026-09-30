@@ -106,3 +106,13 @@ def populated_db(tmp_db, sample_question, sample_certification):
     tmp_db.save(q3)
 
     return tmp_db, cert, [q1, q2, q3]
+
+
+@pytest.fixture(autouse=True)
+def _no_background_writes(monkeypatch):
+    """Auto-export and auto-backup write files outside the test's tmp_path. The
+    config a test run loads may have either switched on (the dev checkout's
+    does), so every test starts with both off; a test of either turns it on."""
+    from exam_bank.utils.config import config
+    monkeypatch.setattr(config, "auto_export_on_save", False)
+    monkeypatch.setattr(config, "auto_backup_enabled", False)

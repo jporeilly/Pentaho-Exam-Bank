@@ -332,6 +332,91 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
       </Section>
 
       <Section
+        title="Export and backups"
+        hint="Both run on their own once switched on; neither needs the app restarted."
+      >
+        <div className="field-row">
+          <Field
+            label="Default export format"
+            hint="What the Bank's Export offers first, and what auto-export writes."
+          >
+            <select
+              value={draft.default_export_format}
+              onChange={(e) => set("default_export_format", e.target.value)}
+            >
+              {(loaded.choices.exportFormats ?? []).map((f) => (
+                <option key={f.format} value={f.format}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Export folder" hint="Where auto-export writes. Created the first time it is needed.">
+            <input
+              value={draft.output_folder}
+              onChange={(e) => set("output_folder", e.target.value)}
+            />
+          </Field>
+        </div>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={draft.auto_export_on_save}
+            onChange={(e) => set("auto_export_on_save", e.target.checked)}
+          />
+          Export the whole bank to that folder after each change
+        </label>
+        <p className="faint field-hint">
+          A couple of seconds after the last change it writes{" "}
+          <code className="mono">{loaded.autoExport?.target}</code>, replacing the
+          previous copy.{" "}
+          {loaded.autoExport?.error
+            ? `The last attempt failed: ${loaded.autoExport.error}`
+            : loaded.autoExport?.at
+              ? `Last written ${loaded.autoExport.at.replace("T", " ")}: ${loaded.autoExport.count} questions.`
+              : ""}
+        </p>
+
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={draft.auto_backup_enabled}
+            onChange={(e) => set("auto_backup_enabled", e.target.checked)}
+          />
+          Back up the bank automatically
+        </label>
+        <div className="field-row">
+          <Field label="Every (hours)">
+            <input
+              type="number"
+              min={1}
+              max={168}
+              value={draft.auto_backup_interval_hours}
+              onChange={(e) => set("auto_backup_interval_hours", Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Keep the newest">
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={draft.auto_backup_max_count}
+              onChange={(e) => set("auto_backup_max_count", Number(e.target.value))}
+            />
+          </Field>
+        </div>
+        <p className="faint field-hint">
+          Only automatic backups are pruned; a backup you take in Admin, and the
+          safety copy a restore takes, are kept.{" "}
+          {loaded.autoBackup?.error
+            ? `The last automatic backup failed: ${loaded.autoBackup.error}`
+            : loaded.autoBackup?.at
+              ? `Last automatic backup ${loaded.autoBackup.at.replace("T", " ")}.`
+              : ""}
+        </p>
+      </Section>
+
+      <Section
         title="Quality"
         hint="Similarity scores between 0 and 1. Higher means stricter — fewer things get flagged."
       >

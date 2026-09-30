@@ -407,6 +407,10 @@ export interface Settings {
   default_difficulty: string;
   default_bloom_level: string;
   auto_export_on_save: boolean;
+  default_export_format: string;
+  auto_backup_enabled: boolean;
+  auto_backup_interval_hours: number;
+  auto_backup_max_count: number;
 }
 
 export interface SettingsResponse {
@@ -423,8 +427,13 @@ export interface SettingsResponse {
     difficulties: string[];
     bloomLevels: string[];
     pageSizes: number[];
+    exportFormats: { format: string; label: string }[];
   };
   paths: { database: string; config: string };
+  /** Where auto-export writes now, and what it last did. */
+  autoExport: { target: string; at: string; path: string; count: number; error: string };
+  /** What the last automatic backup did. */
+  autoBackup: { at: string; path: string; pruned: number; error: string };
 }
 
 /** One topic's share of a weighted exam: what it was owed, what it had, and

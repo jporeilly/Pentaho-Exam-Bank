@@ -26,18 +26,9 @@ from ..tempfiles import cleanup as _cleanup, temp_path as _temp_path
 
 router = APIRouter(tags=["export"])
 
-# format -> (writer, file extension, media type)
-_FORMATS: dict[str, tuple[Callable[..., Any], str, str]] = {
-    "csv": (exporter.export_csv, "csv", "text/csv"),
-    "json": (exporter.export_json, "json", "application/json"),
-    "qti": (exporter.export_qti21, "xml", "application/xml"),
-    "moodle": (exporter.export_moodle_xml, "xml", "application/xml"),
-    "text": (exporter.export_text, "txt", "text/plain"),
-    "docx": (
-        exporter.export_docx, "docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ),
-}
+# format -> (writer, file extension, media type, label): one table, in core,
+# shared with auto-export and Settings.
+_FORMATS = exporter.FORMATS
 
 
 def _selection(
@@ -52,8 +43,8 @@ def _selection(
 @router.get("/api/export/formats")
 def list_formats() -> list[dict[str, str]]:
     return [
-        {"format": name, "extension": ext, "mediaType": media}
-        for name, (_, ext, media) in _FORMATS.items()
+        {"format": name, "extension": ext, "mediaType": media, "label": label}
+        for name, (_, ext, media, label) in _FORMATS.items()
     ]
 
 
@@ -79,7 +70,7 @@ def export_questions(
     """
     if fmt not in _FORMATS:
         raise HTTPException(404, f"Unknown format '{fmt}'. Try: {', '.join(_FORMATS)}")
-    write, extension, media = _FORMATS[fmt]
+    write, extension, media, _label = _FORMATS[fmt]
     questions = _selection(db, dict(
         text=text, topic=topic, difficulty=difficulty, bloom_level=bloom_level,
         status=status, certification_id=certification_id,
