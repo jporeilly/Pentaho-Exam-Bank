@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from .bank import BLOOM_LEVELS, STATUS_LABELS, STATUSES, ExamBankDB, Question
+from .pcm_reader import read_course_json
 
 #: Apply or above: at or above it a question asks the candidate to USE what
 #: they know; below it, to recall or restate it.
@@ -113,7 +114,7 @@ def _summary(questions: Iterable[Question]) -> dict[str, Any]:
 
 def _read_json(path: Path) -> Optional[dict]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = read_course_json(path)
     except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None

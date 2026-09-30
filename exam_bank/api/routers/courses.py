@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from ...core import course_sync
 from ...core.bank import ExamBankDB
 from ...core.context_budget import source_budget_chars
-from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course
+from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course, read_course_json
 from ...core import distribution
 from ...core.publisher import PublishRefused, apply as apply_publish, plan as plan_publish
 from ...utils.config import ASSETS_DIR, config
@@ -51,7 +51,7 @@ def list_courses() -> list[dict[str, Any]]:
         pool = 0
         if exam.is_file():
             try:
-                data = json.loads(exam.read_text(encoding="utf-8"))
+                data = read_course_json(exam)
                 questions = data.get("questions")
                 pool = len(questions) if isinstance(questions, list) else 0
             except (ValueError, OSError):
@@ -121,7 +121,7 @@ def get_course_exam(slug: str) -> dict[str, Any]:
     if not exam.is_file():
         return {"exists": False, "questionCount": 0}
     try:
-        data = json.loads(exam.read_text(encoding="utf-8"))
+        data = read_course_json(exam)
     except (ValueError, OSError) as e:
         raise HTTPException(422, f"{slug}/exam.json could not be read: {e}")
     questions = data.get("questions")
@@ -245,7 +245,7 @@ def _push_preview(slug: str) -> dict[str, Any]:
 
 def _course_title(slug: str) -> str:
     try:
-        data = json.loads((_course_dir(slug) / "course.json").read_text(encoding="utf-8"))
+        data = read_course_json(_course_dir(slug) / "course.json")
         return str(data.get("title") or slug)
     except (OSError, ValueError):
         return slug

@@ -23,7 +23,10 @@ import {
   type DeletionPlan,
 } from "./api";
 
-const STATUSES = ["draft", "sme_review", "approved", "rejected"];
+// Until the server's own list arrives. This was the whole list, and it had
+// drifted: it lacked `revised` and `retired`, so the bulk delete could not be
+// narrowed to either.
+const FALLBACK_STATUSES = ["draft", "sme_review", "revised", "approved", "rejected", "retired"];
 const DIFFICULTIES = ["Easy", "Medium", "Hard"];
 
 export function AdminPane({ onChanged }: { onChanged?: () => void } = {}) {
@@ -33,6 +36,7 @@ export function AdminPane({ onChanged }: { onChanged?: () => void } = {}) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
 
+  const [statuses, setStatuses] = useState<string[]>(FALLBACK_STATUSES);
   const [filters, setFilters] = useState<DeletionFilters>({});
   const [plan, setPlan] = useState<DeletionPlan | null>(null);
   const [confirmedAll, setConfirmedAll] = useState(false);
@@ -48,6 +52,17 @@ export function AdminPane({ onChanged }: { onChanged?: () => void } = {}) {
       setError(e instanceof ApiError ? e.message : String(e)),
     );
   }, [reload]);
+
+  // The statuses come from the bank's lifecycle, the one list the server
+  // validates against. A failure keeps the fallback: the filter still works.
+  useEffect(() => {
+    api
+      .lifecycle()
+      .then((l) => {
+        if (Array.isArray(l?.statuses) && l.statuses.length) setStatuses(l.statuses);
+      })
+      .catch(() => {});
+  }, []);
 
   // A plan describes one specific selection. Changing the filters makes it a
   // description of something else, and its count would authorise that.
@@ -172,7 +187,7 @@ export function AdminPane({ onChanged }: { onChanged?: () => void } = {}) {
             <span className="field-label">Status</span>
             <select value={filters.status ?? ""} onChange={(e) => set("status", e.target.value)}>
               <option value="">Any</option>
-              {STATUSES.map((s) => (
+              {statuses.map((s) => (
                 <option key={s} value={s}>
                   {s.replace("_", " ")}
                 </option>

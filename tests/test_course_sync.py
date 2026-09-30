@@ -390,3 +390,18 @@ def test_the_banks_own_workmanship_is_still_invisible(courses, tmp_db):
             f"{name} is the bank's own, not the course file's - comparing it would "
             "make every sync offer to undo work nobody asked to undo"
         )
+
+
+# A Windows editor can save a course file with a byte-order mark, and
+# json.loads refuses one. Before 1.8.1 only publishing accepted it: the sync
+# reported such a course as unparseable and adopted nothing from it.
+def test_a_course_file_saved_with_a_byte_order_mark_is_adopted(courses, tmp_db):
+    exam = courses / "alpha-practitioner" / "exam.json"
+    exam.write_text(exam.read_text(encoding="utf-8"), encoding="utf-8-sig")
+    assert exam.read_bytes().startswith(b"\xef\xbb\xbf")
+
+    p = course_sync.plan(courses, tmp_db)
+    alpha = next(c for c in p.courses if c.slug == "alpha-practitioner")
+
+    assert alpha.error == ""
+    assert sorted(alpha.new) == ["a1", "a2"]

@@ -105,9 +105,12 @@ describe("BankPane", () => {
     // "clustered" leaves the wrong rows sitting under the right search box.
     const pending: Array<(value: Response) => void> = [];
     vi.stubGlobal("fetch", (url: string) => {
-      if (String(url).includes("/api/certifications")) {
+      // Only the question list is held back; the pane's other lookups (the
+      // certifications, and Settings for the page size) answer at once.
+      if (String(url).includes("/api/certifications") || String(url).includes("/api/settings")) {
         return Promise.resolve(
-          new Response("[]", { headers: { "Content-Type": "application/json" } }),
+          new Response(String(url).includes("/api/settings") ? "{}" : "[]",
+                       { headers: { "Content-Type": "application/json" } }),
         );
       }
       return new Promise<Response>((resolve) => pending.push(resolve));
@@ -158,5 +161,40 @@ describe("BankPane", () => {
         .closest("a") as HTMLAnchorElement;
       expect(link.getAttribute("href")).toContain("status=draft");
     });
+  });
+});
+
+describe("paging and sorting", () => {
+  // "Questions per page" was saved in Settings and never read: the Bank asked
+  // for 25 whatever it said.
+  it("asks for the page size Settings holds", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      calls.push(String(url));
+      const u = String(url);
+      const body = u.includes("/api/settings")
+        ? { settings: { questions_per_page: 10 } }
+        : u.includes("/api/certifications")
+          ? []
+          : { items: [question()], total: 1, limit: 10, offset: 0 };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } }),
+      );
+    });
+    render(<BankPane />);
+
+    await waitFor(() => expect(calls.some((c) => c.includes("limit=10"))).toBe(true));
+  });
+
+  // `sort` was missing from what reloads the list, so on the first page
+  // switching Course order / Recently updated changed nothing on screen.
+  it("reloads when the sort order changes on the first page", async () => {
+    const calls = mockApi([question()]);
+    render(<BankPane />);
+    await screen.findByText("Which step reads a file?");
+
+    await userEvent.selectOptions(screen.getByDisplayValue("Course order"), "updated");
+
+    await waitFor(() => expect(calls.some((c) => c.includes("sort=updated"))).toBe(true));
   });
 });

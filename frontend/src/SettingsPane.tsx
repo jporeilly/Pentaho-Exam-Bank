@@ -322,21 +322,6 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
             onChange={(e) => set("pcm_courses_dir", e.target.value)}
           />
         </Field>
-        <label className="field">
-          <span className="field-label">Export folder</span>
-          <input
-            value={draft.output_folder}
-            onChange={(e) => set("output_folder", e.target.value)}
-          />
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={draft.auto_export_on_save}
-            onChange={(e) => set("auto_export_on_save", e.target.checked)}
-          />
-          Export questions to that folder whenever one is saved
-        </label>
 
         <dl className="paths">
           <dt>Database</dt>
@@ -364,17 +349,6 @@ export function SettingsPane({ onSaved }: { onSaved?: () => void } = {}) {
               onChange={(e) => set("duplicate_threshold", Number(e.target.value))}
             />
           </Field>
-          <label className="field">
-            <span className="field-label">Validation threshold</span>
-            <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.05}
-              value={draft.validation_threshold}
-              onChange={(e) => set("validation_threshold", Number(e.target.value))}
-            />
-          </label>
         </div>
       </Section>
 

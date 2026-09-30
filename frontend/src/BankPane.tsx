@@ -9,7 +9,8 @@ import {
 } from "./api";
 import { QuestionEditor } from "./QuestionEditor";
 
-const PAGE = 25;
+// Until Settings answers. "Questions per page" was saved there and never read.
+const DEFAULT_PAGE = 25;
 
 /**
  * Browse what is in the bank.
@@ -49,13 +50,24 @@ export function BankPane({
   // this is the order the workshops teach it - and topics come out as
   // contiguous blocks without the bank knowing anything about labs.
   const [sort, setSort] = useState<"course" | "updated">("course");
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE);
+
+  useEffect(() => {
+    api
+      .settings()
+      .then((r) => {
+        const n = r?.settings?.questions_per_page;
+        if (typeof n === "number" && n > 0) setPageSize(n);
+      })
+      .catch(() => {});
+  }, []);
 
   const filters: QuestionFilters = {
     text,
     certification_id: certification,
     status,
     sort,
-    limit: PAGE,
+    limit: pageSize,
     offset,
   };
 
@@ -80,7 +92,9 @@ export function BankPane({
     // The filter values are the dependency, not the object built from them,
     // which is new on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, certification, status, offset]);
+    // `sort` was missing here, so on the first page (offset already 0)
+    // switching Course order / Recently updated changed nothing on screen.
+  }, [text, certification, status, sort, offset, pageSize]);
 
   useEffect(load, [load]);
 
@@ -284,14 +298,14 @@ export function BankPane({
         <button
           className="secondary"
           disabled={offset === 0}
-          onClick={() => setOffset(Math.max(0, offset - PAGE))}
+          onClick={() => setOffset(Math.max(0, offset - pageSize))}
         >
           Previous
         </button>
         <button
           className="secondary"
           disabled={offset + shown >= total}
-          onClick={() => setOffset(offset + PAGE)}
+          onClick={() => setOffset(offset + pageSize)}
         >
           Next
         </button>

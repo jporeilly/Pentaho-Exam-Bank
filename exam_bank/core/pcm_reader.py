@@ -22,6 +22,20 @@ from typing import List
 from .source import SlideInfo
 
 
+def read_course_json(path):
+    """A course's JSON file (``exam.json``, ``course.json``, ``manifest.json``), parsed.
+
+    Read as UTF-8 with or without a byte-order mark. A Windows editor can
+    save one, and ``json.loads`` refuses it. Until 1.8.1 only publishing
+    accepted one; every other reader - the ids already taken, the course's id
+    scheme, the sync's own count, the Courses pane, the Report - caught the
+    error and skipped the file without a word, so the ids in it could be
+    minted again for new questions. Raises ``OSError`` or ``ValueError``, as
+    reading and ``json.loads`` do; each caller keeps its own handling.
+    """
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+
+
 def _humanise(slug: str) -> str:
     """Turn a slug ("03-llm-integration") into a title ("Llm Integration")."""
     s = re.sub(r"^\d+[-_]*", "", slug)            # drop leading order prefix
@@ -48,7 +62,7 @@ def list_pcm_courses(courses_dir) -> List[dict]:
             continue
         title = ""
         try:
-            data = json.loads(cj.read_text(encoding="utf-8"))
+            data = read_course_json(cj)
             if isinstance(data, dict):
                 title = str(data.get("title") or data.get("id") or "").strip()
         except Exception:
@@ -161,7 +175,7 @@ def _lab_title(lab_dir: Path) -> str:
     mf = lab_dir / "manifest.json"
     if mf.is_file():
         try:
-            data = json.loads(mf.read_text(encoding="utf-8"))
+            data = read_course_json(mf)
             if isinstance(data, dict) and data.get("title"):
                 return str(data["title"]).strip()
         except Exception:

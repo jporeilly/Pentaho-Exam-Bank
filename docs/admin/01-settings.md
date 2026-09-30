@@ -12,12 +12,12 @@
   the address of the docs site's MCP server, and whether that server is
   answering right now. See
   [The Pentaho docs connection](../ai/02-pentaho-docs-connection.md).
-- **Where things are** — the Content Manager courses folder, the export folder,
-  and the database and config file paths.
+- **Where things are** — the Content Manager courses folder, and the database
+  and config file paths.
 - **Quality** — how alike two questions must be before import calls them
-  duplicates, and how closely an imported answer must match its source text
-  to count as validated. Both run from 0 to 1; higher is stricter.
-- **Defaults** — questions per page, and the default difficulty and Bloom level.
+  duplicates, from 0 to 1; higher is stricter.
+- **Defaults** — how many questions the Bank shows to a page, and the default
+  difficulty and Bloom level.
 
 A setting governed by an environment variable is shown but cannot be edited
 here, and names the variable. Press **Save**; *Saved* confirms it.

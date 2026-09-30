@@ -418,3 +418,16 @@ def test_a_question_outside_any_course_keeps_its_id_when_its_topic_changes(clien
                      certification_id=cert.id))
 
     assert client.put("/api/questions/slide-q", json={"topic": "B"}).json()["id"] == "slide-q"
+
+
+def test_ids_in_an_exam_json_saved_with_a_byte_order_mark_are_taken(db, courses, two_hour):
+    """Before 1.8.1 `taken_ids` skipped such a file without a word, so the
+    next question filed into that course could be given one of its ids."""
+    (courses / "pdi-2hr-lab" / "exam.json").write_text(
+        json.dumps({"questions": [{"id": "2hr-m4-q3", "module": "See It Scale"}]}),
+        encoding="utf-8-sig")
+
+    assert "2hr-m4-q3" in cf.taken_ids(db, courses)
+    q = generated(certification_id=two_hour.id)
+    cf.file_into_course(db, q, two_hour, courses_dir=courses, taken=cf.taken_ids(db, courses))
+    assert q.id == "2hr-m4-q4"

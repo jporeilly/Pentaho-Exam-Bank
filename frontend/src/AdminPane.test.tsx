@@ -78,6 +78,10 @@ function mockApi(handlers: {
     }
     if (path.includes("/admin/backups")) return json({ name: "new-backup", backups: [] });
     if (path.includes("/admin/database")) return json(handlers.status ?? dbStatus());
+    if (path.includes("/api/lifecycle")) {
+      return json({ statuses: ["draft", "sme_review", "revised", "approved", "rejected", "retired"],
+                    transitions: {} });
+    }
     return json(CERTS);
   });
   return calls;
@@ -264,5 +268,20 @@ describe("restoring", () => {
 
     expect(await screen.findByText(/pre_restore/)).toBeInTheDocument();
     expect(screen.getByText(/can be undone/)).toBeInTheDocument();
+  });
+});
+
+// The status list was hard-coded here and had drifted from the bank's: it
+// lacked `revised` and `retired`, so a bulk delete could not be narrowed to
+// either. It now comes from the lifecycle the server validates against.
+describe("the status filter", () => {
+  it("offers every status the bank has, revised and retired included", async () => {
+    mockApi();
+    render(<AdminPane />);
+
+    const select = (await screen.findByText("Status")).parentElement!.querySelector("select")!;
+    await screen.findByRole("option", { name: "retired" });
+    const offered = [...select.options].map((o) => o.value).filter(Boolean);
+    expect(offered).toEqual(["draft", "sme_review", "revised", "approved", "rejected", "retired"]);
   });
 });

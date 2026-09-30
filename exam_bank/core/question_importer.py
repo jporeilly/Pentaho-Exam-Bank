@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 
 from .bank import BLOOM_LEVELS, Question
 from .pptx_reader import PPTXReader
+from .pcm_reader import read_course_json
 from .source import SlideInfo
 from . import mcp_client
 from ..utils.config import config as _config
@@ -326,7 +327,7 @@ def import_from_json(path: Path) -> List[Question]:
 
     Each element should have: stem, key (or keys for multi), distractors, etc.
     """
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(data, list):
         return []
 
@@ -375,7 +376,7 @@ def is_pcm_exam_json(path: Path) -> bool:
     ``prompt``/``options`` (vs the bank's top-level array of ``stem``/``key``).
     """
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
         return False
     if not isinstance(data, dict):
@@ -424,7 +425,7 @@ def import_from_pcm_exam_json(path: Path) -> List[Question]:
     ``prompt`` becomes the stem, and ``module`` becomes the topic. Imported
     questions are tagged as the ``pcm`` source and land as drafts.
     """
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = read_course_json(path)
     if not isinstance(data, dict):
         return []
     exam_title = str(data.get("title") or "").strip()

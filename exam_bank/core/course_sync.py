@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from .bank import Certification, ExamBankDB, Question
+from .pcm_reader import read_course_json
 from .question_importer import import_from_pcm_exam_json
 from .stem_text import question_only
 from .validation import problems_with
@@ -87,7 +88,7 @@ def _course_title(course_dir: Path, slug: str) -> str:
     cj = course_dir / "course.json"
     if cj.is_file():
         try:
-            data = json.loads(cj.read_text(encoding="utf-8"))
+            data = read_course_json(cj)
             if isinstance(data, dict) and str(data.get("title", "")).strip():
                 return str(data["title"]).strip()
         except (ValueError, OSError):
@@ -211,7 +212,7 @@ def _read_course(course_dir: Path, db: ExamBankDB,
     # entry should not cost the course its other forty-nine.
     returned = {q.id for q in questions}
     try:
-        authored = json.loads(exam.read_text(encoding="utf-8")).get("questions", [])
+        authored = read_course_json(exam).get("questions", [])
     except (ValueError, OSError):
         authored = []
     for entry in authored if isinstance(authored, list) else []:

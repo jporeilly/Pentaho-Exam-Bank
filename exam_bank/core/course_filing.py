@@ -48,7 +48,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .bank import Certification, ExamBankDB, Question
-from .pcm_reader import list_pcm_labs, summary_modules
+from .pcm_reader import list_pcm_labs, read_course_json, summary_modules
 
 #: What `uuid.uuid4()` looks like: an id the bank made up, not one a course gave.
 _MINTED = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -112,7 +112,7 @@ def taken_ids(db: ExamBankDB, courses_dir) -> set[str]:
     if courses_dir and Path(courses_dir).is_dir():
         for exam in Path(courses_dir).glob("*/exam.json"):
             try:
-                data = json.loads(exam.read_text(encoding="utf-8"))
+                data = read_course_json(exam)
             except (OSError, ValueError, UnicodeDecodeError):
                 continue
             for q in data.get("questions", []) if isinstance(data, dict) else []:
@@ -126,7 +126,7 @@ def _exam_modules(courses_dir, slug: str) -> list[tuple[str, str]]:
     if not courses_dir or not slug:
         return []
     try:
-        data = json.loads((Path(courses_dir) / slug / "exam.json").read_text(encoding="utf-8"))
+        data = read_course_json(Path(courses_dir) / slug / "exam.json")
     except (OSError, ValueError, UnicodeDecodeError):
         return []
     items = data.get("questions", []) if isinstance(data, dict) else []

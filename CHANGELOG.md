@@ -7,6 +7,37 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-09-30
+
+### Fixed
+
+- **The bulk delete can be narrowed to revised or retired questions.** Its
+  status filter was a list typed into the Admin screen, and it had drifted
+  from the bank's: `revised` and `retired` were missing. It now comes from the
+  lifecycle the server checks statuses against.
+- **"Questions per page" is used.** Settings saved it and the Bank always asked
+  for 25; the Bank now pages by what Settings says.
+- **Switching Course order / Recently updated reloads the Bank on the first
+  page.** The sort was left out of what reloads the list, so the change showed
+  only after paging or filtering.
+- **A course file saved with a byte-order mark is read, not skipped.** A
+  Windows editor can add one, and `json.loads` refuses it. Only publishing
+  accepted it; everywhere else the error was caught and the file passed over
+  in silence - the sync reported the course as unparseable and adopted
+  nothing, and the ids already taken left that course's ids out, so a new
+  question could be given one of them. Every reader of `exam.json`,
+  `course.json` and `manifest.json` now goes through one function
+  (`pcm_reader.read_course_json`), and the importer's own `.json` reads accept
+  a byte-order mark too.
+
+Each fix has a test that fails with it taken out.
+
+### Removed
+
+- **Three Settings controls that saved a value nothing read:** *Export folder*,
+  *Export questions to that folder whenever one is saved*, and *Validation
+  threshold* (read only by import-validation functions nothing calls).
+
 ## [1.8.0] - 2026-09-30
 
 ### Changed
