@@ -110,6 +110,14 @@ Write the bank's questions for a course into its `exam.json`, replacing the
 pool with the questions of the chosen statuses. With **push**, also commit it
 and send it to Pentaho-Courses. See [Publishing to a course](../guides/09-publishing.md).
 
+## Question id
+
+A question's durable key: `<course>-m<module>-q<question>`, as in `di-m3-q7`
+(DI Practitioner, module 3, question 7). The Content Manager records results
+and saved attempts against it. The bank gives every question it files into a
+course an id in this format; see
+[Generating questions](../guides/03-generating.md#filed-like-the-courses-own-questions).
+
 ## Scenario
 
 One to three statements that set the scene for a question: a real working

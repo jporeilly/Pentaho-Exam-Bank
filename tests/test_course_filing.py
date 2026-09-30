@@ -5,6 +5,10 @@ into the course came in as `03f2c063-39c7-…` among `q-preview` and `q-mi`,
 with no place in the order and the lab's title ("One Pipeline, Many Files")
 where the course files it under the module ("See It Scale"). One unplaced
 question also switched the course order off for the whole publish.
+
+Since 2026-09-30 every course question id reads <course>-m<module>-q<n>
+(`2hr-m4-q3`, `di-m3-q14`), which PCM's verify-course enforces; the bank
+files every question into that format, whatever id it arrived with.
 """
 
 import json
@@ -61,7 +65,7 @@ def courses(tmp_path, monkeypatch):
     # Another course, not adopted: its ids are taken all the same.
     other = root / "other-course"
     other.mkdir()
-    (other / "exam.json").write_text(json.dumps({"questions": [{"id": "q-metadata-injection"}]}),
+    (other / "exam.json").write_text(json.dumps({"questions": [{"id": "oc-m1-q1", "module": "A"}]}),
                                      encoding="utf-8")
     monkeypatch.setattr(config, "pcm_courses_dir", str(root))
     return root
@@ -76,11 +80,11 @@ def db(tmp_path):
 
 @pytest.fixture
 def two_hour(db):
-    """The 2hr pool as it stood: q-hidden-data (See It Scale, 27) deleted."""
+    """The 2hr pool in the standard format, a See It Scale question (order 4) deleted."""
     cert = Certification(name="PDI in 2 Hours", source_type="pcm", source_ref="pdi-2hr-lab")
     db.save_certification(cert)
-    layout = [("q-preview", "See It Work"), ("q-mi", "See It Scale"), ("q-join", "Make It Yours"),
-              ("q-preview-loop", "See It Scale"), (None, None), ("q-reject-vs-error", "See It Work")]
+    layout = [("2hr-m2-q1", "See It Work"), ("2hr-m4-q1", "See It Scale"), ("2hr-m3-q1", "Make It Yours"),
+              ("2hr-m4-q2", "See It Scale"), (None, None), ("2hr-m2-q2", "See It Work")]
     for order, (qid, topic) in enumerate(layout):
         if qid:
             db.save(Question(id=qid, stem=f"{qid}?", key="a", distractors=["b"], topic=topic,
@@ -103,6 +107,12 @@ def generated(**kw):
 def test_a_uuid_is_an_id_the_bank_made_up():
     assert cf.is_minted("03f2c063-39c7-43da-ae6a-84d076979851")
     assert not cf.is_minted("q-mi") and not cf.is_minted("m3-q7")
+
+
+def test_the_standard_format_is_token_module_question():
+    assert cf.is_standard("di-m3-q7") and cf.is_standard("2hr-m4-q12")
+    for old in ("m3-q7", "q-mi", "kc-q1", "install-ai-q12", "q1", "di-m0-q1", "DI-m1-q1"):
+        assert not cf.is_standard(old), old
 
 
 def test_labs_belong_to_the_module_heading_above_them(courses):
@@ -157,33 +167,57 @@ def test_slides_with_no_module_keep_their_title_as_topic(monkeypatch):
     assert (made[0].topic, made[0].source_type) == ("Slide 3", "pptx")
 
 
-def test_numbered_ids_continue_the_family_of_the_module():
-    course = [Question(id=f"m3-q{n}", topic="Module 3") for n in range(1, 14)] + \
-             [Question(id=f"m1-q{n}", topic="Module 1") for n in range(1, 6)]
-    new = Question(stem="Which step?", topic="Module 3")
+def test_a_new_question_takes_the_next_number_in_its_module():
+    course = [Question(id=f"di-m3-q{n}", topic="Data Sources") for n in range(1, 14)] + \
+             [Question(id=f"di-m1-q{n}", topic="Getting Started") for n in range(1, 6)]
+    new = Question(stem="Which step?", topic="Data Sources")
 
-    assert cf.mint_id(new, course, set()) == "m3-q14"
-
-
-def test_a_new_module_takes_the_courses_commonest_family():
-    course = [Question(id=f"rd-q{n}", topic="A") for n in range(1, 13)] + \
-             [Question(id=f"q{n}", topic="B") for n in range(1, 4)]
-
-    assert cf.mint_id(Question(stem="x?", topic="New"), course, set()) == "rd-q13"
+    assert cf.mint_id(new, course, set()) == "di-m3-q14"
 
 
-def test_a_numbered_id_skips_one_used_anywhere():
-    course = [Question(id=f"ir-q{n}", topic="IR") for n in range(1, 11)]
+def test_a_module_with_no_questions_yet_takes_the_next_m():
+    course = [Question(id="di-m1-q1", topic="Getting Started"), Question(id="di-m3-q1", topic="Data Sources")]
 
-    assert cf.mint_id(Question(stem="x?", topic="IR"), course, {"ir-q11"}) == "ir-q12"
+    assert cf.mint_id(Question(stem="x?", topic="Capstone Project"), course, set()) == "di-m4-q1"
 
 
-def test_named_ids_get_the_course_prefix_and_the_questions_words():
-    course = [Question(id=i) for i in ("q-preview", "q-mi", "q-hidden-data")]
-    new = generated()
+def test_the_number_comes_after_the_highest_used_anywhere():
+    """A gap is not refilled: a deleted question's number may still be in a
+    published exam, a results row or a learner's saved attempt."""
+    course = [Question(id=f"ba-m3-q{n}", topic="IR") for n in (1, 2, 5)]
 
-    assert cf.mint_id(new, course, set()) == "q-metadata-injection"
-    assert cf.mint_id(new, course, {"q-metadata-injection"}) == "q-metadata-injection-2"
+    assert cf.mint_id(Question(stem="x?", topic="IR"), course, set()) == "ba-m3-q6"
+    assert cf.mint_id(Question(stem="x?", topic="IR"), course, {"ba-m3-q9"}) == "ba-m3-q10"
+
+
+def test_a_course_with_no_questions_takes_a_token_from_its_slug():
+    new = Question(stem="x?", topic="Overview")
+
+    assert cf.mint_id(new, [], set(), slug="architect-con-specialty") == "con-m1-q1"
+    # Another course already uses `con`.
+    assert cf.mint_id(new, [], {"con-m2-q4"}, slug="architect-con-specialty") == "con2-m1-q1"
+
+
+def test_the_scheme_reads_the_courses_exam_json_as_well_as_the_bank(courses):
+    (courses / "pdi-2hr-lab" / "exam.json").write_text(json.dumps({"questions": [
+        {"id": "2hr-m5-q2", "module": "Make It Real"}]}), encoding="utf-8")
+
+    assert cf.mint_id(Question(stem="x?", topic="Make It Real"), [], set(),
+                      slug="pdi-2hr-lab", courses_dir=courses) == "2hr-m5-q1"
+    taken = {"2hr-m5-q2"}
+    assert cf.mint_id(Question(stem="x?", topic="Make It Real"), [], taken,
+                      slug="pdi-2hr-lab", courses_dir=courses) == "2hr-m5-q3"
+
+
+def test_an_id_fits_only_with_the_courses_token_and_its_modules_m():
+    scheme = cf.IdScheme("2hr", {"See It Work": 2, "See It Scale": 4})
+
+    assert scheme.fits("2hr-m2-q9", "See It Work")
+    assert not scheme.fits("2hr-m4-q9", "See It Work")       # another module's m
+    assert not scheme.fits("di-m2-q9", "See It Work")        # another course's token
+    assert not scheme.fits("q-preview", "See It Work")       # the old schemes
+    assert scheme.fits("2hr-m6-q1", "Make It Real")          # a new module, a free m
+    assert not scheme.fits("2hr-m4-q1", "Make It Real")      # ...but not one in use
 
 
 def test_it_goes_after_the_last_question_of_its_module_into_a_free_slot():
@@ -218,21 +252,21 @@ def test_the_reported_question_is_filed_like_an_adopted_one(db, courses, two_hou
 
     result = cf.file_into_course(db, q, two_hour, courses_dir=courses, taken=taken)
 
-    # q-metadata-injection belongs to the other course's exam.json.
-    assert q.id == "q-metadata-injection-2"
+    # See It Scale is m4, and 2hr-m4-q2 its highest.
+    assert q.id == "2hr-m4-q3"
     assert q.topic == "See It Scale"
     assert q.source_type == "pcm" and q.source_file == "One Pipeline, Many Files"
     assert q.pool_order == 4 and result.moved == {}  # the slot q-hidden-data left
 
 
 def test_an_adopted_question_keeps_its_module_and_citation(db, courses, two_hour):
-    q = Question(id="q-kept", stem="x?", key="a", distractors=["b"], topic="See It Scale",
+    q = Question(id="2hr-m4-q9", stem="x?", key="a", distractors=["b"], topic="See It Scale",
                  source_type="pcm", source_file="Lab 5 — One Pipeline", pool_order=3,
                  certification_id=two_hour.id)
 
     cf.file_into_course(db, q, two_hour, courses_dir=courses, taken=set())
 
-    assert (q.id, q.topic, q.source_file, q.pool_order) == ("q-kept", "See It Scale", "Lab 5 — One Pipeline", 3)
+    assert (q.id, q.topic, q.source_file, q.pool_order) == ("2hr-m4-q9", "See It Scale", "Lab 5 — One Pipeline", 3)
 
 
 def test_a_certification_that_is_not_a_course_files_nothing(db, courses):
@@ -257,20 +291,20 @@ def test_a_repair_writes_what_it_changed_into_the_history(db, courses, two_hour)
     saved = db.get(q.id)
     assert db.get(old) is None
     assert {(h["field"], h["old"], h["new"]) for h in saved.version_history} >= {
-        ("id", old, "q-metadata-injection-2"),
+        ("id", old, "2hr-m4-q3"),
         ("topic", "One Pipeline, Many Files", "See It Scale"),
     }
 
 
 def test_rename_refuses_an_id_that_exists(db, two_hour):
     with pytest.raises(ValueError):
-        db.rename_question("q-mi", "q-preview")
+        db.rename_question("2hr-m4-q1", "2hr-m2-q1")
 
 
 def test_moving_to_make_room_is_not_an_edit(db, two_hour):
-    before = db.get("q-reject-vs-error")
-    db.set_pool_orders({"q-reject-vs-error": 6})
-    after = db.get("q-reject-vs-error")
+    before = db.get("2hr-m2-q2")
+    db.set_pool_orders({"2hr-m2-q2": 6})
+    after = db.get("2hr-m2-q2")
 
     assert after.pool_order == 6
     assert (after.version, after.version_history) == (before.version, before.version_history)
@@ -323,8 +357,8 @@ def test_a_generated_question_committed_to_a_course_is_filed(client, db, courses
 
     body = client.post(f"/api/jobs/{job}/commit", json={"certification_id": two_hour.id}).json()
 
-    assert body["filed"] == [{"id": "q-metadata-injection-2", "poolOrder": 4, "topic": "See It Scale"}]
-    saved = db.get("q-metadata-injection-2")
+    assert body["filed"] == [{"id": "2hr-m4-q3", "poolOrder": 4, "topic": "See It Scale"}]
+    saved = db.get("2hr-m4-q3")
     assert saved.pool_order == 4 and saved.topic == "See It Scale"
     assert db.get("03f2c063-39c7-43da-ae6a-84d076979851") is None
 
@@ -341,14 +375,46 @@ def test_two_questions_committed_together_get_different_ids(client, db, courses,
     assert sorted(f["poolOrder"] for f in filed) == [4, 5]
 
 
-def test_an_import_keeps_an_id_the_file_carried_and_replaces_one_it_made_up(client, db, courses, two_hour):
-    kept = {"id": "from-the-file", "stem": "Kept?", "key": "a", "distractors": ["b"], "topic": "See It Work"}
+def test_an_import_keeps_an_id_that_fits_and_renumbers_every_other(client, db, courses, two_hour):
+    """A course's own id is how the course and the bank recognise a question,
+    so it stays. An id carried from another file or course, and one the
+    bank made up, both become the next number in the module."""
+    fits = {"id": "2hr-m2-q7", "stem": "Kept?", "key": "a", "distractors": ["b"], "topic": "See It Work"}
+    foreign = {"id": "from-the-file", "stem": "Which step reads a file?", "key": "a",
+               "distractors": ["b"], "topic": "See It Work"}
     minted = {"id": "5d1e2f3a-0b1c-4d2e-8f90-123456789abc", "stem": "Which join keeps unmatched rows?",
               "key": "a", "distractors": ["b"], "topic": "See It Work"}
 
-    body = client.post("/api/import/commit", json={"questions": [kept, minted],
+    body = client.post("/api/import/commit", json={"questions": [fits, foreign, minted],
                                                    "certification_id": two_hour.id}).json()
 
-    assert "from-the-file" in body["ids"]
-    assert not any(cf.is_minted(i) for i in body["ids"])
-    assert db.get("from-the-file").pool_order >= 0
+    assert body["ids"] == ["2hr-m2-q7", "2hr-m2-q8", "2hr-m2-q9"]
+    assert db.get("from-the-file") is None
+    assert db.get("2hr-m2-q8").pool_order >= 0
+
+
+def test_moving_a_course_question_to_another_module_renumbers_it(client, db, courses, two_hour):
+    body = client.put("/api/questions/2hr-m2-q2", json={"topic": "See It Scale", "editor": "SME"}).json()
+
+    assert body["id"] == "2hr-m4-q3"
+    assert db.get("2hr-m2-q2") is None
+    saved = db.get("2hr-m4-q3")
+    assert saved.topic == "See It Scale"
+    assert ("id", "2hr-m2-q2", "2hr-m4-q3", "SME") in {
+        (h["field"], h["old"], h["new"], h["editor"]) for h in saved.version_history}
+
+
+def test_any_other_edit_keeps_the_id(client, db, courses, two_hour):
+    body = client.put("/api/questions/2hr-m2-q2", json={"stem": "Which step reads a file now?"}).json()
+
+    assert body["id"] == "2hr-m2-q2"
+    assert db.get("2hr-m2-q2").stem == "Which step reads a file now?"
+
+
+def test_a_question_outside_any_course_keeps_its_id_when_its_topic_changes(client, db):
+    cert = Certification(name="Slides")
+    db.save_certification(cert)
+    db.save(Question(id="slide-q", stem="Which?", key="a", distractors=["b"], topic="A",
+                     certification_id=cert.id))
+
+    assert client.put("/api/questions/slide-q", json={"topic": "B"}).json()["id"] == "slide-q"

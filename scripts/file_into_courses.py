@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from exam_bank.core import db_backup  # noqa: E402
 from exam_bank.core.bank import ExamBankDB  # noqa: E402
 from exam_bank.core.course_filing import (  # noqa: E402
-    course_slug, file_into_course, is_minted, taken_ids,
+    course_slug, file_into_course, is_minted, is_standard, taken_ids,
 )
 from exam_bank.utils.config import DB_PATH, config  # noqa: E402
 
@@ -61,7 +61,7 @@ def run(db: ExamBankDB, root: Path | None, editor: str) -> list[dict]:
             continue
         published = _published(root, slug)
         for q in db.search(certification_id=cert.id, limit=100000):
-            if not (is_minted(q.id) or q.pool_order < 0):
+            if not (is_minted(q.id) or not is_standard(q.id) or q.pool_order < 0):
                 continue
             if q.id in published:
                 report.append({"course": slug, "id": q.id, "skipped": "already published under this id"})

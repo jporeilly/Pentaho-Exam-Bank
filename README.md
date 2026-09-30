@@ -108,8 +108,15 @@ A course pool carries three things that are easy to destroy and hard to notice:
 
 - **Question ids are durable external keys.** The Content Manager puts them in
   the results payload it posts to the webhook, and keys an in-progress attempt
-  on the ids it dealt. The live pools use hand-authored ids (`m1-q1`,
-  `q-preview`). Minting new ones would orphan every recorded result.
+  on the ids it dealt. Every course's ids read the same way,
+  `<course>-m<module>-q<question>` (`di-m3-q7`, `2hr-m4-q3`), which the Content
+  Manager's `verify-course` enforces; the bank files every question it adds to
+  a course into that format and keeps an id that already fits. Renaming one
+  orphans its recorded results, so it happens only when the id no longer
+  says where the question is filed (see
+  [Generating questions](docs/guides/03-generating.md#filed-like-the-courses-own-questions)).
+  The one-off move to this format on 2026-09-30 is mapped old -> new in the
+  Content Manager's `docs/question-id-map.csv`.
 - **The `source` citation is richer than the module name** — "Lab 1 — Your
   First Win" against "See It Work".
 - **Order decides what gets asked** in a pool that draws N questions with

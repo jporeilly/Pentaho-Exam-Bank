@@ -9,10 +9,11 @@ from pydantic import BaseModel
 
 from ...core import providers, question_refinement
 from ...core.bank import STATUS_TRANSITIONS, STATUSES, ExamBankDB
+from ...core.course_filing import refile_id
 from ...core.stem_text import form_notes
 from ...core.validation import problems_with
 from ...utils.config import config
-from ..deps import get_db, question_json
+from ..deps import courses_dir_if_any, get_db, question_json
 
 router = APIRouter(tags=["questions"])
 
@@ -93,6 +94,7 @@ def update_question(
         raise HTTPException(404, f"No question '{question_id}'")
 
     editor = str(body.get("editor") or "").strip()
+    topic_before = question.topic
     for field in _EDITABLE:
         if field not in body:
             continue
@@ -105,6 +107,13 @@ def update_question(
 
     if not (question.stem or "").strip():
         raise HTTPException(400, "A question needs a stem")
+    # A course question's id names its module (<course>-m<module>-q<n>), so
+    # moving it to another module gives it that module's next number - the
+    # row is renamed and the change recorded, and the reply carries the new
+    # id for the editor to follow.
+    if question.topic != topic_before and question.certification_id:
+        refile_id(db, question, db.get_certification(question.certification_id),
+                  courses_dir=courses_dir_if_any(), editor=editor)
     db.save(question)
     return question_json(question)
 

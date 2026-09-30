@@ -36,9 +36,12 @@ const TRANSITIONS = {
 };
 
 /** A small fake of the server: it keeps the question, applies PUTs and
- *  status moves to it, and answers the lists the pane asks for. */
-function fakeServer(start: Question) {
+ *  status moves to it, and answers the lists the pane asks for. With
+ *  `renameTo`, a PUT that changes the topic renames the question, as the
+ *  bank does when a course question moves to another module. */
+function fakeServer(start: Question, renameTo = "") {
   let current = start;
+  const puts: string[] = [];
   const json = (body: unknown) =>
     Promise.resolve(new Response(JSON.stringify(body), {
       headers: { "Content-Type": "application/json" },
@@ -54,7 +57,10 @@ function fakeServer(start: Question) {
                      sourceRef: "developer-di-practitioner", questionCount: 1 }]);
     }
     if (method === "PUT") {
-      current = { ...current, ...JSON.parse(String(init?.body)) };
+      puts.push(u);
+      const body = JSON.parse(String(init?.body));
+      const moved = renameTo && body.topic !== current.topic;
+      current = { ...current, ...body, ...(moved ? { id: renameTo } : {}) };
       return json(current);
     }
     if (method === "POST" && u.endsWith("/ai/rewrite")) {
@@ -74,6 +80,7 @@ function fakeServer(start: Question) {
     }
     return json({ items: [current], total: 1, limit: 25, offset: 0 });
   });
+  return { puts };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -122,6 +129,35 @@ describe("saving a question", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       /Still approved: send it back for review/,
     );
+  });
+});
+
+describe("moving a course question to another module", () => {
+  // Its id names the module (<course>-m<module>-q<n>), so the bank renames
+  // it. The Bank list keyed rows on the id and patched only a row with the
+  // NEW id, so the renamed question's row went stale; and the editor cleared
+  // its notice whenever the id changed, so the save looked unconfirmed.
+  it("says the id changed, keeps the notice, and the next save uses the new id", async () => {
+    const server = fakeServer(question({ id: "di-m1-q1" }), "di-m3-q15");
+    await openEditor();
+
+    const topic = screen.getByDisplayValue("Getting Started");
+    await userEvent.clear(topic);
+    await userEvent.type(topic, "Data Sources");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/Saved at \d/);
+    expect(screen.getByRole("status")).toHaveTextContent("Its id is now di-m3-q15");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole("status")).toHaveTextContent("di-m3-q15");
+    // The row follows the question to its new id; none is left on the old one.
+    expect(screen.getByRole("cell", { name: "di-m3-q15" })).toBeInTheDocument();
+    expect(screen.queryByRole("cell", { name: "di-m1-q1" })).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByDisplayValue("Which step reads a file?"), "!");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("status");
+    expect(server.puts.at(-1)).toContain("/api/questions/di-m3-q15");
   });
 });
 

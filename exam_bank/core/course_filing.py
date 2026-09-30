@@ -17,12 +17,14 @@ exam would have been written back in the bank's newest-first order.
 This gives a new question what an adopted one has, when it is filed under a
 course:
 
-- **id** — the course's scheme. Where the course numbers its questions
-  (`m3-q1`…`m3-q13`) it takes the next number in the family its module
-  uses, else the course's commonest family; where it names them (`q-mi`,
-  `q-hidden-data`) it takes the same prefix and a slug of the question's key
-  words. Never an id used anywhere in the bank or in any course's exam.json:
-  the bank keys on the bare id, across courses.
+- **id** — the one format every course exam uses, which PCM's
+  verify-course enforces: `<course token>-m<module>-q<question>`, as in
+  `di-m3-q7`. The token and each module's m are read from the course's
+  questions (in the bank and in its exam.json); the question takes the next
+  number in its module, after the highest in use anywhere. A module with no
+  questions yet takes the next m; a course with no questions yet takes a
+  token from its slug. Never an id used anywhere in the bank or in any
+  course's exam.json: the bank keys on the bare id, across courses.
 - **module** — the `##` heading of the course's SUMMARY.md the lab sits
   under, which is what the exams use (2hr 5 of 5 modules, Installation 4 of
   4). The lab's title becomes the citation, as it is for adopted questions.
@@ -30,8 +32,11 @@ course:
   free slot if there is one there (a deleted question leaves one), else the
   questions after it move up one, but only as far as the next gap.
 
-Only ids the bank made up are ever changed. An id a course gave is how the
-course and the bank recognise the same question.
+An id that already fits the course and its module is never changed: a
+course's own id is how the course and the bank recognise the same question.
+Everything else gets one that fits - a UUID the bank made up, an id an import
+carried from another course or file, and the id of a question whose module
+was changed (see refile_id).
 """
 
 from __future__ import annotations
@@ -43,32 +48,27 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .bank import Certification, ExamBankDB, Question
-from .docs import STOP_WORDS, tokens
 from .pcm_reader import list_pcm_labs, summary_modules
 
 #: What `uuid.uuid4()` looks like: an id the bank made up, not one a course gave.
 _MINTED = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-_NUMBERED = re.compile(r"^(.*?)(\d+)$")
+#: The one question-id format every course exam uses, which PCM's
+#: verify-course enforces: <course token>-m<module>-q<question>, e.g. di-m3-q7.
+STANDARD_ID = re.compile(r"^([a-z0-9]+)-m([1-9]\d*)-q([1-9]\d*)$")
 
-#: Words that say nothing about what a question is about, on top of the
-#: search's stop words. A slug id is a handle for a person reading a list.
-#: Found on the first real run: "What is the key advantage of…" gave
-#: `q-key-advantage`. Product terms (job, step, transformation) are kept:
-#: the courses' own ids use them (`q-jobs`, `q-filter-false`).
-_SLUG_SKIP = STOP_WORDS | frozenset("""
-pentaho pdi data integration does most likely best primary main reason
-following would should could need needs use using used this that these
-those which what why how when where requirement requirements scenario
-approach way option support supports key advantage advantages benefit
-benefits purpose important significant effective efficient efficiently
-correct correctly true false result results happen happens describe
-describes difference differences
-""".split())
+#: Words a new course's token is not taken from: they name a role or a level
+#: that several courses share.
+_TOKEN_SKIP = frozenset("developer analyst architect bi practitioner specialty certified lab pdi".split())
 
 
 def is_minted(question_id: str) -> bool:
     """Whether the bank made this id up (a UUID) rather than a course giving it."""
     return bool(_MINTED.match(question_id or ""))
+
+
+def is_standard(question_id: str) -> bool:
+    """Whether the id reads <token>-m<module>-q<question>."""
+    return bool(STANDARD_ID.match(question_id or ""))
 
 
 @dataclass
@@ -121,37 +121,87 @@ def taken_ids(db: ExamBankDB, courses_dir) -> set[str]:
     return taken
 
 
-def _slug(question: Question, words: int = 2) -> str:
-    kept = [t for t in tokens(question.stem) if t not in _SLUG_SKIP and not t.isdigit()]
-    if len(kept) < words:
-        kept += [t for t in tokens(question.scenario) if t not in _SLUG_SKIP and t not in kept]
-    return "-".join(kept[:words]) or "question"
+def _exam_modules(courses_dir, slug: str) -> list[tuple[str, str]]:
+    """(id, module) for every question in the course's exam.json."""
+    if not courses_dir or not slug:
+        return []
+    try:
+        data = json.loads((Path(courses_dir) / slug / "exam.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return []
+    items = data.get("questions", []) if isinstance(data, dict) else []
+    return [(str(i.get("id", "")), str(i.get("module", ""))) for i in items if isinstance(i, dict)]
 
 
-def mint_id(question: Question, course: list[Question], taken: set[str]) -> str:
-    """An id in the course's own scheme that nothing else uses."""
-    given = [q for q in course if not is_minted(q.id) and q.id != question.id]
-    numbered = [(m.group(1), int(m.group(2)), q) for q in given if (m := _NUMBERED.match(q.id))]
+def _new_token(slug: str, taken: set[str]) -> str:
+    """A token for a course none of whose questions has one yet: the first
+    word of its slug that is not a role or level, made unique."""
+    in_use = {m.group(1) for i in taken if (m := STANDARD_ID.match(i))}
+    words = [w for w in re.split(r"[^a-z0-9]+", slug.lower()) if w and w not in _TOKEN_SKIP]
+    base = words[0] if words else (re.sub(r"[^a-z0-9]", "", slug.lower())[:3] or "c")
+    token, n = base, 2
+    while token in in_use:
+        token, n = f"{base}{n}", n + 1
+    return token
 
-    if numbered and len(numbered) * 2 >= len(given):
-        # The family the question's own module uses, else the course's commonest.
-        same = Counter(p for p, _, q in numbered if q.topic == question.topic)
-        every = Counter(p for p, _, _ in numbered)
-        chosen = same or every
-        prefix = max(chosen.items(), key=lambda kv: (kv[1], len(kv[0])))[0]
-        n = max(num for p, num, _ in numbered if p == prefix) + 1
-        while f"{prefix}{n}" in taken:
-            n += 1
-        return f"{prefix}{n}"
 
-    # Named ids: the course's common prefix ("q-") and the question's words.
-    lead = Counter(q.id.split("-")[0] + "-" for q in given if "-" in q.id)
-    prefix = lead.most_common(1)[0][0] if lead else "q-"
-    base = prefix + _slug(question)
-    candidate, n = base, 2
-    while candidate in taken:
-        candidate, n = f"{base}-{n}", n + 1
-    return candidate
+@dataclass
+class IdScheme:
+    """How one course numbers its questions: its token, and each module's m."""
+
+    token: str
+    modules: dict[str, int] = field(default_factory=dict)   # module -> m
+
+    def fits(self, question_id: str, module: str) -> bool:
+        """Whether the id already reads this course's way, for this module."""
+        m = STANDARD_ID.match(question_id or "")
+        if not m or m.group(1) != self.token:
+            return False
+        number = int(m.group(2))
+        if module in self.modules:
+            return self.modules[module] == number
+        return number not in self.modules.values()
+
+    def module_number(self, module: str) -> int:
+        """The module's m. A module with no questions yet takes the next one,
+        rather than its place in the reading order: renumbering the modules
+        after it would rename questions that are already published."""
+        if module not in self.modules:
+            self.modules[module] = max(self.modules.values(), default=0) + 1
+        return self.modules[module]
+
+    def next_id(self, module: str, taken: set[str]) -> str:
+        """The number after the highest this module has used anywhere."""
+        m = self.module_number(module)
+        own = re.compile(rf"^{re.escape(self.token)}-m{m}-q([1-9]\d*)$")
+        n = max((int(x.group(1)) for i in taken if (x := own.match(i))), default=0) + 1
+        return f"{self.token}-m{m}-q{n}"
+
+
+def id_scheme(slug: str, course: list[Question], courses_dir, taken: set[str],
+              exclude: str = "") -> IdScheme:
+    """The course's scheme, read from its questions in the bank and its exam.json.
+
+    ``exclude`` leaves one question out, so that a question whose module is
+    being changed does not tell the scheme its old id's module is its new one.
+    """
+    pairs = [(q.id, q.topic) for q in course] + _exam_modules(courses_dir, slug)
+    parsed = [(m.group(1), int(m.group(2)), module) for qid, module in pairs
+              if qid != exclude and (m := STANDARD_ID.match(qid))]
+    counts = Counter(t for t, _, _ in parsed)
+    token = counts.most_common(1)[0][0] if counts else _new_token(slug, taken)
+    modules: dict[str, int] = {}
+    for t, number, module in parsed:
+        if t == token and module and module not in modules and number not in modules.values():
+            modules[module] = number
+    return IdScheme(token, modules)
+
+
+def mint_id(question: Question, course: list[Question], taken: set[str], *,
+            slug: str = "", courses_dir=None) -> str:
+    """The next id in the course's format that nothing else uses."""
+    scheme = id_scheme(slug, course, courses_dir, taken, exclude=question.id)
+    return scheme.next_id(question.topic, taken | {q.id for q in course})
 
 
 def placement(question: Question, course: list[Question]) -> tuple[int, dict[str, int]]:
@@ -239,8 +289,12 @@ def file_into_course(
             question.source_file = cmap.title_of_lab.get(lab, question.source_file)
         question.source_type = "pcm"
 
-    if is_minted(question.id):
-        new_id = mint_id(question, course, taken)
+    # The id: anything that does not already read this course's way for
+    # this module gets the next number in the module (see the module
+    # docstring). A course's own id fits, and stays.
+    scheme = id_scheme(slug, course, courses_dir, taken, exclude=question.id)
+    if not scheme.fits(question.id, question.topic):
+        new_id = scheme.next_id(question.topic, taken | {q.id for q in course})
         if record:
             question.record_edit("id", question.id, new_id, editor=editor)
         question.id = new_id
@@ -254,3 +308,30 @@ def file_into_course(
 
     return Filed(before_id, question.id, before_topic, question.topic,
                  question.pool_order, moved)
+
+
+def refile_id(db: ExamBankDB, question: Question, cert: Certification | None, *,
+              courses_dir, editor: str = "") -> str:
+    """After a question's module is changed, give it the id the new module
+    calls for, renaming its row and recording the change in its history.
+
+    Returns the old id, or "" when the id already fits (or the certification
+    is not a course). The caller saves the question afterwards, under its
+    new id. A published question renamed this way shows in the next publish
+    as its old id removed and its new id added: the id names the module, so
+    moving a question to another module is a new id by design.
+    """
+    slug = course_slug(cert)
+    if not slug:
+        return ""
+    course = [q for q in db.search(certification_id=cert.id, limit=100000) if q.id != question.id]
+    taken = taken_ids(db, courses_dir)
+    scheme = id_scheme(slug, course, courses_dir, taken, exclude=question.id)
+    if scheme.fits(question.id, question.topic):
+        return ""
+    old = question.id
+    new_id = scheme.next_id(question.topic, taken | {q.id for q in course})
+    question.record_edit("id", old, new_id, editor=editor or "Exam Bank")
+    db.rename_question(old, new_id)
+    question.id = new_id
+    return old

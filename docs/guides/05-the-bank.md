@@ -24,6 +24,12 @@ Two kinds of message appear under the fields:
 Every edit is recorded field by field in the question's version history, with
 the old and new value.
 
+A course question's id names its module (`di-m3-q7` is module 3), so changing
+its **topic** to another module gives it that module's next number
+(`di-m5-q13`). The saved message says so, the Bank row follows it, and the
+history records the old and new id. When the course is next published, its
+exam shows the old id removed and the new one added.
+
 
 ## Saving a Question
 

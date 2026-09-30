@@ -7,6 +7,53 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-30
+
+### Changed
+
+- **Every question the bank files into a course gets an id in the one course
+  format, `<course>-m<module>-q<question>`.** On 2026-09-30 every course exam
+  moved to that format (`m1-q1` became `di-m1-q1`, `q-preview` `2hr-m2-q1`,
+  `kc-q1` `sw-m1-q1`; the map is the Content Manager's
+  `docs/question-id-map.csv`), and the Content Manager's `verify-course` now
+  fails any other shape. The bank's filing followed each course's old habit
+  instead: the next number in a module's family (`m3-q14`, `install-ai-q20`),
+  or the course's prefix plus two key words (`q-metadata-injection`). It now
+  reads the course's token and each module's number from the course's
+  questions, in the bank and in its `exam.json`, and takes the next number in
+  the module after the highest used anywhere, so a number a published exam
+  still carries is never handed out again. A module with no questions yet
+  takes the next module number; a course with no questions yet takes a token
+  from its name (`architect-con-specialty` would be `con`).
+- **An import renumbers any id that does not fit the course.** Only an id the
+  bank had made up (a UUID) used to be replaced, so a file carrying ids from
+  another course, or in an older style, put them into the course as they were.
+  An id that already fits the course and the question's module is still kept:
+  that is how the course and the bank recognise the same question.
+- **Moving a course question to another module renumbers it.** Its id names
+  its module, so changing its topic gives it the new module's next number. The
+  row is renamed and the change recorded in its version history; the editor
+  says "Its id is now …" and keeps its Saved message, and the Bank row follows
+  the question to its new id. Before this, a save that changed the id left the
+  row on the old id (a click then asked for a question that no longer
+  existed) and the editor cleared its message, as it does when a different
+  question opens. A render test covers both, and fails with either fix taken
+  out.
+
+The live bank was renamed in step with the courses (311 questions, one
+column, each rename recorded in the question's history, `updated_at` left
+alone so the Bank's order does not move): backup
+`exam_bank_20260930_085653_pre-standard-ids.db`. A comparison with the course
+files afterwards found exactly what it found before: nothing, bar the review
+edits not yet published.
+
+### Removed
+
+- The named-id minting (`q-` prefix plus the question's key words) and the
+  numbered-family guesswork it sat beside. `scripts/file_into_courses.py`,
+  the repair script, now also refiles a question whose id is not in the
+  format, unless a published exam carries that id.
+
 ## [1.7.3] - 2026-09-29
 ### Fixed
 

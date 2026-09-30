@@ -25,11 +25,14 @@ from a course's own material.
 Saved under a course's certification, each question is filed the way the
 course files its own:
 
-- **Its id follows the course's scheme** — the next number in its module's
-  family where the course numbers them (`m3-q14`, `install-ai-q20`), or the
-  course's prefix and the question's key words where it names them
-  (`q-metadata-injection`). Never an id another question, or another course's
-  exam, already uses.
+- **Its id is in the one format every course uses**,
+  `<course>-m<module>-q<question>`: the course's token, its module's number
+  and the next number in that module, after the highest already used —
+  `di-m3-q14` after `di-m3-q13`. A module with no questions yet takes the next
+  module number (`di-m6-q1`); a course with no questions yet takes a token
+  from its name. Never an id another question, or another course's exam,
+  already uses, and never a number a deleted question had, if a published
+  exam still carries it.
 - **Its topic is the course's module** — the heading in the course's contents
   its lab sits under (*See It Scale*), and the lab (*One Pipeline, Many
   Files*) becomes its citation, which the course shows with the results.

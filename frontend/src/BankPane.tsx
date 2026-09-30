@@ -194,8 +194,13 @@ export function BankPane({
           onSaved={(q) => {
             // Patch the row in place rather than reloading: a reload
             // re-sorts by updated_at and the question the user is
-            // editing jumps somewhere else on the page.
-            setQuestions((rows) => rows?.map((r) => (r.id === q.id ? q : r)) ?? rows);
+            // editing jumps somewhere else on the page. Matched on the id
+            // it had when opened too: moving a course question to another
+            // module renames it, and the row must follow.
+            const was = editing?.id;
+            setQuestions(
+              (rows) => rows?.map((r) => (r.id === q.id || r.id === was ? q : r)) ?? rows,
+            );
             setEditing(q);
             onChanged?.();
           }}

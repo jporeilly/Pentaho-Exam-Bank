@@ -13,7 +13,7 @@
  * same STATUS_TRANSITIONS table the model enforces, so the buttons offered
  * are exactly the moves that will be accepted.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   ApiError,
@@ -242,9 +242,12 @@ export function QuestionEditor({
   }, [question]);
 
   // The notice belongs to the question it was about: cleared when a
-  // DIFFERENT question opens, not when this one comes back updated.
+  // DIFFERENT question opens, not when this one comes back updated. A save
+  // can change the id (a course question moved to another module takes that
+  // module's next number), so "this one" is the id the last save returned.
+  const savedId = useRef("");
   useEffect(() => {
-    setNotice("");
+    if (question.id !== savedId.current) setNotice("");
   }, [question.id]);
 
   useEffect(() => {
@@ -286,11 +289,16 @@ export function QuestionEditor({
         difficulty: draft.difficulty,
         bloom_level: draft.bloom_level,
       });
+      savedId.current = updated.id;
       setDraft(updated);
+      const renamed =
+        updated.id !== draft.id
+          ? ` Its id is now ${updated.id}, the next number in its new module.`
+          : "";
       setNotice(
-        updated.status === "approved"
+        (updated.status === "approved"
           ? `Saved at ${clock()}. Still approved: send it back for review if this change needs one.`
-          : `Saved at ${clock()}`,
+          : `Saved at ${clock()}.`) + renamed,
       );
       onSaved(updated);
     } catch (e) {
@@ -305,6 +313,7 @@ export function QuestionEditor({
     setError("");
     try {
       const updated = await api.setStatus(draft.id, status);
+      savedId.current = updated.id;
       setDraft(updated);
       setNotice(`Moved to ${STATUS_NAME[updated.status] ?? updated.status}`);
       onSaved(updated);
@@ -368,7 +377,7 @@ export function QuestionEditor({
     <div className="editor card">
       <div className="toolbar">
         <strong>Edit question</strong>
-        <code className="mono faint">{draft.id.slice(0, 12)}</code>
+        <code className="mono faint">{draft.id.length > 16 ? draft.id.slice(0, 12) : draft.id}</code>
         <span className={`pill ${draft.status}`}>{draft.status.replace("_", " ")}</span>
         <span className="spacer" />
         <button className="secondary" onClick={onClose} disabled={busy}>
