@@ -7,6 +7,42 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-30
+
+### Added
+
+Five features that had settings or code but nothing working behind them.
+
+- **AI Chat answers as it writes.** The sources appear as soon as the
+  searches are done, then the answer word by word, instead of all at once
+  after a minute on a local model. **Stop** keeps what was written, marked
+  *Stopped before it finished*, and leaves it out of the follow-up; with
+  Ollama it also stops the model. Streams from Ollama, Anthropic and OpenAI
+  (`providers.chat_stream`, `POST /api/chat/stream`, newline-delimited JSON).
+- **GPU advice** under Settings > The model (Ollama): the cards from
+  `nvidia-smi`; whether the saved model fits on ONE card - on a two-card
+  machine a model that does not is spread over the cards or onto the CPU and
+  runs several times slower; every pulled model's fit; the largest one that
+  fits comfortably when the chosen one does not; and how much of a loaded
+  model sits on the CPU (Ollama's `/api/ps`). `GET /api/settings/gpu`.
+- **Check imported questions against docs.pentaho.com.** A button in
+  Import's preview looks each question up through the docs connection AI
+  Chat uses and marks it Backed (every correct answer found, word for word or
+  by enough of its meaningful words), Not found, or Not checked, with the
+  pages it found. Changes nothing. The **Docs check threshold** is back in
+  Settings > Quality, now read. `POST /api/import/check-docs`.
+- **Automatic backups.** Settings > Export and backups: every N hours,
+  checked at start and every ten minutes, keeping the newest M. Only
+  automatic backups are ever pruned; yours and a restore's safety copy are
+  kept.
+- **Auto-export on save, and a default export format.** After any change to
+  the questions, the whole bank is written to the export folder in the
+  default format (`exam-bank.csv`, `exam-bank-qti.xml` ...), a couple of
+  seconds after the last change, replacing the previous copy. The Bank's
+  Export now offers every format, starting on the default. A new install
+  starts with auto-export off; **a saved config keeps its own value** - one
+  carried over from the Question Bank may have it on.
+
 ### Fixed
 
 - **The installer's courses search no longer records a git worktree over
@@ -24,6 +60,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   main checkout. New `-Roots` parameter so tests can search a directory of
   their own (`tests/test_find_courses_script.py`, run under Windows
   PowerShell).
+
+### Removed
+
+- The implementations these replaced: `validate_question_against_docs` and
+  the MCP client's error-swallowing layer it used (`check_connection`,
+  `search_documentation`, two multi-server searches) with the `mcp_servers`
+  and `mcp_enabled` settings nothing set; and `recommend_num_ctx`,
+  `MODEL_CATALOG` and `recommend_models`, which added the cards' memory
+  together and named models this machine did not have.
 
 ## [1.9.0] - 2026-09-30
 
