@@ -18,7 +18,9 @@ from a course's own material.
    you leave the screen, and **Cancel** stops it.
 6. When it finishes, review the questions. Everything starts ticked; untick
    what is wrong and press **Save N to the bank**. Nothing is saved until you
-   do.
+   do. A question that cannot be graded - nothing marked correct, or a
+   distractor that repeats a correct answer - is not saved; the message after
+   saving names it and says why, as an import does.
 
 ## Filed like the course's own questions
 

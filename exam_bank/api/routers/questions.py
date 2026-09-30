@@ -109,6 +109,13 @@ def update_question(
 
     if not (question.stem or "").strip():
         raise HTTPException(400, "A question needs a stem")
+    # The same rules the editor applies before it lets Save be pressed
+    # (pinned to one fixture with core/validation.py), so this refuses only
+    # what the editor would never send - a script, or a client out of step.
+    problems = problems_with(question)
+    if problems:
+        raise HTTPException(400, "This question could not be graded: "
+                                 + "; ".join(p.message for p in problems))
     # A course question's id names its module (<course>-m<module>-q<n>), so
     # moving it to another module gives it that module's next number - the
     # row is renamed and the change recorded, and the reply carries the new

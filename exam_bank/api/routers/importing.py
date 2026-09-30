@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from ...core.bank import Question, ExamBankDB
 from ...core.importing import SUPPORTED, UnsupportedFile, import_any
 from ...core.validation import problems_with
-from ...core.course_filing import file_into_course, taken_ids
+from ...core.intake import take_in
 from ..deps import courses_dir_if_any, get_db, question_json
 
 router = APIRouter(tags=["import"])
@@ -159,44 +159,21 @@ def commit_import(
     if body.certification_id and db.get_certification(body.certification_id) is None:
         raise HTTPException(404, f"No certification '{body.certification_id}'.")
 
-    # A question filed under a course takes the course's id scheme and a place
-    # in its order (core/course_filing). Only an id the importer made up is
-    # replaced; one the file carried - a Content Manager exam.json, this
-    # bank's own export - is kept.
-    root = courses_dir_if_any()
-    taken = taken_ids(db, root)
-    saved, refused = [], []
+    # A row that is not a question at all is refused here; everything else
+    # goes the one way in for new questions (core/intake): refused if it cannot
+    # be graded - the bank's own editor will not save one of these, and an
+    # import that could would make that rule a suggestion - else filed into
+    # the course (an id in the course's format: one the file carried is kept
+    # when it fits, else renumbered; module; place) and saved.
+    questions, refused = [], []
     for raw in body.questions:
         try:
-            question = Question(**raw)
+            questions.append(Question(**raw))
         except TypeError as e:
             refused.append({"stem": str(raw.get("stem", ""))[:80], "reason": str(e)})
-            continue
 
-        problems = problems_with(question)
-        if problems:
-            # Refused rather than saved-and-flagged: the bank's own editor will
-            # not let an author save one of these, and an import that can put
-            # them in anyway makes that rule a suggestion.
-            refused.append({
-                "stem": question.stem[:80],
-                "reason": "; ".join(p.message for p in problems),
-            })
-            continue
-
-        if body.certification_id:
-            question.certification_id = body.certification_id
-            certification = db.get_certification(body.certification_id)
-            if certification:
-                question.source_type = certification.source_type
-        if body.topic:
-            question.topic = body.topic
-        question.status = body.status
-
-        certification = db.get_certification(question.certification_id) if question.certification_id else None
-        if certification:
-            file_into_course(db, question, certification, courses_dir=root, taken=taken)
-        db.save(question)
-        saved.append(question.id)
-
-    return {"saved": len(saved), "ids": saved, "refused": refused}
+    done = take_in(db, questions, certification_id=body.certification_id,
+                   courses_dir=courses_dir_if_any(), topic=body.topic, status=body.status,
+                   source_type_from_certification=True)
+    return {"saved": len(done.saved), "ids": [q.id for q in done.saved],
+            "refused": refused + done.refused}

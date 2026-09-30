@@ -194,12 +194,20 @@ export function GeneratePane({
     setBusy(true);
     setError("");
     try {
-      const { saved: count } = await api.commitJob(
+      const { saved: count, refused = [] } = await api.commitJob(
         jobId,
         [...keep],
         form.certification_id ?? "",
       );
-      setSaved(`Saved ${count} question${count === 1 ? "" : "s"} to the bank.`);
+      // A question nobody can answer is refused, as import refuses one; say
+      // which and why rather than let the count quietly come up short.
+      const why = refused.map((r) => `"${r.stem}" (${r.reason})`).join("; ");
+      setSaved(
+        `Saved ${count} question${count === 1 ? "" : "s"} to the bank.` +
+          (refused.length
+            ? ` Not saved, because ${refused.length === 1 ? "it" : "they"} could not be graded: ${why}`
+            : ""),
+      );
       setJob(null);
       setJobId("");
       setKeep(new Set());

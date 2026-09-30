@@ -785,7 +785,8 @@ export const api = {
   cancelJob: (id: string) =>
     request<{ ok: boolean }>(`/api/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   commitJob: (id: string, question_ids: string[] = [], certification_id = "") =>
-    request<{ saved: number }>(`/api/jobs/${encodeURIComponent(id)}/commit`, {
+    request<{ saved: number; refused?: { stem: string; reason: string }[] }>(
+      `/api/jobs/${encodeURIComponent(id)}/commit`, {
       method: "POST",
       body: JSON.stringify({ question_ids, certification_id }),
     }),

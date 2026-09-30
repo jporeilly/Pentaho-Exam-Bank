@@ -41,6 +41,8 @@ function mockApi(opts: {
   generateError?: { status: number; detail: string };
   /** Jobs already running when the pane mounts. */
   existing?: Job[];
+  /** What the commit answers. */
+  commit?: Record<string, unknown>;
 } = {}) {
   const calls: Array<{ url: string; method: string; body?: unknown }> = [];
   const queue = [...(opts.jobs ?? [job()])];
@@ -71,7 +73,7 @@ function mockApi(opts: {
         );
       return ok({ jobId: "job-1", sections: 2 });
     }
-    if (path.includes("/commit")) return ok({ saved: 1 });
+    if (path.includes("/commit")) return ok(opts.commit ?? { saved: 1 });
     if (path.includes("/cancel")) return ok({ ok: true });
     if (path.includes("/api/jobs/")) return ok(queue.length > 1 ? queue.shift() : queue[0]);
     // The bare list, asked for on mount to find a run already in flight.
@@ -313,6 +315,24 @@ describe("review and commit", () => {
 
     expect(await screen.findByText(/Saved 1 question to the bank/)).toBeInTheDocument();
     expect(screen.queryByText("Review")).not.toBeInTheDocument();
+  });
+
+  // A question nobody can answer is refused at commit, as import refuses one.
+  // The count alone would come up short with no word why.
+  it("says which questions were not saved, and why", async () => {
+    mockApi({ commit: { saved: 0, refused: [
+      { stem: "Which step reads a file?", reason: "Nothing is marked correct, so the question cannot be graded." },
+    ] } });
+    render(<GeneratePane />);
+    await chooseCourse();
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await screen.findByText("1 of 1 selected");
+
+    await userEvent.click(screen.getByRole("button", { name: /Save 1 to the bank/ }));
+
+    expect(await screen.findByText(/Saved 0 questions to the bank/)).toHaveTextContent(
+      /could not be graded: "Which step reads a file\?" \(Nothing is marked correct/,
+    );
   });
 });
 

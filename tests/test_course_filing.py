@@ -431,3 +431,47 @@ def test_ids_in_an_exam_json_saved_with_a_byte_order_mark_are_taken(db, courses,
     q = generated(certification_id=two_hour.id)
     cf.file_into_course(db, q, two_hour, courses_dir=courses, taken=cf.taken_ids(db, courses))
     assert q.id == "2hr-m4-q4"
+
+
+# --- one way in, one policy (1.9.0) -------------------------------------------------
+#
+# Import refused a question that could not be graded; generation's commit saved
+# it, and the editor's Save refused it only in the browser. Every path that adds
+# or saves a question now applies the same rules (core/validation.py).
+
+
+def test_a_generated_question_that_cannot_be_graded_is_refused(client, db, courses, two_hour, monkeypatch):
+    monkeypatch.setattr(generation_router, "generate_questions_batch",
+                        lambda **kw: [generated(key="", id="c0ffee00-0000-4000-8000-000000000001"),
+                                      generated()])
+    job = client.post("/api/generate", json={"course_slug": "pdi-2hr-lab"}).json()["jobId"]
+    _wait(client, job)
+
+    body = client.post(f"/api/jobs/{job}/commit", json={"certification_id": two_hour.id}).json()
+
+    assert body["saved"] == 1
+    assert len(body["refused"]) == 1 and "Nothing is marked correct" in body["refused"][0]["reason"]
+    assert db.get("c0ffee00-0000-4000-8000-000000000001") is None
+    # The refused question reserved nothing: the saved one takes the next number.
+    assert body["filed"][0]["id"] == "2hr-m4-q3"
+
+
+def test_the_editor_save_refuses_what_cannot_be_graded(client, db, courses, two_hour):
+    response = client.put("/api/questions/2hr-m2-q2", json={"key": "", "stem": "Changed?"})
+
+    assert response.status_code == 400
+    assert "Nothing is marked correct" in response.json()["detail"]
+    assert db.get("2hr-m2-q2").stem == "2hr-m2-q2?"
+
+
+def test_import_and_generation_take_the_same_way_in(db, courses, two_hour):
+    from exam_bank.core.intake import take_in
+
+    done = take_in(db, [generated(key=""), generated(), Question(stem="x?", key="a", distractors=["a"])],
+                   certification_id=two_hour.id, courses_dir=courses)
+
+    assert [q.id for q in done.saved] == ["2hr-m4-q3"]
+    assert [r["reason"] for r in done.refused] == [
+        "Nothing is marked correct, so the question cannot be graded.",
+        '"a" is both correct and a distractor.',
+    ]
