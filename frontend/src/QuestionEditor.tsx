@@ -17,6 +17,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   ApiError,
+  type AiAnswer,
+  type AiExplanation,
   type AiReview,
   type AiRewrite,
   type Lifecycle,
@@ -221,10 +223,12 @@ export function QuestionEditor({
   // "Use this" only fills the form - the question is still saved by the
   // same button as any other edit. A model that wrote to the bank directly
   // would be the one contributor whose work nobody reviewed.
-  const [aiBusy, setAiBusy] = useState<"" | "rewrite" | "review">("");
+  const [aiBusy, setAiBusy] = useState<"" | "rewrite" | "review" | "explanation" | "answer">("");
   const [aiError, setAiError] = useState("");
   const [proposal, setProposal] = useState<AiRewrite | null>(null);
   const [review, setReview] = useState<AiReview | null>(null);
+  const [explained, setExplained] = useState<AiExplanation | null>(null);
+  const [answered, setAnswered] = useState<AiAnswer | null>(null);
   const [lifecycle, setLifecycle] = useState<Lifecycle | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -285,6 +289,8 @@ export function QuestionEditor({
         keys: draft.keys,
         distractors: draft.distractors,
         explanation: draft.explanation,
+        key_source_text: draft.key_source_text,
+        tags: draft.tags,
         topic: draft.topic,
         difficulty: draft.difficulty,
         bloom_level: draft.bloom_level,
@@ -339,10 +345,62 @@ export function QuestionEditor({
   const moves = lifecycle?.transitions[draft.status] ?? [];
   const forField = (name: string) => problems.filter((p) => p.field === name);
 
+  /** One AI panel at a time: each answers a different question. */
+  const clearAi = () => {
+    setProposal(null);
+    setReview(null);
+    setExplained(null);
+    setAnswered(null);
+  };
+
+  const runExplanation = async () => {
+    setAiBusy("explanation");
+    setAiError("");
+    clearAi();
+    try {
+      setExplained(await api.aiExplanation(draft.id));
+    } catch (e: unknown) {
+      setAiError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setAiBusy("");
+    }
+  };
+
+  const runAnswer = async () => {
+    setAiBusy("answer");
+    setAiError("");
+    clearAi();
+    try {
+      setAnswered(await api.aiAnswer(draft.id));
+    } catch (e: unknown) {
+      setAiError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setAiBusy("");
+    }
+  };
+
+  /** Take the proposed answer key into the form. Still unsaved. */
+  const acceptAnswer = () => {
+    if (!answered) return;
+    const p = answered.proposed;
+    setDraft({
+      ...draft,
+      key: p.key,
+      keys: p.keys,
+      distractors: p.distractors,
+      question_type: p.question_type,
+      key_source_text: p.key_source_text,
+      tags: p.tags,
+    });
+    setAnswered(null);
+  };
+
+  const guessed = draft.tags.includes("key-unverified");
+
   const runRewrite = async () => {
     setAiBusy("rewrite");
     setAiError("");
-    setReview(null);
+    clearAi();
     try {
       setProposal(await api.aiRewrite(draft.id));
     } catch (e: unknown) {
@@ -355,7 +413,7 @@ export function QuestionEditor({
   const runReview = async () => {
     setAiBusy("review");
     setAiError("");
-    setProposal(null);
+    clearAi();
     try {
       setReview(await api.aiReview(draft.id));
     } catch (e: unknown) {
@@ -552,13 +610,108 @@ export function QuestionEditor({
         >
           {aiBusy === "review" ? "Checking…" : "AI check answers"}
         </button>
+        <button
+          className="secondary"
+          onClick={runExplanation}
+          disabled={busy || aiBusy !== ""}
+          title="Ask the model to write the explanation from the course's pages. Nothing is saved until you do."
+        >
+          {aiBusy === "explanation" ? "Writing…" : "AI explanation"}
+        </button>
+        <button
+          className="secondary"
+          onClick={runAnswer}
+          disabled={busy || aiBusy !== ""}
+          title="Ask the model which options are correct, from the course's pages. Nothing is saved until you do."
+        >
+          {aiBusy === "answer" ? "Deciding…" : "AI answer key"}
+        </button>
 
         <button className="secondary danger" onClick={remove} disabled={busy}>
           Delete
         </button>
       </div>
 
+      {guessed && (
+        <div className="banner warn" role="note" style={{ marginTop: 12 }}>
+          The correct answer was guessed when this question was imported: the file
+          marked none, so the first option was taken. Check it before relying on it
+          &mdash; <strong>AI answer key</strong> proposes one from the course&rsquo;s pages.{" "}
+          <button
+            className="secondary"
+            onClick={() => setDraft({ ...draft, tags: draft.tags.filter((t) => t !== "key-unverified") })}
+          >
+            The answer is right
+          </button>
+        </div>
+      )}
+
       {aiError && <div className="banner" style={{ marginTop: 12 }}>{aiError}</div>}
+
+      {explained && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <strong>Proposed explanation</strong>
+          <p className="muted" style={{ marginTop: 4 }}>
+            {explained.groundedOn
+              ? `Written from ${explained.groundedOn}.`
+              : "No course page was found for this question, so the model wrote it without one. Check every fact."}
+          </p>
+          <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{explained.explanation}</p>
+          {explained.unnamed.length > 0 && (
+            <div className="advice">
+              It never names: {explained.unnamed.join("; ")}. The explanation should
+              address every option by its text.
+            </div>
+          )}
+          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+            <button
+              onClick={() => {
+                setDraft({ ...draft, explanation: explained.explanation });
+                setExplained(null);
+              }}
+            >
+              Use this explanation
+            </button>
+            <button className="secondary" onClick={() => setExplained(null)}>
+              Discard
+            </button>
+            <span className="muted" style={{ alignSelf: "center" }}>
+              Nothing is saved until you press Save.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {answered && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <strong>Proposed answer key</strong>
+          <p className="muted" style={{ marginTop: 4 }}>
+            {answered.changed ? "Different from the answer the question has now. " : "The same answer the question has now. "}
+            {answered.groundedOn
+              ? `Decided from ${answered.groundedOn}.`
+              : "No course page was found for this question, so the model decided without one."}
+          </p>
+          <ul>
+            {answered.analysis.map((a) => (
+              <li key={a.option} className={a.correct ? "" : "muted"}>
+                <strong>{a.correct ? "Correct" : "Wrong"}:</strong> {a.option}
+                {a.quote && a.quote.toLowerCase() !== "none" && (
+                  <div className="faint" style={{ fontSize: "0.9em" }}>&ldquo;{a.quote}&rdquo;</div>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+            <button onClick={acceptAnswer}>Use this answer</button>
+            <button className="secondary" onClick={() => setAnswered(null)}>
+              Discard
+            </button>
+            <span className="muted" style={{ alignSelf: "center" }}>
+              Nothing is saved until you press Save.
+            </span>
+          </div>
+        </div>
+      )}
 
       {proposal && (
         <div className="card" style={{ marginTop: 12 }}>

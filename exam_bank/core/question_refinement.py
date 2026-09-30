@@ -1,4 +1,19 @@
-"""Post-generation AI operations: regen, improve, QA check, explanation, key assignment."""
+"""The AI operations the editor offers on a saved question.
+
+Every one of them PROPOSES: it returns a rewrite, findings, an explanation or
+an answer key, and never changes the Question it is given. The author takes a
+proposal into the editor and saves it, or does not.
+
+- improve_question: the AI rewrite;
+- review_answers and qa_check_question: the AI answer check;
+- generate_explanation: the AI explanation;
+- ai_assign_keys: the AI answer key - which options are correct, for a
+  question whose answer was guessed at import.
+
+Four more came across from the NiceGUI app and were never reachable from any
+screen: regen_stem, regen_key and regen_distractor (the AI rewrite covers
+them) and qa_fix_question. They were deleted in 1.9.0.
+"""
 
 import copy as _copy
 import json
@@ -11,178 +26,6 @@ from .bank import Question
 from .generation_prompts import GENERATION_SYSTEM_PROMPT, SCENARIO_AND_STEM_RULES
 from .generation_parsing import _extract_json_array, _extract_json_object
 from .stem_text import question_only
-
-
-def regen_stem(
-    question: Question,
-    model: str,
-    base_url: str = "http://localhost:11434",
-    system_prompt: str = "",
-) -> Optional[str]:
-    """Regenerate only the stem (and scenario) — all choices stay locked."""
-    is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
-    keys_json = json.dumps(question.keys) if is_multi else json.dumps([question.key])
-
-    prompt = f"""Rewrite ONLY the stem and scenario for this certification exam question.
-All answer choices must remain EXACTLY the same — do NOT change them.
-
-**Current scenario:** {question.scenario}
-**Current stem:** {question.stem}
-**{"Keys" if is_multi else "Key"} (DO NOT CHANGE):** {keys_json}
-**Distractors (DO NOT CHANGE):** {json.dumps(question.distractors)}
-**Key source text:** {question.key_source_text}
-
-RULES:
-- Write a new scenario and stem that still leads to the same correct answer(s).
-{SCENARIO_AND_STEM_RULES}
-- Keep the same difficulty and cognitive level.
-- The new stem must still be answerable from the key_source_text.
-
-Return ONLY a JSON object:
-```json
-{{"scenario": "Statements that set the scene.", "stem": "Only the question?"}}
-```"""
-
-    try:
-        response = providers.generate(
-            prompt=prompt, model=model,
-            system=system_prompt or GENERATION_SYSTEM_PROMPT,
-            base_url=base_url, timeout=120.0,
-        )
-    except Exception as e:
-        print(f"[REGEN-STEM] AI call failed: {e}")
-        return None
-
-    data = _extract_json_object(response)
-    if not data:
-        return None
-
-    if "stem" in data:
-        question.scenario = data.get("scenario", question.scenario)
-        # The question only: the count is presentation (see stem_text).
-        question.stem = question_only(str(data["stem"]).strip())
-        return question.stem
-    return None
-
-
-def regen_key(
-    question: Question,
-    key_index: int,
-    model: str,
-    base_url: str = "http://localhost:11434",
-    system_prompt: str = "",
-) -> Optional[str]:
-    """Regenerate a single correct answer (key) — stem and distractors stay locked.
-
-    For single-select questions, key_index is always 0.
-    For multi-select, key_index selects which key to replace.
-    """
-    is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
-    current_keys = list(question.keys) if is_multi else [question.key]
-    old_key = current_keys[key_index] if key_index < len(current_keys) else current_keys[0]
-
-    prompt = f"""Rewrite ONE correct answer for this certification exam question.
-The stem, distractors, and all other keys must remain EXACTLY the same.
-
-**Stem (DO NOT CHANGE):** {question.stem}
-**Key source text:** {question.key_source_text}
-**Current correct answer to replace:** {json.dumps(old_key)}
-**Other keys to keep (DO NOT CHANGE):** {json.dumps([k for i, k in enumerate(current_keys) if i != key_index])}
-**Distractors (DO NOT CHANGE):** {json.dumps(question.distractors)}
-
-RULES:
-- The new key MUST still be factually correct based on the key_source_text.
-- It must be a different wording or angle, not identical to the old key.
-- It must be similar in length to the distractors.
-- Update the explanation to reflect the new wording.
-
-Return ONLY a JSON object:
-```json
-{{"key": "new correct answer text", "explanation": "A: ... B: ... C: ... D: ..."}}
-```"""
-
-    try:
-        response = providers.generate(
-            prompt=prompt, model=model,
-            system=system_prompt or GENERATION_SYSTEM_PROMPT,
-            base_url=base_url, timeout=120.0,
-        )
-    except Exception as e:
-        print(f"[REGEN-KEY] AI call failed: {e}")
-        return None
-
-    data = _extract_json_object(response)
-    if not data or "key" not in data:
-        return None
-
-    new_key = data["key"]
-    if is_multi:
-        question.keys[key_index] = new_key
-        if key_index == 0:
-            question.key = new_key
-    else:
-        question.key = new_key
-
-    if "explanation" in data:
-        question.explanation = data["explanation"]
-
-    return new_key
-
-
-def regen_distractor(
-    question: Question,
-    distractor_index: int,
-    model: str,
-    base_url: str = "http://localhost:11434",
-    system_prompt: str = "",
-) -> Optional[str]:
-    """Regenerate a single distractor — stem and keys stay locked."""
-    old_dist = question.distractors[distractor_index] if distractor_index < len(question.distractors) else ""
-    is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
-    keys_json = json.dumps(question.keys) if is_multi else json.dumps([question.key])
-
-    other_distractors = [d for i, d in enumerate(question.distractors) if i != distractor_index]
-
-    prompt = f"""Write ONE new distractor (wrong answer) for this certification exam question.
-The stem, correct answer(s), and other distractors must remain EXACTLY the same.
-
-**Stem (DO NOT CHANGE):** {question.stem}
-**{"Keys" if is_multi else "Key"} (DO NOT CHANGE):** {keys_json}
-**Distractor to REPLACE:** {json.dumps(old_dist)}
-**Other distractors to keep (DO NOT CHANGE):** {json.dumps(other_distractors)}
-**Key source text:** {question.key_source_text}
-
-RULES:
-- The new distractor must be plausible but clearly WRONG.
-- It must NOT duplicate any existing key or distractor.
-- It must be similar in length to the correct answer(s).
-- It should be a common misconception or partial truth related to the topic.
-- Update the explanation to address the new distractor by letter.
-
-Return ONLY a JSON object:
-```json
-{{"distractor": "new wrong answer text", "explanation": "A: ... B: ... C: ... D: ..."}}
-```"""
-
-    try:
-        response = providers.generate(
-            prompt=prompt, model=model,
-            system=system_prompt or GENERATION_SYSTEM_PROMPT,
-            base_url=base_url, timeout=120.0,
-        )
-    except Exception as e:
-        print(f"[REGEN-DIST] AI call failed: {e}")
-        return None
-
-    data = _extract_json_object(response)
-    if not data or "distractor" not in data:
-        return None
-
-    question.distractors[distractor_index] = data["distractor"]
-    if "explanation" in data:
-        question.explanation = data["explanation"]
-
-    return data["distractor"]
 
 
 def improve_question(
@@ -342,287 +185,191 @@ If the question has no errors, return: []
     return issues
 
 
-def qa_fix_question(
-    question: Question,
-    issues: List[dict],
-    model: str,
-    base_url: str = "http://localhost:11434",
-    system_prompt: str = "",
-) -> Optional[Question]:
-    """Auto-fix a question based on QA issues. Returns the fixed question or None on failure.
+def _options(question: Question) -> list[str]:
+    """Every option once, in the order the author sees them where known."""
+    keys = question.keys if question.question_type == "multi" and question.keys else [question.key]
+    combined = []
+    for o in [*keys, *question.distractors]:
+        if o and o not in combined:
+            combined.append(o)
+    order = [o for o in (question.option_order or []) if o]
+    if order and sorted(set(order)) == sorted(combined):
+        return list(dict.fromkeys(order))
+    return combined
 
-    Uses the QA issues as specific instructions for what to fix.
-    """
-    if not issues:
-        return question
 
-    is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
-    keys_str = json.dumps(question.keys) if is_multi else json.dumps(question.key)
-
-    # Format issues as fix instructions
-    fix_instructions = []
-    for issue in issues:
-        field = issue.get("field", "general")
-        desc = issue.get("issue", "")
-        severity = issue.get("severity", "warning")
-        fix_instructions.append(f"- [{severity.upper()}] {field}: {desc}")
-    fixes_text = "\n".join(fix_instructions)
-
-    prompt = f"""Fix the following certification exam question based on the QA issues found.
-
-Current question:
-- Scenario: {question.scenario}
-- Stem: {question.stem}
-- Question Type: {question.question_type}
-- {"Keys" if is_multi else "Key"}: {keys_str}
-- Key Source Text: {question.key_source_text}
-- Distractors: {json.dumps(question.distractors)}
-- Explanation: {question.explanation}
-
-QA ISSUES TO FIX:
-{fixes_text}
-
-INSTRUCTIONS:
-- Fix ALL the issues listed above.
-- Keep the key answer(s) grounded in the original source material.
-- The key_source_text must still reference the original source material.
-- ALL choices (keys + distractors) must be similar in length and detail.
-- The explanation MUST address each choice by its actual text content (NOT by letter A/B/C/D).
-  Format: "'choice text' — Correct/Incorrect: <reason>." for each key and distractor.
-{SCENARIO_AND_STEM_RULES}
-- NEVER mention slides, speaker notes, or source material.
-
-Return ONLY a JSON object with these keys:
-```json
-{{
-  "scenario": "...",
-  "stem": "...?",
-  {"'keys': ['...', '...']," if is_multi else "'key': '...',"}
-  "key_source_text": "...",
-  "distractors": ["...", "..."],
-  "explanation": "'choice text' — Correct: <reason>. 'choice text' — Incorrect: <reason>. ..."
-}}
-```"""
-
-    response = providers.generate(
-        prompt=prompt,
-        model=model,
-        system=system_prompt or GENERATION_SYSTEM_PROMPT,
-        base_url=base_url,
-        timeout=120.0,
-    )
-
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response, re.DOTALL)
-    text = fence_match.group(1) if fence_match else response
-
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        return None
-
-    try:
-        data = json.loads(text[start:end + 1])
-        question.scenario = data.get("scenario", question.scenario)
-        question.stem = question_only(data.get("stem", question.stem))
-        if is_multi and "keys" in data:
-            question.keys = data["keys"]
-            question.key = data["keys"][0] if data["keys"] else question.key
-        elif "key" in data:
-            question.key = data["key"]
-        question.key_source_text = data.get("key_source_text", question.key_source_text)
-        question.distractors = data.get("distractors", question.distractors)
-        question.explanation = data.get("explanation", question.explanation)
-        return question
-    except json.JSONDecodeError:
-        return None
+def _grounding_block(source_text: str) -> str:
+    if source_text.strip():
+        return ("Course material the question was written from:\n"
+                f"{source_text.strip()}\n\n"
+                "Use only facts this material states, or that follow directly from it.")
+    return ("No course material is available for this question. Use only facts about "
+            "Pentaho that you are certain of; say less rather than guess.")
 
 
 def generate_explanation(
     question: Question,
-    speaker_notes: str,
     model: str,
     base_url: str = "http://localhost:11434",
+    source_text: str = "",
 ) -> str:
-    """Generate an explanation for why the correct answer(s) are correct, citing speaker notes.
-
-    Returns the explanation text, or empty string on failure.
+    """Propose the explanation: why each correct answer is right and each
+    distractor wrong, naming every option by its text (the options are
+    shuffled, so a letter means nothing). Returns "" on failure. Writes
+    nothing: the caller shows it, and the author decides.
     """
-    is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
-    keys_str = json.dumps(question.keys) if is_multi else json.dumps(question.key)
+    keys = question.keys if question.question_type == "multi" and question.keys else [question.key]
+    keys = [k for k in keys if k]
+    if not keys:
+        return ""
+    lines = [f"- {k} (correct)" for k in keys] + \
+            [f"- {d} (incorrect)" for d in question.distractors if d and d not in keys]
+    prompt = f"""Write the explanation for this certification exam question. Candidates read it after the exam.
 
-    prompt = f"""Based on the speaker notes below, explain why the correct answer(s) are correct
-and why each distractor is incorrect. Reference specific facts from the notes.
+{_grounding_block(source_text)}
 
-Speaker Notes:
-{speaker_notes}
+Scenario: {question.scenario.strip() or "(none)"}
+Question: {question.stem.strip()}
+Options:
+{chr(10).join(lines)}
 
-Question: {question.stem}
-{"Keys" if is_multi else "Key"}: {keys_str}
-Distractors: {json.dumps(question.distractors)}
+Rules:
+- Say why each correct option is right and why each incorrect option is wrong.
+- Name every option by its text. Never refer to an option by a letter or a position: the options are shuffled.
+- Plain prose: one short paragraph of three to six sentences. No list, no headings.
+- Do not mention a course, a workshop, a lab or "the material": state the facts.
 
-Write ONE LINE PER OPTION. Each line must follow this exact format:
-'option text' — Correct: reason citing notes.
-'option text' — Incorrect: reason citing notes.
-
-Put each option on its OWN LINE (separated by newlines). Use the exact option text in single quotes.
-Every option (both keys and distractors) must have its own line.
-
-Return ONLY the explanation text, no JSON wrapping."""
-
+Return only the explanation text."""
     try:
         response = providers.generate(
             prompt=prompt,
             model=model,
-            system="You are an exam question reviewer. Write concise, factual explanations citing the source notes.",
+            system=("You write explanations for Pentaho certification exam questions: "
+                    "accurate, concise, and addressing every option by its text."),
             base_url=base_url,
-            timeout=60.0,
+            timeout=90.0,
         )
-        return response.strip() if response else ""
     except Exception:
         return ""
+    text = (response or "").strip()
+    fence = re.match(r"^```\w*\s*\n(.*?)\n?```$", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    if len(text) > 1 and text[0] == text[-1] == '"':
+        text = text[1:-1].strip()
+    return text
+
+
+_COUNT_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def expected_key_count(question: Question) -> int:
+    """How many correct answers the question asks for.
+
+    The house form says so in the question - "Which two ...?" - and older
+    stems in a directive - "(Choose two)". Failing both, a multi-select
+    question keeps the count it has (at least two), a single-select one.
+    """
+    stem = question.stem or ""
+    m = re.search(r"\bwhich\s+(two|three|four|five)\b", stem, re.IGNORECASE) or \
+        re.search(r"(?:choose|select|pick)\s+(two|three|four|five|\d+)", stem, re.IGNORECASE)
+    if m:
+        word = m.group(1).lower()
+        return _COUNT_WORDS.get(word) or int(word)
+    if question.question_type == "multi":
+        return max(2, len([k for k in question.keys if k]))
+    return 1
 
 
 def ai_assign_keys(
     question: Question,
-    speaker_notes: str,
     model: str,
     base_url: str = "http://localhost:11434",
-    slide_image: str = "",
-) -> bool:
-    """Use AI to determine which options are correct answers vs distractors.
+    source_text: str = "",
+    expected: int = 0,
+) -> Optional[dict]:
+    """Propose which options are correct - for a question whose answer was
+    guessed at import (a plain-text file marks none, so the first option is
+    taken and the question tagged ``key-unverified``).
 
-    Sends all options + speaker notes (+ optional slide image) to Ollama.
-    The AI identifies which options are supported by the source material.
-    Mutates the question in-place: sets key/keys, distractors, key_source_text,
-    explanation, and removes the key-unverified tag.
-
-    Returns True if keys were successfully assigned, False otherwise.
+    Returns ``{"keys", "distractors", "keySourceText", "analysis"}``, the
+    options by their text, or None when the model's answer is unusable -
+    including when it picks a different number of answers than the question
+    asks for. Writes nothing: until 1.9.0 this assigned the answer straight
+    onto the question it was given.
     """
-    all_options = list(question.distractors)  # all options are in distractors for unverified
-    if question.key:
-        all_options = [question.key] + [d for d in all_options if d != question.key]
-    if not all_options or not speaker_notes.strip():
-        return False
+    options = _options(question)
+    if len(options) < 2 or len(options) > 26:
+        return None
+    n = expected or expected_key_count(question)
+    letters = string.ascii_uppercase[:len(options)]
+    listed = "\n".join(f"{letters[i]}: {o}" for i, o in enumerate(options))
 
-    # Detect expected number of correct answers from stem
-    num_expected = 1
-    choose_match = re.search(
-        r'(?:Choose|Select)\s+(two|three|four|five|\d+)',
-        question.stem, re.IGNORECASE,
-    )
-    if choose_match:
-        word_map = {"two": 2, "three": 3, "four": 4, "five": 5}
-        val = choose_match.group(1).lower()
-        num_expected = word_map.get(val, int(val) if val.isdigit() else 1)
+    prompt = f"""Decide which answer options to this certification exam question are correct.
 
-    # Build lettered option list
-    options_text = "\n".join(
-        f"{string.ascii_uppercase[i]}: {opt}"
-        for i, opt in enumerate(all_options)
-        if i < 26
-    )
+{_grounding_block(source_text)}
 
-    prompt = f"""Based ONLY on the source material below, determine which answer options are correct.
+Scenario: {question.scenario.strip() or "(none)"}
+Question: {question.stem.strip()}
 
-**Source Material (Speaker Notes):**
-{speaker_notes}
+Options:
+{listed}
 
-**Question:** {question.stem}
+The question has EXACTLY {n} correct answer(s).
 
-**Options:**
-{options_text}
+STEP 1: For each option ({", ".join(letters)}), quote the sentence that supports or contradicts it; if there is none, say so.
+STEP 2: Select EXACTLY {n} option(s) that are correct.
 
-The question expects EXACTLY {num_expected} correct answer(s).
-
-STEP 1: For EACH option ({', '.join(string.ascii_uppercase[i] for i in range(min(len(all_options), 26)))}), \
-quote the specific sentence from the source material that supports or contradicts it.
-If no supporting quote exists, the option is a distractor (incorrect).
-
-STEP 2: Based on your analysis, select EXACTLY {num_expected} option(s) that are DIRECTLY supported \
-by the source material. Count carefully — you must pick exactly {num_expected}.
-
-Return ONLY a JSON object with these exact keys:
-```json
+Return ONLY a JSON object:
 {{
-  "analysis": {{
-    "A": {{"quote": "exact quote or 'no supporting quote found'", "supported": true/false}},
-    "B": {{"quote": "...", "supported": true/false}}
-  }},
-  "correct_letters": ["A", "C"],
-  "key_source_text": "exact quote from source material supporting the correct answer(s)",
-  "explanation": "'option text' — Correct: reason citing source.\\n'option text' — Incorrect: reason."
-}}
-```
-
-CRITICAL RULES:
-- "correct_letters" must contain EXACTLY {num_expected} letter(s) — no more, no fewer
-- Only options with direct quotes from the source material can be correct
-- "key_source_text" must be an EXACT quote from the source material
-- Explanation must address EVERY option on its own line, stating Correct or Incorrect with reasoning
-- Each line of the explanation should start with the option text in single quotes"""
-
-    images = [slide_image] if slide_image else None
+  "analysis": {{"A": {{"quote": "the supporting or contradicting sentence, or 'none'", "supported": true}}}},
+  "correct_letters": ["A"],
+  "key_source_text": "the sentence that best supports the correct answer(s)"
+}}"""
     try:
         response = providers.generate(
             prompt=prompt,
             model=model,
-            system="You are a certification exam validator. Identify correct answers based strictly on the source material provided.",
+            system=("You are a certification exam validator. Decide the correct answers "
+                    "strictly from the material given."),
             base_url=base_url,
             timeout=120.0,
-            images=images,
         )
     except Exception:
-        return False
+        return None
 
-    # Parse response
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response, re.DOTALL)
-    text = fence_match.group(1) if fence_match else response
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        return False
-
+    fence = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response or "", re.DOTALL)
+    text = fence.group(1) if fence else (response or "")
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        return None
     try:
         data = json.loads(text[start:end + 1])
     except json.JSONDecodeError:
-        return False
+        return None
+    chosen = data.get("correct_letters")
+    if not isinstance(chosen, list):
+        return None
+    chosen = {str(c).strip().upper() for c in chosen}
+    keys = [o for i, o in enumerate(options) if letters[i] in chosen]
+    if len(keys) != n:
+        return None
 
-    correct_letters = data.get("correct_letters", [])
-    if not correct_letters or not isinstance(correct_letters, list):
-        return False
-
-    # Map letters back to option text
-    new_keys = []
-    new_distractors = []
-    for i, opt in enumerate(all_options):
-        letter = string.ascii_uppercase[i] if i < 26 else ""
-        if letter in correct_letters:
-            new_keys.append(opt)
-        else:
-            new_distractors.append(opt)
-
-    if not new_keys:
-        return False
-
-    # Assign to question
-    question.key = new_keys[0]
-    if len(new_keys) > 1:
-        question.keys = new_keys
-        question.question_type = "multi"
-    else:
-        question.keys = []
-        question.question_type = "single"
-    question.distractors = new_distractors
-
-    if data.get("key_source_text"):
-        question.key_source_text = data["key_source_text"]
-    # Do NOT save the AI explanation here — it is often inconsistent with
-    # correct_letters.  Let the separate "Generate Explanations" step create
-    # the explanation using the already-corrected key assignments.
-
-    # Remove unverified tag
-    question.tags = [t for t in question.tags if t != "key-unverified"]
-    return True
+    analysis = data.get("analysis") if isinstance(data.get("analysis"), dict) else {}
+    return {
+        "keys": keys,
+        "distractors": [o for o in options if o not in keys],
+        "keySourceText": str(data.get("key_source_text") or "").strip(),
+        "analysis": [
+            {
+                "option": o,
+                "correct": o in keys,
+                "quote": str((analysis.get(letters[i]) or {}).get("quote") or "").strip()
+                if isinstance(analysis.get(letters[i]), dict) else "",
+            }
+            for i, o in enumerate(options)
+        ],
+    }
 
 
 #: What `review_answers` is allowed to say about a field.

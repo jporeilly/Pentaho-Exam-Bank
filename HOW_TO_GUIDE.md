@@ -37,7 +37,7 @@ PDF exam; **Settings**, **Admin** and **Documentation** look after the app.
 
 - [How a question is written](docs/writing/01-how-a-question-is-written.md) —
   the scenario, the question, the options and the explanation.
-- [AI rewrite and AI check](docs/writing/02-ai-rewrite-and-check.md)
+- [AI rewrite, check, explanation and answer key](docs/writing/02-ai-rewrite-and-check.md)
 
 ## AI
 

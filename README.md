@@ -78,7 +78,7 @@ needs a human read before it is approved.
 | **Generate** | Write questions from a course with the AI model, then choose which to keep |
 | **Import** | Bring questions in from a file, with a gradeability and duplicate check first |
 | **AI Chat** | Ask about the app or about Pentaho's products; answers come from this app's docs and docs.pentaho.com, with their sources |
-| **Bank** | Search and filter the questions; edit, save, AI rewrite and check, move through review |
+| **Bank** | Search and filter the questions; edit, save, AI rewrite, check, explanation and answer key, move through review |
 | **Report** | One exam at a time against its certification bar |
 | **Exam paper** | A printable, topic-weighted PDF exam |
 | **Publish** | Write the questions into a course, and push them to the courses repo |
@@ -145,7 +145,7 @@ prompt, which is dropped.
 | Thing | For | Without it |
 | ----- | --- | ---------- |
 | **Content Manager** courses folder | adopting, generating from and publishing to courses | no course sources or publishing; the bank, import and export still work |
-| **An AI model** — Ollama (local, free), or a hosted provider with its API key | Generate, AI rewrite, AI check, AI Chat | no AI; everything else still works |
+| **An AI model** — Ollama (local, free), or a hosted provider with its API key | Generate, AI rewrite, check, explanation and answer key, AI Chat | no AI; everything else still works |
 | **docs.pentaho.com** — its GitBook MCP server | AI Chat's answers about Pentaho's products | AI Chat answers from this app's docs only; Settings turns it off |
 | **git** and the courses repo | *Publish and push* | publishing still writes the course; the push is offered only when it can succeed |
 

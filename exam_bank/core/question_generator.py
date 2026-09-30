@@ -4,7 +4,7 @@ This module was refactored into four focused submodules:
   - generation_prompts.py  — Prompt construction and constants
   - generation_parsing.py  — JSON extraction and validation utilities
   - question_generation.py — Core generation pipeline
-  - question_refinement.py — Post-generation AI operations (regen, QA, explain, key assignment)
+  - question_refinement.py — The editor's AI operations (rewrite, check, explanation, answer key)
 
 All public names are re-exported here for backward compatibility.
 For new code, import directly from the submodule.
@@ -36,12 +36,8 @@ from .question_generation import (
 
 # Post-generation AI operations
 from .question_refinement import (
-    regen_stem,
-    regen_key,
-    regen_distractor,
     improve_question,
     qa_check_question,
-    qa_fix_question,
     generate_explanation,
     ai_assign_keys,
 )

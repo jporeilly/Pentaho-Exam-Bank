@@ -22,5 +22,7 @@ carried (one from another course, or in an older style such as `q-preview`)
 is replaced with the next number in the module.
 
 A plain-text file carries no marked answers, so its correct answers are
-guessed from their position. The preview says so; check them before relying
-on them.
+guessed from their position: the first option is taken. The preview says so,
+and the editor keeps saying so at the top of each such question until the
+answer is checked. **AI answer key** proposes the answer from the course's
+pages; see [AI rewrite, check, explanation and answer key](../writing/02-ai-rewrite-and-check.md).

@@ -42,6 +42,7 @@ const TRANSITIONS = {
 function fakeServer(start: Question, renameTo = "") {
   let current = start;
   const puts: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
   const json = (body: unknown) =>
     Promise.resolve(new Response(JSON.stringify(body), {
       headers: { "Content-Type": "application/json" },
@@ -56,8 +57,29 @@ function fakeServer(start: Question, renameTo = "") {
       return json([{ id: "c1", name: "DI Practitioner", description: "", sourceType: "pcm",
                      sourceRef: "developer-di-practitioner", questionCount: 1 }]);
     }
+    if (method === "POST" && u.endsWith("/ai/explanation")) {
+      return json({
+        explanation: "CSV input reads the file. Table output writes rows. Sort rows orders them.",
+        groundedOn: "Text File Input",
+        unnamed: [],
+      });
+    }
+    if (method === "POST" && u.endsWith("/ai/answer")) {
+      return json({
+        proposed: { ...current, key: "Table output", distractors: ["CSV input", "Sort rows"],
+                    tags: current.tags.filter((t) => t !== "key-unverified") },
+        changed: true,
+        analysis: [
+          { option: "CSV input", correct: false, quote: "" },
+          { option: "Table output", correct: true, quote: "Table output writes rows." },
+          { option: "Sort rows", correct: false, quote: "" },
+        ],
+        groundedOn: "Text File Output",
+      });
+    }
     if (method === "PUT") {
       puts.push(u);
+      bodies.push(JSON.parse(String(init?.body)));
       const body = JSON.parse(String(init?.body));
       const moved = renameTo && body.topic !== current.topic;
       current = { ...current, ...body, ...(moved ? { id: renameTo } : {}) };
@@ -80,7 +102,7 @@ function fakeServer(start: Question, renameTo = "") {
     }
     return json({ items: [current], total: 1, limit: 25, offset: 0 });
   });
-  return { puts };
+  return { puts, bodies };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -202,5 +224,48 @@ describe("an approved question", () => {
     await userEvent.click(screen.getByRole("button", { name: "Back to draft" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Moved to Draft");
+  });
+});
+
+describe("AI explanation and AI answer key", () => {
+  // Both propose; nothing reaches the bank until the author presses Save.
+  it("puts a proposed explanation into the field only when taken, and saves nothing", async () => {
+    const server = fakeServer(question());
+    await openEditor();
+
+    await userEvent.click(screen.getByRole("button", { name: "AI explanation" }));
+    expect(await screen.findByText(/Written from Text File Input/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Use this explanation" }));
+
+    expect(screen.getByDisplayValue(/CSV input reads the file/)).toBeInTheDocument();
+    expect(server.puts).toHaveLength(0);
+  });
+
+  it("flags a guessed answer, and taking the AI answer key clears the flag", async () => {
+    const server = fakeServer(question({ tags: ["key-unverified"] }));
+    await openEditor();
+    expect(screen.getByRole("note")).toHaveTextContent(/guessed when this question was imported/);
+
+    await userEvent.click(screen.getByRole("button", { name: "AI answer key" }));
+    expect(await screen.findByText(/Decided from Text File Output/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Use this answer" }));
+
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("Table output")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("status");
+    expect(server.bodies.at(-1)).toMatchObject({ key: "Table output", tags: [] });
+  });
+
+  it("lets the author confirm a guessed answer is right", async () => {
+    const server = fakeServer(question({ tags: ["key-unverified", "imported"] }));
+    await openEditor();
+
+    await userEvent.click(screen.getByRole("button", { name: "The answer is right" }));
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("status");
+
+    expect(server.bodies.at(-1)).toMatchObject({ key: "CSV input", tags: ["imported"] });
   });
 });

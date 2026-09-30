@@ -636,6 +636,22 @@ export interface AiReview {
   form?: { field: string; message: string }[];
 }
 
+/** A proposed explanation. `unnamed` are options it never names. */
+export interface AiExplanation {
+  explanation: string;
+  /** The course page it was grounded on, or "" when there was none. */
+  groundedOn: string;
+  unnamed: string[];
+}
+
+/** A proposed answer key: which options are correct, by their text. */
+export interface AiAnswer {
+  proposed: Question;
+  changed: boolean;
+  analysis: { option: string; correct: boolean; quote: string }[];
+  groundedOn: string;
+}
+
 export interface AiRewrite {
   proposed: Question;
   problems: { field: string; message: string }[];
@@ -950,6 +966,16 @@ export const api = {
   /** Check the answers, and proofread. Writes nothing. */
   aiReview: (id: string) =>
     request<AiReview>(`/api/questions/${encodeURIComponent(id)}/ai/review`, {
+      method: "POST",
+    }),
+  /** Propose the explanation, from the course's pages. Writes nothing. */
+  aiExplanation: (id: string) =>
+    request<AiExplanation>(`/api/questions/${encodeURIComponent(id)}/ai/explanation`, {
+      method: "POST",
+    }),
+  /** Propose which options are correct, from the course's pages. Writes nothing. */
+  aiAnswer: (id: string) =>
+    request<AiAnswer>(`/api/questions/${encodeURIComponent(id)}/ai/answer`, {
       method: "POST",
     }),
 

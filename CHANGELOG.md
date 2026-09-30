@@ -7,6 +7,41 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **AI explanation.** A button in the question editor that proposes the
+  explanation: why each correct answer is right and each distractor wrong,
+  naming every option by its text. It is written from the course page the
+  question cites, or else its module's pages (new `core/grounding.py`, which
+  reads adopted citations such as "Course: Module — Page (Tab)" as well as lab
+  titles), and says which; without a page it says so. An option the text
+  never names is listed under the proposal. **Use this explanation** fills the
+  field; Save saves it.
+- **AI answer key.** A button that proposes which options are correct, from
+  the same pages, with the sentence it relied on for each option. It picks
+  exactly as many answers as the question asks for ("Which two …?" is two)
+  and an answer of another size is refused. **Use this answer** takes the key
+  into the editor.
+- **A question whose answer was guessed at import says so.** A plain-text
+  file marks no answers, so the importer took the first option and tagged the
+  question `key-unverified` - and no screen showed the tag. The editor now
+  says so at the top of such a question, with **The answer is right** for a
+  guess that was correct; taking the AI answer key clears it too. The editor's
+  Save now sends the question's tags and key source text, so both stick.
+
+These are the two NiceGUI-era operations kept when the other four were
+deleted (`generate_explanation` and `ai_assign_keys`). Both were unreachable;
+`ai_assign_keys` also wrote its answer straight onto the question it was
+given and read the answer count from a "(Choose two)" note that stems no
+longer carry. Both now propose and write nothing, like the AI rewrite and
+check, and both follow the house item-writing rules.
+
+### Removed
+
+- `regen_stem`, `regen_key`, `regen_distractor` (the AI rewrite covers them)
+  and `qa_fix_question`: four AI operations that came across from the NiceGUI
+  app and were never reachable from any screen.
+
 ## [1.8.1] - 2026-09-30
 
 ### Fixed

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 from ...core import providers, question_refinement
 from ...core.bank import STATUS_TRANSITIONS, STATUSES, ExamBankDB
 from ...core.course_filing import refile_id
+from ...core.grounding import Grounding, grounding_for
 from ...core.stem_text import form_notes
 from ...core.validation import problems_with
 from ...utils.config import config
@@ -156,7 +158,7 @@ def delete_question(question_id: str, db: ExamBankDB = Depends(get_db)) -> dict[
 
 # --- AI assistance -------------------------------------------------------
 #
-# Both endpoints are READ-ONLY. They return a proposal or a list of findings
+# Every endpoint here is READ-ONLY. They return a proposal or a list of findings
 # and never touch the bank: accepting a rewrite is an ordinary save the author
 # makes, through the editor they were already looking at.
 #
@@ -260,4 +262,76 @@ def ai_review_question(
         "form": [
             {"field": f, "message": m} for f, m in form_notes(question.scenario, question.stem)
         ],
+    }
+
+
+def _grounding(db: ExamBankDB, question) -> Grounding:
+    """The course pages the question was written from, if it is a course's."""
+    cert = db.get_certification(question.certification_id) if question.certification_id else None
+    return grounding_for(question, cert, courses_dir_if_any())
+
+
+def _options_of(question) -> list[str]:
+    keys = question.keys if question.question_type == "multi" and question.keys else [question.key]
+    return [o for o in dict.fromkeys([*keys, *question.distractors]) if o]
+
+
+@router.post("/api/questions/{question_id}/ai/explanation")
+def ai_write_explanation(question_id: str, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """Propose the explanation, grounded on the course's pages. Writes nothing."""
+    question = db.get(question_id)
+    if question is None:
+        raise HTTPException(404, f"No question '{question_id}'.")
+    if not _options_of(question) or not (question.key or question.keys):
+        raise HTTPException(409, "Mark the correct answer first: an explanation says why it is right.")
+
+    grounding = _grounding(db, question)
+    text = question_refinement.generate_explanation(
+        question, _ai_model(), base_url=config.ollama_url, source_text=grounding.text)
+    if not text:
+        raise HTTPException(502, "The model did not return an explanation. Try again, or a larger model.")
+    lowered = text.lower()
+    return {
+        "explanation": text,
+        # What it was grounded on, so the author knows how far to trust it.
+        "groundedOn": grounding.label,
+        # Options the text never names. The rule is to name every one; a
+        # model can skip one, and the author should see that before taking it.
+        "unnamed": [o for o in _options_of(question) if o.strip().lower() not in lowered],
+    }
+
+
+@router.post("/api/questions/{question_id}/ai/answer")
+def ai_answer_key(question_id: str, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """Propose which options are correct, grounded on the course's pages. Writes nothing."""
+    question = db.get(question_id)
+    if question is None:
+        raise HTTPException(404, f"No question '{question_id}'.")
+
+    grounding = _grounding(db, question)
+    found = question_refinement.ai_assign_keys(
+        question, _ai_model(), base_url=config.ollama_url, source_text=grounding.text)
+    if found is None:
+        raise HTTPException(
+            502,
+            "The model did not return a usable answer - none, or not the number of "
+            "correct answers the question asks for. Try again, or a larger model.",
+        )
+
+    proposed = copy.deepcopy(question)
+    keys = found["keys"]
+    proposed.key = keys[0]
+    proposed.keys = keys if len(keys) > 1 else []
+    proposed.question_type = "multi" if len(keys) > 1 else "single"
+    proposed.distractors = found["distractors"]
+    if found["keySourceText"]:
+        proposed.key_source_text = found["keySourceText"]
+    # Taking the proposal is the author checking the answer.
+    proposed.tags = [t for t in proposed.tags if t != "key-unverified"]
+    current = set(question.keys if question.question_type == "multi" and question.keys else [question.key])
+    return {
+        "proposed": question_json(proposed),
+        "changed": set(keys) != current,
+        "analysis": found["analysis"],
+        "groundedOn": grounding.label,
     }

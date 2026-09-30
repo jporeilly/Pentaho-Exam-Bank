@@ -222,3 +222,189 @@ def test_an_unrecognised_severity_becomes_a_warning(question, monkeypatch):
 def test_model_prose_that_is_not_json_is_not_a_finding(question, monkeypatch):
     _stub_generate(monkeypatch, "Looks good to me!")
     assert question_refinement.review_answers(question, "a-model") == []
+
+
+# --- explanation and answer key (1.9.0) --------------------------------------
+#
+# The two NiceGUI-era operations kept when the other four were deleted. Both
+# used to be unreachable; ai_assign_keys also wrote its answer straight onto
+# the question. Both now propose, and are grounded on the course's own pages.
+
+
+from exam_bank.core import grounding as grounding_mod  # noqa: E402
+from exam_bank.core.bank import Certification  # noqa: E402
+from exam_bank.utils.config import config  # noqa: E402
+
+
+def _capture(monkeypatch, reply: str) -> list[dict]:
+    calls: list[dict] = []
+
+    def fake(**kw):
+        calls.append(kw)
+        return reply
+
+    monkeypatch.setattr(providers, "generate", fake)
+    return calls
+
+
+EXPLANATION = ("Moves and shapes rows is right: a transformation reads, changes and writes "
+               "rows. Prints a report is what Report Designer does. Installs the server is "
+               "the installer's job. Backs up a database is a DBA task.")
+
+
+def test_an_explanation_is_proposed_and_nothing_is_saved(client, question, db_path, monkeypatch):
+    calls = _capture(monkeypatch, EXPLANATION)
+
+    body = client.post("/api/questions/q-ai/ai/explanation").json()
+
+    assert body["explanation"] == EXPLANATION
+    assert body["unnamed"] == [] and body["groundedOn"] == ""
+    prompt = calls[0]["prompt"]
+    for option in ("Moves and shapes rows", "Prints a report", "Installs the server", "Backs up a database"):
+        assert option in prompt
+    assert "Never refer to an option by a letter" in prompt
+    database = ExamBankDB(db_path)
+    try:
+        assert database.get("q-ai").explanation == question.explanation
+    finally:
+        database.close()
+
+
+def test_an_explanation_that_skips_an_option_says_which(client, question, monkeypatch):
+    _capture(monkeypatch, "Moves and shapes rows is right. Prints a report is wrong.")
+
+    body = client.post("/api/questions/q-ai/ai/explanation").json()
+
+    assert body["unnamed"] == ["Installs the server", "Backs up a database"]
+
+
+def test_the_answer_key_is_proposed_by_option_text_and_nothing_is_saved(client, question, db_path, monkeypatch):
+    # A B C D = the key, then the distractors, as the author sees them.
+    _capture(monkeypatch, json.dumps({
+        "analysis": {"B": {"quote": "Reports are printed.", "supported": True}},
+        "correct_letters": ["B"], "key_source_text": "Reports are printed."}))
+
+    body = client.post("/api/questions/q-ai/ai/answer").json()
+
+    assert body["proposed"]["key"] == "Prints a report"
+    assert "Moves and shapes rows" in body["proposed"]["distractors"]
+    assert body["changed"] is True
+    assert [a["option"] for a in body["analysis"] if a["correct"]] == ["Prints a report"]
+    database = ExamBankDB(db_path)
+    try:
+        assert database.get("q-ai").key == "Moves and shapes rows"
+    finally:
+        database.close()
+
+
+def test_an_answer_of_the_wrong_size_is_refused(client, question, monkeypatch):
+    _capture(monkeypatch, json.dumps({"correct_letters": ["A", "B"]}))
+
+    assert client.post("/api/questions/q-ai/ai/answer").status_code == 502
+
+
+def test_taking_the_answer_clears_the_guessed_at_import_tag(client, db_path, monkeypatch):
+    database = ExamBankDB(db_path)
+    try:
+        database.save(Question(id="q-guess", stem="Which step reads a CSV file?", key="Sort rows",
+                               distractors=["CSV file input", "Table output"], tags=["key-unverified"]))
+    finally:
+        database.close()
+    _capture(monkeypatch, json.dumps({"correct_letters": ["B"]}))
+
+    body = client.post("/api/questions/q-guess/ai/answer").json()
+
+    assert body["proposed"]["key"] == "CSV file input"
+    assert "key-unverified" not in body["proposed"]["tags"]
+
+
+def test_ai_assign_keys_changes_nothing_it_is_given(monkeypatch):
+    q = Question(id="x", stem="Which two steps write rows?", question_type="multi",
+                 key="", keys=[], distractors=["Table output", "Insert / Update", "Sort rows", "Filter rows"])
+    before = json.dumps(q.__dict__, default=str, sort_keys=True)
+    monkeypatch.setattr(providers, "generate",
+                        lambda **kw: json.dumps({"correct_letters": ["A", "B"]}))
+
+    found = question_refinement.ai_assign_keys(q, "a-model")
+
+    assert found["keys"] == ["Table output", "Insert / Update"]
+    assert json.dumps(q.__dict__, default=str, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("stem,qtype,keys,expected", [
+    ("Which two steps write rows?", "multi", [], 2),
+    ("Which three settings apply?", "multi", ["a", "b"], 3),
+    ("What does it do? (Choose two.)", "multi", [], 2),
+    ("Which step reads a file?", "single", [], 1),
+    ("Which of these apply?", "multi", [], 2),
+    ("Which of these apply?", "multi", ["a", "b", "c"], 3),
+])
+def test_the_number_of_answers_comes_from_the_question(stem, qtype, keys, expected):
+    q = Question(stem=stem, question_type=qtype, keys=keys, key=keys[0] if keys else "")
+    assert question_refinement.expected_key_count(q) == expected
+
+
+# --- grounding --------------------------------------------------------------------
+
+
+@pytest.fixture
+def course(tmp_path, monkeypatch):
+    root = tmp_path / "courses"
+    c = root / "bi-developer-ct-practitioner"
+    for lab, title in [("04-community-data-access", "Overview of Community Data Access"),
+                       ("05-community-data-access-creating-a-cda", "Creating a CDA")]:
+        (c / lab).mkdir(parents=True)
+        (c / lab / "manifest.json").write_text(json.dumps({"title": title}), encoding="utf-8")
+        (c / lab / "guide.md").write_text(
+            f"## Section\n\n{title} prose: a parameter is written ${{name}} and declared "
+            "with a type and a default. " * 3, encoding="utf-8")
+    (c / "SUMMARY.md").write_text(
+        "# Table of contents\n\n## Community Data Access\n\n"
+        "* [Overview](04-community-data-access/guide.md)\n"
+        "* [Creating a CDA](05-community-data-access-creating-a-cda/guide.md)\n", encoding="utf-8")
+    (c / "course.json").write_text(json.dumps({"title": "CT"}), encoding="utf-8")
+    monkeypatch.setattr(config, "pcm_courses_dir", str(root))
+    return root
+
+
+CT = Certification(name="CT Practitioner", source_type="pcm", source_ref="bi-developer-ct-practitioner")
+
+
+def test_an_adopted_citation_finds_its_page(course):
+    q = Question(source_file="Pentaho BI Developer - CT Practitioner: Community Data Access — "
+                             "Creating a CDA (Parameters)", topic="Community Data Access")
+
+    g = grounding_mod.grounding_for(q, CT, course)
+
+    assert g.label == "Creating a CDA"
+    assert "Creating a CDA prose" in g.text and "Overview of Community Data Access prose" not in g.text
+
+
+def test_no_matching_page_falls_back_to_the_module(course):
+    g = grounding_mod.grounding_for(Question(source_file="Something else", topic="Community Data Access"),
+                                    CT, course)
+
+    assert g.label == "the Community Data Access module"
+    assert "Creating a CDA prose" in g.text and "Overview of Community Data Access prose" in g.text
+
+
+def test_a_question_outside_any_course_is_not_grounded(course):
+    assert grounding_mod.grounding_for(Question(topic="x"), Certification(name="Slides"), course).text == ""
+
+
+def test_the_explanation_prompt_carries_the_course_page(client, db_path, course, monkeypatch):
+    database = ExamBankDB(db_path)
+    try:
+        database.save_certification(CT)
+        database.save(Question(id="ct-m2-q3", stem="How is the query written?", key="With ${status}",
+                               distractors=["Concatenated", "One DataAccess per status"],
+                               certification_id=CT.id, topic="Community Data Access",
+                               source_file="Community Data Access — Creating a CDA"))
+    finally:
+        database.close()
+    calls = _capture(monkeypatch, "With ${status} is right. Concatenated is wrong. One DataAccess per status is wrong.")
+
+    body = client.post("/api/questions/ct-m2-q3/ai/explanation").json()
+
+    assert body["groundedOn"] == "Creating a CDA"
+    assert "Creating a CDA prose" in calls[0]["prompt"]

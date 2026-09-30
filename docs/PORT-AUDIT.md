@@ -22,28 +22,18 @@ out rather than built.
 
 ## Missing, and worth deciding about
 
-### 1. AI operations on a question — 6 of 8 still unreachable
+### 1. AI operations on a question — settled in 1.9.0
 
-`core/question_refinement.py` has eight AI operations. Two are now wired
-(`improve_question`, `qa_check_question`, plus the new `review_answers`).
-These six have **no API route and no caller**:
+`core/question_refinement.py` came across with eight AI operations and three
+wired (`improve_question`, `qa_check_question`, and the new `review_answers`).
+Of the six left, the owner kept two and deleted four:
 
-| Function | What it did in the old editor |
+| Function | Outcome |
 | --- | --- |
-| `regen_stem` | Reword the stem and scenario, leaving every choice locked. |
-| `regen_key` | Replace the correct answer only. |
-| `regen_distractor` | Replace one distractor, keeping the others. |
-| `qa_fix_question` | Apply the proofreader's findings rather than only listing them. |
-| `generate_explanation` | Write the explanation from the key and distractors. |
-| `ai_assign_keys` | Pick the key for an imported question that has none. |
-
-`ai_assign_keys` is the one with a real use today: the plain-text importer
-takes the FIRST option as the key, positionally, and nothing else flags the
-result because the question is still gradeable.
-
-All six take `(question, model, base_url)` and return a value — none of them
-mutates now, but that was true of `improve_question` too until it was wired
-up and the mutation was found. **Treat each as untested until it has a test.**
+| `generate_explanation` | **Wired** as *AI explanation*: proposes, grounded on the course page the question cites (`core/grounding.py`), names every option by its text. |
+| `ai_assign_keys` | **Wired** as *AI answer key*: proposes which options are correct, grounded the same way, refuses an answer of the wrong size. No longer writes onto the question. The editor now flags a question whose answer the plain-text importer guessed (`key-unverified`), which it never did. |
+| `regen_stem`, `regen_key`, `regen_distractor` | Deleted: the AI rewrite covers them. |
+| `qa_fix_question` | Deleted. |
 
 ### 2. A dashboard — `dashboard.py`, 356 lines
 
@@ -102,10 +92,10 @@ like a separate conversion path that lost its caller. Confirm, then delete.
 
 ## Suggested order
 
-1. **`ai_assign_keys`** — fixes a known, silent import defect.
+1. ~~**`ai_assign_keys`**~~ — done in 1.9.0 (AI answer key).
 2. **The dashboard**, including the Bloom distribution that is already
    computed and thrown away.
-3. **`generate_explanation`** and **`qa_fix_question`** — the two that save
+3. ~~**`generate_explanation`**~~ (done in 1.9.0) and **`qa_fix_question`** (deleted) — the two that save
    the most typing in review.
 4. **Streaming**, or at least a progress indication, before more AI features
    land on top of a 171-second blocking call.
