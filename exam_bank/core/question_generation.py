@@ -14,23 +14,30 @@ from .generation_prompts import (
 )
 from .generation_parsing import _extract_json_array, _extract_json_object, validate_key_against_notes
 from .stem_text import question_only
+from .validation import problems_with
 
 
-# Warnings that the AI can fix by rewriting the question. Length balance is
-# deliberately NOT here: it's a cosmetic heuristic that fires on nearly every
-# question, and a local model rarely satisfies it — so auto-fixing it spent an
-# extra (often fruitless) LLM call per question. It's still surfaced as a review
-# tag via validate(); it just no longer triggers an automatic rewrite.
-_FIXABLE_WARNINGS = {
-    "A distractor is identical to a correct answer",
-    "'All/None of the above' is a weak distractor",
-}
+# What the AI can fix by rewriting the options: a distractor that repeats a
+# correct answer or another distractor - taken from the bank's one set of
+# gradeability rules (core/validation.py), so generation, the editor and import
+# all mean the same thing by them - and "All/None of the above", a writing
+# rule rather than a grading one. Until 1.9.0 this read a third, older rule set
+# (Question.validate_detailed) that disagreed with the other two.
+#
+# Length balance is deliberately NOT here: it fires on nearly every question,
+# and a local model rarely satisfies it, so auto-fixing it spent an extra
+# (often fruitless) model call per question.
+_ALL_OR_NONE = re.compile(r"^\s*(all|none) of the above\s*\.?\s*$", re.IGNORECASE)
 
 
 def _get_fixable_warnings(q: Question) -> List[str]:
-    """Return only the warnings that can be auto-fixed by AI rewrite."""
-    warnings = q.validate()
-    return [w for w in warnings if any(fw in w for fw in _FIXABLE_WARNINGS)]
+    """The option defects an AI rewrite can fix, in words the prompt can use."""
+    out = [p.message for p in problems_with(q)
+           if p.field == "distractors"
+           and ("both correct and a distractor" in p.message or " appears " in p.message)]
+    if any(_ALL_OR_NONE.match(d or "") for d in q.distractors):
+        out.append("'All/None of the above' is a weak distractor.")
+    return out
 
 
 def _auto_fix_question(
@@ -68,14 +75,16 @@ RULES:
 if needed for length balance.
 - Replace any distractor that duplicates a key with a different plausible wrong answer.
 - Replace "All/None of the above" with a specific, plausible wrong answer.
-- The explanation must address each choice (A, B, C, D) individually by letter.
+- The explanation must say why each correct answer is right and each distractor wrong,
+  naming every option by its text. Never refer to an option by a letter or position:
+  the options are shuffled.
 
 Return ONLY a JSON object with these keys (nothing else):
 ```json
 {{
   {"\"keys\": [\"...\", \"...\"]," if is_multi else "\"key\": \"...\","}
   "distractors": ["...", "..."],
-  "explanation": "A: Correct/Incorrect — <reason>. B: ..."
+  "explanation": "<one paragraph naming each option by its text>"
 }}
 ```"""
 

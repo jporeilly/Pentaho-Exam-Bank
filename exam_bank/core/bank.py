@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from .stem_text import form_notes
 
 
 BLOOM_LEVELS = [
@@ -276,78 +275,6 @@ class Question:
         })
         self.version += 1
         self.updated_at = datetime.now().isoformat()
-
-    def validate(self) -> List[str]:
-        """Return a list of all quality issues (errors + warnings)."""
-        errors, warnings = self.validate_detailed()
-        return errors + warnings
-
-    def validate_detailed(self) -> tuple:
-        """Return (errors, warnings) — errors block save, warnings are advisory.
-
-        Returns:
-            (errors: List[str], warnings: List[str])
-        """
-        errors = []
-        warnings = []
-
-        # ── Errors (block save) ──────────────────────────────
-        if not self.stem.strip():
-            errors.append("Stem is empty")
-
-        if self.question_type == "multi":
-            if len(self.keys) < 2:
-                errors.append("Multi-select needs at least 2 correct answers")
-        else:
-            if not self.key.strip():
-                errors.append("Key (correct answer) is empty")
-
-        if len(self.distractors) < 2:
-            errors.append(f"Only {len(self.distractors)} distractor(s) — need at least 2")
-
-        # Check for duplicate between correct answers and distractors
-        correct_lower = {a.strip().lower() for a in self.correct_answers}
-        for d in self.distractors:
-            if d.strip().lower() in correct_lower:
-                errors.append("A distractor is identical to a correct answer")
-                break
-
-        # ── Warnings (advisory) ──────────────────────────────
-        # The house form: the scenario is statements that set the scene, the
-        # stem is the question only - no statements before it, no count after
-        # it (courses and the printed exam add their own; Publish removes it).
-        # Said here so the author knows before they publish. See stem_text.
-        warnings.extend(message for _field, message in form_notes(self.scenario, self.stem))
-
-        if self.source_type == "pptx":
-            if not self.key_source_text:
-                warnings.append("Key is not linked to source slide text")
-            if self.key_source_slide < 0:
-                warnings.append("No source slide recorded for the key answer")
-        if not self.certification_id:
-            warnings.append("Not assigned to a certification")
-
-        # Check for common item-writing flaws
-        all_answer_lengths = [len(a) for a in self.correct_answers] + [len(d) for d in self.distractors]
-        if all_answer_lengths and max(all_answer_lengths) > 2 * min(all_answer_lengths):
-            warnings.append("Answer lengths are unbalanced — correct answer may stand out")
-
-        lower_distractors = [d.lower().strip() for d in self.distractors]
-        if "all of the above" in lower_distractors or "none of the above" in lower_distractors:
-            warnings.append("'All/None of the above' is a weak distractor")
-
-        if self.stem.strip() and self.stem.strip()[-1:] not in "?.:)":
-            warnings.append("Stem should end with a question mark, period, or colon")
-
-        if "key-unverified" in self.tags:
-            if self.question_type == "multi" and not self.keys:
-                warnings.append("Correct answers not assigned — edit to mark which options are correct")
-            else:
-                warnings.append("Correct answer not yet verified — first answer was assumed as key")
-        elif "key-not-validated" in self.tags:
-            warnings.append("Key failed validation against source material — review the correct answer")
-
-        return errors, warnings
 
 
 #: How a page of questions may be ordered.
