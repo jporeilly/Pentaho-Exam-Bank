@@ -106,11 +106,11 @@ describe("BankPane", () => {
     const pending: Array<(value: Response) => void> = [];
     vi.stubGlobal("fetch", (url: string) => {
       // Only the question list is held back; the pane's other lookups (the
-      // certifications, and Settings for the page size) answer at once.
-      if (String(url).includes("/api/certifications") || String(url).includes("/api/settings")) {
+      // certifications, Settings for the page size, the vocabulary) answer at
+      // once, with nothing, and the pane falls back where it needs to.
+      if (!String(url).includes("/api/questions")) {
         return Promise.resolve(
-          new Response(String(url).includes("/api/settings") ? "{}" : "[]",
-                       { headers: { "Content-Type": "application/json" } }),
+          new Response("[]", { headers: { "Content-Type": "application/json" } }),
         );
       }
       return new Promise<Response>((resolve) => pending.push(resolve));

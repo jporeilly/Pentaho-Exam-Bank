@@ -25,6 +25,7 @@ import {
   type Problem,
   type Question,
 } from "./api";
+import { useVocabulary } from "./vocabulary";
 
 // `Problem` is defined in api.ts and re-exported here. Import reports the same
 // shape from the server, computed by `core/validation.py` from the same rules,
@@ -396,6 +397,7 @@ export function QuestionEditor({
   };
 
   const guessed = draft.tags.includes("key-unverified");
+  const vocabulary = useVocabulary();
 
   const runRewrite = async () => {
     setAiBusy("rewrite");
@@ -553,14 +555,14 @@ export function QuestionEditor({
         </Field>
         <Field label="Difficulty">
           <select value={draft.difficulty} onChange={(e) => set("difficulty", e.target.value)}>
-            {["Easy", "Medium", "Hard"].map((d) => (
+            {vocabulary.difficulties.map((d) => (
               <option key={d}>{d}</option>
             ))}
           </select>
         </Field>
         <Field label="Bloom level">
           <select value={draft.bloom_level} onChange={(e) => set("bloom_level", e.target.value)}>
-            {["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"].map((b) => (
+            {vocabulary.bloomLevels.map((b) => (
               <option key={b}>{b}</option>
             ))}
           </select>

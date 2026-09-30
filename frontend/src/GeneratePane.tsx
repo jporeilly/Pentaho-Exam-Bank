@@ -11,11 +11,10 @@ import {
   type Question,
   type QuestionFormat,
 } from "./api";
+import { useVocabulary } from "./vocabulary";
 
 // The backend owns these and validates against them, naming the valid set in
 // its error, so drift shows up as a readable message rather than silently.
-const DIFFICULTIES = ["Easy", "Medium", "Hard"];
-const BLOOM_LEVELS = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"];
 
 const POLL_MS = 900;
 
@@ -54,6 +53,7 @@ export function GeneratePane({
   const [courses, setCourses] = useState<Course[]>([]);
   const [labs, setLabs] = useState<Lab[]>([]);
   const [certifications, setCertifications] = useState<Certification[]>([]);
+  const vocabulary = useVocabulary();
 
   const [form, setForm] = useState<GenerateRequest>({
     course_slug: initialCourse,
@@ -308,7 +308,7 @@ export function GeneratePane({
             value={form.difficulty}
             onChange={(e) => set("difficulty", e.target.value)}
           >
-            {DIFFICULTIES.map((d) => (
+            {vocabulary.difficulties.map((d) => (
               <option key={d}>{d}</option>
             ))}
           </select>
@@ -333,7 +333,7 @@ export function GeneratePane({
 
         <div className="toolbar">
           <span className="muted">Bloom&rsquo;s</span>
-          {BLOOM_LEVELS.map((level) => {
+          {vocabulary.bloomLevels.map((level) => {
             const on = (form.bloom_levels ?? []).includes(level);
             return (
               <label key={level} className={on ? "" : "faint"}>

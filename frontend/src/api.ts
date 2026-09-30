@@ -636,6 +636,14 @@ export interface AiReview {
   form?: { field: string; message: string }[];
 }
 
+/** The bank's fixed lists, as the server validates them. */
+export interface Vocabulary {
+  statuses: string[];
+  statusLabels: Record<string, string>;
+  difficulties: string[];
+  bloomLevels: string[];
+}
+
 /** A proposed explanation. `unnamed` are options it never names. */
 export interface AiExplanation {
   explanation: string;
@@ -766,6 +774,7 @@ export const api = {
     request<{ ok: boolean }>(`/api/questions/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   lifecycle: () => request<Lifecycle>("/api/lifecycle"),
+  vocabulary: () => request<Vocabulary>("/api/vocabulary"),
 
   certifications: () => request<Certification[]>("/api/certifications"),
 

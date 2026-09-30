@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ...core import providers, question_refinement
-from ...core.bank import STATUS_TRANSITIONS, STATUSES, ExamBankDB
+from ...core.bank import BLOOM_LEVELS, DIFFICULTIES, STATUS_LABELS, STATUS_TRANSITIONS, STATUSES, ExamBankDB
 from ...core.course_filing import refile_id
 from ...core.grounding import Grounding, grounding_for
 from ...core.stem_text import form_notes
@@ -27,6 +27,22 @@ _EDITABLE = (
     "distractors", "option_order", "explanation", "topic", "tags",
     "difficulty", "bloom_level", "assigned_sme",
 )
+
+
+@router.get("/api/vocabulary")
+def vocabulary() -> dict[str, Any]:
+    """The bank's fixed lists, exactly as the server validates them.
+
+    Every screen that offers a status, a difficulty or a Bloom level reads
+    them from here (frontend/src/vocabulary.ts). Five screens used to type
+    their own copies, and the Admin bulk delete's had drifted.
+    """
+    return {
+        "statuses": list(STATUSES),
+        "statusLabels": dict(STATUS_LABELS),
+        "difficulties": list(DIFFICULTIES),
+        "bloomLevels": list(BLOOM_LEVELS),
+    }
 
 
 @router.get("/api/lifecycle")

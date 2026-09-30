@@ -78,9 +78,12 @@ function mockApi(handlers: {
     }
     if (path.includes("/admin/backups")) return json({ name: "new-backup", backups: [] });
     if (path.includes("/admin/database")) return json(handlers.status ?? dbStatus());
-    if (path.includes("/api/lifecycle")) {
-      return json({ statuses: ["draft", "sme_review", "revised", "approved", "rejected", "retired"],
-                    transitions: {} });
+    if (path.includes("/api/vocabulary")) {
+      // One more status than the fallback has, so a pass proves the list came from the server.
+      return json({ statuses: ["draft", "sme_review", "revised", "approved", "rejected", "retired", "archived"],
+                    statusLabels: { archived: "Archived" },
+                    difficulties: ["Easy", "Medium", "Hard"],
+                    bloomLevels: ["Apply"] });
     }
     return json(CERTS);
   });
@@ -280,8 +283,8 @@ describe("the status filter", () => {
     render(<AdminPane />);
 
     const select = (await screen.findByText("Status")).parentElement!.querySelector("select")!;
-    await screen.findByRole("option", { name: "retired" });
+    await screen.findByRole("option", { name: "Archived" });
     const offered = [...select.options].map((o) => o.value).filter(Boolean);
-    expect(offered).toEqual(["draft", "sme_review", "revised", "approved", "rejected", "retired"]);
+    expect(offered).toEqual(["draft", "sme_review", "revised", "approved", "rejected", "retired", "archived"]);
   });
 });

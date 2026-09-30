@@ -23,8 +23,10 @@ import {
   type ExamRequest,
   type ExamTopic,
 } from "./api";
+import { useVocabulary } from "./vocabulary";
 
-const DIFFICULTIES = ["Easy", "Medium", "Hard"];
+// A deliberate subset, with the names an exam paper's author uses: which
+// review states may go on a paper. Not the vocabulary.
 const STATUSES = [
   { value: "approved", label: "Approved" },
   { value: "sme_review", label: "In review" },
@@ -55,7 +57,8 @@ export function ExamPane() {
   const [weights, setWeights] = useState<Record<string, number>>({});
 
   const [total, setTotal] = useState(20);
-  const [difficulties, setDifficulties] = useState<string[]>(DIFFICULTIES);
+  const vocabulary = useVocabulary();
+  const [difficulties, setDifficulties] = useState<string[]>(vocabulary.difficulties);
   const [statuses, setStatuses] = useState<string[]>(["approved"]);
   const [seed, setSeed] = useState("");
   const [title, setTitle] = useState("Practice Exam");
@@ -228,7 +231,7 @@ export function ExamPane() {
       <div className="field-row">
         <fieldset className="field checks">
           <legend className="field-label">Difficulty</legend>
-          {DIFFICULTIES.map((d) => (
+          {vocabulary.difficulties.map((d) => (
             <label key={d} className="check">
               <input
                 type="checkbox"

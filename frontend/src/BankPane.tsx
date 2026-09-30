@@ -8,6 +8,7 @@ import {
   type QuestionFilters,
 } from "./api";
 import { QuestionEditor } from "./QuestionEditor";
+import { statusLabel, useVocabulary } from "./vocabulary";
 
 // Until Settings answers. "Questions per page" was saved there and never read.
 const DEFAULT_PAGE = 25;
@@ -51,6 +52,7 @@ export function BankPane({
   // contiguous blocks without the bank knowing anything about labs.
   const [sort, setSort] = useState<"course" | "updated">("course");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE);
+  const vocabulary = useVocabulary();
 
   useEffect(() => {
     api
@@ -175,9 +177,9 @@ export function BankPane({
         </select>
         <select value={status} onChange={(e) => changeFilter(() => setStatus(e.target.value))}>
           <option value="">Any status</option>
-          {["draft", "sme_review", "revised", "approved", "rejected", "retired"].map((s) => (
+          {vocabulary.statuses.map((s) => (
             <option key={s} value={s}>
-              {s.replace("_", " ")}
+              {statusLabel(vocabulary, s)}
             </option>
           ))}
         </select>
