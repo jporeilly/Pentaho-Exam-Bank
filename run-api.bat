@@ -13,7 +13,9 @@ if exist ".env" (
     )
 )
 
-set "API_PORT=%QB_API_PORT%"
+set "API_PORT=%PEB_API_PORT%"
+:: QB_API_PORT is the name from when this was the Question Bank; still honoured.
+if "%API_PORT%"=="" set "API_PORT=%QB_API_PORT%"
 if "%API_PORT%"=="" set "API_PORT=7788"
 
 :: %~dp0 is this script's own directory. Calling a sibling by bare name

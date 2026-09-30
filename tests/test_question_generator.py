@@ -1,13 +1,18 @@
-"""Tests for core/question_generator.py — prompt building, JSON extraction, validation."""
+"""Prompt building, JSON extraction and key validation.
+
+These imported from `core/question_generator.py`, a re-export shim left from
+splitting the generator into four modules; nothing else used it, so it was
+deleted in 1.9.0 and the tests import the modules themselves.
+"""
 
 import json
 
 import pytest
 
-from exam_bank.core.question_generator import (
-    build_prompt, _extract_json_array, _extract_json_object,
-    _build_question_specs, _num_word, validate_key_against_notes,
+from exam_bank.core.generation_parsing import (
+    _extract_json_array, _extract_json_object, validate_key_against_notes,
 )
+from exam_bank.core.generation_prompts import _build_question_specs, _num_word, build_prompt
 from exam_bank.core.bank import Question
 from exam_bank.core.source import SlideInfo
 

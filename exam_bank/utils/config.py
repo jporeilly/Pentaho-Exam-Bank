@@ -231,10 +231,6 @@ class AppConfig:
     mcp_servers: List[dict] = field(default_factory=list)
     mcp_enabled: bool = False
 
-    # UI
-    theme_color: str = "Slate"
-    dark_mode: bool = True
-
     # Defaults for question generation
     default_difficulty: str = "Medium"
     default_bloom_level: str = "Apply"
@@ -242,12 +238,6 @@ class AppConfig:
     # User / SME identity
     sme_name: str = ""              # Current user's name for review audit trail
     sme_names: List[str] = field(default_factory=list)  # Saved list of SME names
-
-    # Recent files
-    recent_files: List[str] = field(default_factory=list)
-
-    # File-to-certification mapping (filename -> cert_id)
-    file_certifications: dict = field(default_factory=dict)
 
     # Export
     # Off the STATE directory, not the code root: an install writes its
@@ -283,9 +273,6 @@ class AppConfig:
 
     # Auto-export CSV on save
     auto_export_on_save: bool = True        # auto-export questions to assets/questions/ on save
-
-    # Mermaid diagrams
-    mermaid_enabled: bool = False            # include Mermaid diagrams in AI responses
 
     def save(self):
         """Save config to disk.

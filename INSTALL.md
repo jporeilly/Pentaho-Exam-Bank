@@ -74,7 +74,8 @@ run-api.bat
 ```
 
 Use this for only the API — driving it from a REST client, or developing the
-front end. `QB_API_PORT` overrides the port, and extra arguments pass through
+front end. `PEB_API_PORT` overrides the port (the older `QB_API_PORT` still
+works), and extra arguments pass through
 (`run-api.bat --reload`). Or without the launcher:
 
 ```bat

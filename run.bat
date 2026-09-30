@@ -24,7 +24,9 @@ if exist ".env" (
 set "API_PORT_FILE=%TEMP%\exam_bank_api_port.txt"
 set "UI_PORT_FILE=%TEMP%\exam_bank_port.txt"
 
-set "API_PORT=%QB_API_PORT%"
+set "API_PORT=%PEB_API_PORT%"
+:: QB_API_PORT is the name from when this was the Question Bank; still honoured.
+if "%API_PORT%"=="" set "API_PORT=%QB_API_PORT%"
 if "%API_PORT%"=="" set "API_PORT=7788"
 
 :: Release ports a previous run left behind. The second file is the old

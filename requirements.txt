@@ -1,7 +1,6 @@
 # Runtime dependencies - these ship inside the installer's vendored
 # Python. Anything only the tests need belongs in requirements-dev.txt,
 # which the installer deliberately does not stage.
-python-pptx>=1.0.0
 python-dotenv>=1.0.0
 pywin32>=306
 fpdf2>=2.7.0

@@ -460,57 +460,6 @@ def _write_csv(rows: List[dict], output_path: Path) -> None:
             writer.writerow(row)
 
 
-def convert_xlsx_to_csv(
-    xlsx_path: Path,
-    output_path: Optional[Path] = None,
-    backup_dir: Optional[Path] = None,
-    combine: bool = True,
-) -> List[Path]:
-    """Convert an .xlsx file to CSV(s) ready for Exam Bank import.
-
-    Args:
-        xlsx_path: Path to the Excel file.
-        output_path: Where to write the CSV. Defaults to same directory as xlsx,
-            with .csv extension.
-        backup_dir: If provided, a copy of the CSV is saved here (e.g. assets/questions/).
-        combine: If True, one CSV with all sheets. If False, one CSV per sheet.
-
-    Returns:
-        List of output CSV file paths.
-    """
-    xlsx_path = Path(xlsx_path)
-    result_paths: List[Path] = []
-
-    if combine:
-        rows = convert_workbook(xlsx_path, combine=True)
-        if not rows:
-            return []
-        out = output_path or xlsx_path.with_suffix(".csv")
-        _write_csv(rows, out)
-        result_paths.append(out)
-
-        # Backup copy
-        if backup_dir:
-            backup_path = Path(backup_dir) / out.name
-            backup_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(out, backup_path)
-    else:
-        sheets = convert_workbook(xlsx_path, combine=False)
-        for sheet_name, rows in sheets.items():
-            safe_name = re.sub(r'[^\w\-]', '_', sheet_name)
-            out = output_path.parent / f"{output_path.stem}_{safe_name}.csv" if output_path else \
-                  xlsx_path.parent / f"{xlsx_path.stem}_{safe_name}.csv"
-            _write_csv(rows, out)
-            result_paths.append(out)
-
-            if backup_dir:
-                backup_path = Path(backup_dir) / out.name
-                backup_dir.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(out, backup_path)
-
-    return result_paths
-
-
 # ---------------------------------------------------------------------------
 # Direct-to-Question conversion (for GUI integration)
 # ---------------------------------------------------------------------------
@@ -530,7 +479,7 @@ def import_from_xlsx(path: Path, backup_dir: Optional[Path] = None) -> "List":
         return []
 
     # Write temporary CSV
-    tmp_csv = Path(tempfile.gettempdir()) / f"qb_converted_{Path(path).stem}.csv"
+    tmp_csv = Path(tempfile.gettempdir()) / f"peb_converted_{Path(path).stem}.csv"
     _write_csv(rows, tmp_csv)
 
     # Save backup copy
@@ -550,39 +499,3 @@ def import_from_xlsx(path: Path, backup_dir: Optional[Path] = None) -> "List":
 
     return questions
 
-
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    import argparse
-    import sys
-
-    parser = argparse.ArgumentParser(
-        description="Convert Excel spreadsheets to Exam Bank CSV format."
-    )
-    parser.add_argument("xlsx", type=Path, help="Path to the .xlsx file")
-    parser.add_argument("-o", "--output", type=Path, default=None,
-                        help="Output CSV path (default: same name with .csv)")
-    parser.add_argument("--per-sheet", action="store_true",
-                        help="Create one CSV per sheet instead of combining")
-    parser.add_argument("--backup-dir", type=Path, default=None,
-                        help="Directory to save a backup copy of the CSV")
-
-    args = parser.parse_args()
-
-    if not args.xlsx.exists():
-        print(f"Error: File not found: {args.xlsx}", file=sys.stderr)
-        sys.exit(1)
-
-    paths = convert_xlsx_to_csv(
-        args.xlsx,
-        output_path=args.output,
-        backup_dir=args.backup_dir,
-        combine=not args.per_sheet,
-    )
-
-    for p in paths:
-        print(f"Created: {p}")
-    print(f"Total questions converted: {sum(1 for _ in paths)}")

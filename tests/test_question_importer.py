@@ -1,17 +1,12 @@
-"""Tests for core/question_importer.py — CSV and JSON import + validation."""
+"""Tests for core/question_importer.py — CSV and JSON import."""
 
 import csv
 import json
 
 import pytest
 
-from exam_bank.core.question_importer import (
-    import_from_csv, import_from_json, validate_question_against_pptx,
-    validate_batch,
-)
+from exam_bank.core.question_importer import import_from_csv, import_from_json
 from exam_bank.core.bank import Question
-from exam_bank.core.pptx_reader import PPTXReader
-from exam_bank.core.source import SlideInfo
 
 
 # ── CSV Import ─────────────────────────────────────────
@@ -168,80 +163,6 @@ class TestJSONImport:
         path.write_text("[]", encoding="utf-8")
         questions = import_from_json(path)
         assert questions == []
-
-
-# ── Validation against PPTX ───────────────────────────
-
-
-class MockPPTXReader:
-    """A mock PPTXReader for validation tests (avoids needing real PPTX files)."""
-
-    def __init__(self, slides):
-        self._slides = slides
-
-    @property
-    def slide_count(self):
-        return len(self._slides)
-
-    @property
-    def slides(self):
-        return self._slides
-
-
-class TestValidation:
-    def test_exact_match(self):
-        reader = MockPPTXReader([
-            SlideInfo(index=0, speaker_notes="HTTPS is used for secure web communication."),
-        ])
-        q = Question(stem="Q?", key="HTTPS is used for secure web communication.")
-        passed, match, slide_idx, detail = validate_question_against_pptx(q, reader)
-        assert passed
-        assert slide_idx == 0
-        assert "Exact match" in detail
-
-    def test_fuzzy_match(self):
-        reader = MockPPTXReader([
-            SlideInfo(index=0, speaker_notes="The AES algorithm provides strong symmetric encryption for data at rest."),
-        ])
-        q = Question(stem="Q?", key="AES algorithm provides symmetric encryption")
-        passed, _, slide_idx, detail = validate_question_against_pptx(q, reader)
-        assert passed
-        assert "overlap" in detail.lower() or "exact" in detail.lower()
-
-    def test_no_match(self):
-        reader = MockPPTXReader([
-            SlideInfo(index=0, speaker_notes="Topic about databases."),
-        ])
-        q = Question(stem="Q?", key="Quantum computing is the future")
-        passed, _, _, detail = validate_question_against_pptx(q, reader)
-        assert not passed
-        assert "No match" in detail
-
-    def test_fallback_to_body_text(self):
-        reader = MockPPTXReader([
-            SlideInfo(index=0, speaker_notes="", body_text="Body text with HTTPS info."),
-        ])
-        q = Question(stem="Q?", key="HTTPS info")
-        passed, _, _, _ = validate_question_against_pptx(q, reader)
-        assert passed
-
-    def test_empty_reader(self):
-        reader = MockPPTXReader([])
-        q = Question(stem="Q?", key="Answer")
-        passed, _, _, detail = validate_question_against_pptx(q, reader)
-        assert not passed
-        assert "No PPTX" in detail
-
-    def test_validate_batch(self):
-        reader = MockPPTXReader([
-            SlideInfo(index=0, speaker_notes="HTTPS is secure. AES is symmetric."),
-        ])
-        q1 = Question(stem="Q1?", key="HTTPS is secure")
-        q2 = Question(stem="Q2?", key="Completely unrelated topic")
-        results = validate_batch([q1, q2], reader)
-        assert results[0][1] is True   # q1 passed
-        assert results[1][1] is False  # q2 failed
-        assert "key-not-validated" in results[1][0].tags  # failed validation gets this tag
 
 
 class TestOptionOrder:

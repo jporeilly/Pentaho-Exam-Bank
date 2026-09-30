@@ -125,7 +125,7 @@ if ($LASTEXITCODE -ne 0) { throw "pip install -r requirements.txt failed" }
 # one worth naming: nothing imports it directly, FastAPI needs it for the
 # Import pane's upload, and it was missing from requirements.txt
 # altogether until this packaging work went looking.
-& $py -c "import sys, uvicorn, fastapi, multipart, httpx, anthropic, openai, fpdf, docx, pptx, openpyxl, PIL, dotenv; print('imports ok on Python ' + sys.version.split()[0])"
+& $py -c "import sys, uvicorn, fastapi, multipart, httpx, anthropic, openai, fpdf, docx, openpyxl, PIL, dotenv; print('imports ok on Python ' + sys.version.split()[0])"
 if ($LASTEXITCODE -ne 0) { throw "the vendored runtime cannot import the bank's dependencies" }
 
 Set-Content -LiteralPath $stampFile -Value $stamp -Encoding ASCII

@@ -108,12 +108,12 @@ def test_the_active_sme_joins_the_saved_list(client):
 
 
 def test_a_field_the_app_manages_itself_cannot_be_written(client):
-    """`file_certifications` maps a source file to its certification. Nothing
+    """`mcp_servers` is config the app keeps but no screen edits. Nothing
     would report it being clobbered."""
-    response = put(client, file_certifications={"evil.pptx": "cert-1"})
+    response = put(client, mcp_servers=[{"url": "http://evil"}])
 
     assert response.status_code == 400
-    assert "file_certifications" in response.json()["detail"]
+    assert "mcp_servers" in response.json()["detail"]
 
 
 def test_an_unknown_field_is_refused_rather_than_ignored(client):

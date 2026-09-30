@@ -7,7 +7,7 @@ import pytest
 from openpyxl import Workbook
 
 from exam_bank.core.spreadsheet_converter import (
-    match_headers, convert_sheet, convert_workbook, convert_xlsx_to_csv,
+    match_headers, convert_sheet, convert_workbook,
     import_from_xlsx, _normalize_header, _resolve_correct_indicator,
     _detect_layout, CSV_COLUMNS,
 )
@@ -325,57 +325,6 @@ class TestConvertWorkbook:
 
 
 # ── CSV output ────────────────────────────────────────
-
-
-class TestCSVOutput:
-    def test_convert_to_csv(self, tmp_path):
-        xlsx = _make_workbook(tmp_path, {
-            "Sheet1": [
-                ["Question", "Answer", "Distractor 1", "Distractor 2", "Distractor 3"],
-                ["What is HTTP?", "Protocol", "Format", "Language", "Tool"],
-            ],
-        })
-
-        paths = convert_xlsx_to_csv(xlsx, output_path=tmp_path / "output.csv")
-        assert len(paths) == 1
-        assert paths[0].exists()
-
-        # Read back and verify
-        with open(paths[0], encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-        assert len(rows) == 1
-        assert rows[0]["Stem"] == "What is HTTP?"
-
-    def test_backup_copy(self, tmp_path):
-        xlsx = _make_workbook(tmp_path, {
-            "Sheet1": [
-                ["Question", "Answer", "Distractor 1", "Distractor 2"],
-                ["Q?", "A", "B", "C"],
-            ],
-        })
-        backup_dir = tmp_path / "backups"
-
-        convert_xlsx_to_csv(xlsx, output_path=tmp_path / "out.csv", backup_dir=backup_dir)
-        assert (backup_dir / "out.csv").exists()
-
-    def test_per_sheet_csv(self, tmp_path):
-        xlsx = _make_workbook(tmp_path, {
-            "Tab1": [
-                ["Question", "Answer", "Distractor 1", "Distractor 2"],
-                ["Q1?", "A1", "B1", "C1"],
-            ],
-            "Tab2": [
-                ["Question", "Answer", "Distractor 1", "Distractor 2"],
-                ["Q2?", "A2", "B2", "C2"],
-            ],
-        })
-
-        paths = convert_xlsx_to_csv(xlsx, output_path=tmp_path / "out.csv", combine=False)
-        assert len(paths) == 2
-
-
-# ── Round-trip through importer ───────────────────────
 
 
 class TestImportFromXlsx:

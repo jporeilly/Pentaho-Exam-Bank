@@ -18,7 +18,7 @@ out rather than built.
 | Was | Why |
 | --- | --- |
 | `slide_panel.py` (426 lines) | PPTX generation was dropped as a product decision. |
-| `pptx_exporter*.py`, `pptx_reader.py` in core | Same. Candidates for deletion rather than porting. |
+| `pptx_exporter*.py`, `pptx_reader.py` in core | Same. Deleted in 1.9.0, with the PPTX answer validation in `question_importer` and the `python-pptx` dependency. |
 
 ## Missing, and worth deciding about
 
@@ -85,10 +85,11 @@ two sequential requests and shows nothing until both finish.
 
 ## Probably just dead code
 
-`core/spreadsheet_converter.py` exports `match_headers`, `convert_sheet`,
-`convert_workbook` and `convert_xlsx_to_csv`, none called. **xlsx import
-works** — it goes through `import_from_xlsx`, which is wired. These four look
-like a separate conversion path that lost its caller. Confirm, then delete.
+`core/spreadsheet_converter.py`: this said `match_headers`, `convert_sheet`
+and `convert_workbook` were never called. They are - `import_from_xlsx`, the
+wired xlsx import, is built on them. Only `convert_xlsx_to_csv` (a CSV-file
+path with a command line of its own) had lost its caller; both were deleted in
+1.9.0.
 
 ## Suggested order
 
