@@ -7,6 +7,24 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Fixed
+
+- **The installer's courses search no longer records a git worktree over
+  the main checkout.** On the dev machine it recorded `C:\Projects\pcm-060`,
+  a worktree of the Content Manager on an unmerged branch whose courses
+  predate the question-id rename, instead of `C:\Projects\Pentaho-Content-Manager`.
+  Both held 13 courses. The comment said a tie went to the first found, but
+  Sort-Object in Windows PowerShell 5.1 is not stable, and nothing ranked a
+  worktree lower anyway. It did no harm there only because the saved config
+  names the courses directory; a fresh machine or a reset config would have
+  read the worktree. `find-courses.ps1` now ranks a main checkout (`.git`
+  directory) above a worktree (`.git` file) whatever the counts, breaks ties
+  by the order found, and logs the worktrees it passed over. A worktree on
+  its own is still recorded, and a copy with no `.git` at all counts as a
+  main checkout. New `-Roots` parameter so tests can search a directory of
+  their own (`tests/test_find_courses_script.py`, run under Windows
+  PowerShell).
+
 ## [1.9.0] - 2026-09-30
 
 ### Added

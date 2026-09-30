@@ -34,7 +34,11 @@ param(
     # elevation, which the installer has and a developer checking this
     # script does not - without a way to run the search alone, the only
     # way to test it is to install.
-    [switch]$ReportOnly
+    [switch]$ReportOnly,
+    # Search these roots instead of the list below. For tests: the default
+    # list includes C:\Projects, so a test run against it passes or fails on
+    # whatever checkouts this machine happens to hold.
+    [string[]]$Roots
 )
 
 # Deliberately NOT "Stop". A provisioning step that throws takes the install
@@ -44,14 +48,17 @@ $ErrorActionPreference = "Continue"
 # One level deep, and only these roots. A recursive hunt across a home
 # directory is how an installer ends up waiting on OneDrive or a mapped drive
 # while the user watches a progress bar that has stopped.
-$roots = @(
-    "C:\Projects",
-    (Join-Path $env:USERPROFILE "Projects"),
-    (Join-Path $env:USERPROFILE "source\repos"),
-    (Join-Path $env:USERPROFILE "git"),
-    (Join-Path $env:USERPROFILE "Documents"),
-    $env:USERPROFILE
-) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+if (-not $Roots) {
+    $Roots = @(
+        "C:\Projects",
+        (Join-Path $env:USERPROFILE "Projects"),
+        (Join-Path $env:USERPROFILE "source\repos"),
+        (Join-Path $env:USERPROFILE "git"),
+        (Join-Path $env:USERPROFILE "Documents"),
+        $env:USERPROFILE
+    )
+}
+$Roots = @($Roots | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
 
 function Test-Checkout($path) {
     # courses/ is the whole requirement. The bank reads course.json and the
@@ -63,11 +70,17 @@ function Test-Checkout($path) {
     $count = @(Get-ChildItem -LiteralPath $courses -Directory -ErrorAction SilentlyContinue |
         Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "course.json") }).Count
     if ($count -eq 0) { return $null }
-    return [pscustomobject]@{ Path = $path; Courses = $count }
+    # A git worktree has a .git FILE ("gitdir: ...") where a main checkout
+    # has a .git directory. A worktree is a branch in flight - on the dev
+    # machine, an unmerged release that predates a course rename - so it
+    # ranks below any main checkout. A copy with no .git at all is not a
+    # worktree: courses/ is still the whole requirement.
+    $worktree = Test-Path -LiteralPath (Join-Path $path ".git") -PathType Leaf
+    return [pscustomobject]@{ Path = $path; Courses = $count; Worktree = $worktree }
 }
 
 $found = @()
-foreach ($root in $roots) {
+foreach ($root in $Roots) {
     # The obvious name first, then anything else one level down that happens
     # to hold courses - a clone renamed on checkout is common.
     $named = Join-Path $root "Pentaho-Content-Manager"
@@ -88,13 +101,31 @@ foreach ($root in $roots) {
     }
 }
 
-# The one with the most courses wins; among equals, the first root.
-$best = $found | Sort-Object -Property @{ Expression = { -$_.Courses } } |
-    Select-Object -First 1
+# A main checkout beats a worktree whatever the counts; then the most courses
+# wins; among equals, the first found. That last key is spelled out because
+# Sort-Object in Windows PowerShell 5.1 is not stable: without it a tie went
+# to whichever candidate the sort left on top, which on the dev machine was
+# the worktree.
+for ($i = 0; $i -lt $found.Count; $i++) {
+    $found[$i] | Add-Member -NotePropertyName Order -NotePropertyValue $i
+}
+$best = $found | Sort-Object -Property @(
+    @{ Expression = { $_.Worktree } },
+    @{ Expression = { -$_.Courses } },
+    @{ Expression = { $_.Order } }
+) | Select-Object -First 1
 
 if (-not $best) {
     Write-Host "No Content Manager courses found - the Exam Bank will ask in Settings."
     exit 1
+}
+
+# Say what was passed over, so an install log explains a choice that looks
+# wrong next to a checkout with more courses.
+if (-not $best.Worktree) {
+    foreach ($skipped in @($found | Where-Object { $_.Worktree })) {
+        Write-Host "Passed over git worktree $($skipped.Path) ($($skipped.Courses) courses)."
+    }
 }
 
 if ($ReportOnly) {
