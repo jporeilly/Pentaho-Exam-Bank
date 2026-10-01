@@ -9,6 +9,9 @@ course — and on to the courses repo that learners' apps sync from.
 An **authoring tool for the author's machine.** It is never shipped to a
 learner VM: the questions it produces are, the app is not.
 
+<img width="1442" height="952" alt="image" src="https://github.com/user-attachments/assets/1c4a53a1-9e52-4705-82e5-5c4f7c8f115d" />
+
+
 It is a Windows desktop app — a Tauri shell over a FastAPI backend and a React
 interface, with its own Python — installed per machine. For how to use it, see
 [`HOW_TO_GUIDE.md`](HOW_TO_GUIDE.md) and the pages under [`docs/`](docs/), which
