@@ -33,6 +33,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+from . import similarity
 from .bank import BLOOM_LEVELS, STATUS_LABELS, STATUSES, ExamBankDB, Question
 from .pcm_reader import read_course_json
 
@@ -189,7 +190,7 @@ def _bar_check(summary: dict, level: Optional[dict]) -> Optional[dict]:
 
 
 def _findings(summary: dict, level: Optional[dict], exam: Optional[dict],
-              bar: Optional[dict]) -> list[dict]:
+              bar: Optional[dict], sim: Optional[dict] = None) -> list[dict]:
     """What the numbers say to do, by the same rules for every exam.
 
     A finding appears only where its numbers trigger it and disappears once
@@ -262,6 +263,23 @@ def _findings(summary: dict, level: Optional[dict], exam: Optional[dict],
             "action": "Add a plausible wrong option.",
         })
 
+    # Two questions asking the same thing waste a pool slot and, drawn into
+    # one paper, can give each other away. Only likely duplicates raise a
+    # finding; overlaps are listed in the Similarity section without one,
+    # since related questions within one course are expected.
+    if sim and sim["duplicates"]:
+        d = sim["duplicates"]
+        named = "; ".join(f"{p['a']} and {p['b']} ({p['score']}%)"
+                          for p in sim["pairs"] if p["band"] == "duplicate")
+        out.append({
+            "severity": "review",
+            "title": f"{d} pair{'s' if d != 1 else ''} of near-duplicate questions",
+            "detail": f"{named}. Each pair shares most of its scenario, question and answer "
+                      "wording.",
+            "action": "Keep one of each pair, or rewrite one to test something else. The "
+                      "Similarity section shows the words they share.",
+        })
+
     if summary["unknownBloom"]:
         u = summary["unknownBloom"]
         out.append({
@@ -283,8 +301,8 @@ def _findings(summary: dict, level: Optional[dict], exam: Optional[dict],
     if not out:
         out.append({
             "severity": "clear", "title": f"Clears the Level {bar['level']} {bar['name']} bar",
-            "detail": "All four criteria pass, and so do draw headroom, scenario coverage "
-                      "and distractors.",
+            "detail": "All four criteria pass, and so do draw headroom, scenario coverage, "
+                      "distractors and question similarity.",
             "action": "Leave it alone.",
         })
     return out
@@ -310,6 +328,7 @@ def build_report(db: ExamBankDB, courses_dir: Optional[Path] = None) -> dict[str
     order = [k for k in groups if k] + ([""] if "" in groups else [])
 
     exams = []
+    nearest: dict[str, dict] = {}
     for cert_id in order:
         members = groups[cert_id]
         cert = certs.get(cert_id)
@@ -317,6 +336,8 @@ def build_report(db: ExamBankDB, courses_dir: Optional[Path] = None) -> dict[str
         level, exam = _course_facts(courses_dir, slug)
         summary = _summary(members)
         bar = _bar_check(summary, level)
+        sim = similarity.analyse(members)
+        nearest.update(sim["nearest"])
 
         topic_order = db.get_topics(cert_id) if cert_id else []
         by_topic: dict[str, list[Question]] = {}
@@ -335,7 +356,8 @@ def build_report(db: ExamBankDB, courses_dir: Optional[Path] = None) -> dict[str
             "exam": exam,
             **summary,
             "bar": bar,
-            "findings": _findings(summary, level, exam, bar),
+            "findings": _findings(summary, level, exam, bar, sim),
+            "similarity": {k: v for k, v in sim.items() if k != "nearest"},
             "topics": [{"topic": t, **_summary(by_topic[t])} for t in ranked],
         })
 
@@ -362,6 +384,9 @@ def build_report(db: ExamBankDB, courses_dir: Optional[Path] = None) -> dict[str
                 "multi": q.question_type == "multi",
                 "stem": q.stem,
                 "poolOrder": q.pool_order,
+                # The most similar other question in the same exam, or None
+                # when the exam holds only this one.
+                "nearest": nearest.get(q.id),
             }
             for q in ordered
         ],

@@ -269,6 +269,63 @@ def test_an_exam_with_a_scenario_on_every_question_is_not_flagged_for_it(db):
     assert "scenario" not in titles.lower()
 
 
+# ── similarity ──────────────────────────────────────────────────────────────
+
+def add_text(db, cert, qid, stem, scenario, key, bloom="Apply"):
+    q = Question(id=qid, stem=stem, scenario=scenario, key=key, distractors=["w1", "w2", "w3"],
+                 bloom_level=bloom, topic="T", certification_id=cert.id)
+    db.save(q)
+    return q
+
+
+def distinct_questions(db, cert, n):
+    """n unrelated questions; with n >= 2 they clear the Level 1 bar."""
+    for i, topic in enumerate(["kafka offsets", "mondrian cubes", "metadata masks", "cda caches",
+                               "report bands", "rjava natives", "mqtt wills", "rabbitmq bindings"][:n]):
+        bloom = {0: "Evaluate", 1: "Analyze"}.get(i, "Apply")
+        add_text(db, cert, f"d{i}", f"What governs {topic} here?", f"A team works on {topic}.",
+                 f"The {topic} setting", bloom)
+
+
+def test_each_item_names_its_nearest_neighbour_within_its_own_exam(db):
+    one, two = add_cert(db, "One", "one"), add_cert(db, "Two", "two")
+    add_text(db, one, "p", "How is the cache refreshed?", "A cache is stale.", "Refresh it")
+    add_text(db, one, "q", "Which port does Carte use?", "Carte will not start.", "8081")
+    add_text(db, two, "r", "How is the cache refreshed?", "A cache is stale.", "Refresh it")
+    items = {i["id"]: i for i in build_report(db)["items"]}
+    # r is word-for-word p, but in another exam, so it is never p's neighbour.
+    assert items["p"]["nearest"]["id"] == "q"
+    assert items["r"]["nearest"] is None          # alone in its exam
+
+
+def test_a_near_duplicate_pair_raises_a_finding_naming_both(db):
+    cert = add_cert(db, "Dup", "dup")
+    distinct_questions(db, cert, 8)
+    add_text(db, cert, "x1", "Which steps find the duplicate customer IDs?",
+             "An analyst suspects duplicate customer IDs in a flat file of customer records.",
+             "Sort rows, then Unique rows")
+    add_text(db, cert, "x2", "Which steps find the duplicate customer IDs?",
+             "An analyst checks customer records for duplicate customer IDs from several systems.",
+             "Sort rows, then Unique rows")
+    exam = build_report(db)["exams"][0]
+    assert exam["similarity"]["duplicates"] == 1
+    finding = next(f for f in exam["findings"] if "near-duplicate" in f["title"])
+    assert finding["title"] == "1 pair of near-duplicate questions"
+    assert "x1 and x2" in finding["detail"]
+    assert "nearest" not in exam["similarity"]    # per question, it lives on the items
+
+
+def test_distinct_questions_raise_no_similarity_finding_and_the_clear_says_so(db, tmp_path):
+    course_files(tmp_path, "clean", level=1, pool=8, draw=4)
+    cert = add_cert(db, "Clean", "clean")
+    distinct_questions(db, cert, 8)
+    exam = build_report(db, tmp_path)["exams"][0]
+    assert exam["similarity"]["duplicates"] == 0
+    assert not any("duplicate" in f["title"] for f in exam["findings"])
+    clear = next(f for f in exam["findings"] if f["severity"] == "clear")
+    assert "question similarity" in clear["detail"]
+
+
 # ── HTTP ────────────────────────────────────────────────────────────────────
 
 @pytest.fixture

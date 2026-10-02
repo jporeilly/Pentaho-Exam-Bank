@@ -7,6 +7,25 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **How alike each exam's questions are.** The report now gives every
+  question its nearest neighbour in the same exam, with a similarity from
+  0 to 100%, and lists each exam's closest pairs with the words they share.
+  Two questions asking the same thing waste a pool slot and, drawn into one
+  paper, can give each other away. 55% and above is a likely duplicate and
+  raises a finding naming the pair; 40-54% is an overlap, listed but not
+  flagged, since related questions within a course are expected. The
+  measure is TF-IDF over the scenario, the question and the correct
+  answer(s), compared by cosine, with IDF taken within the exam so a
+  course's own vocabulary does not make all of its questions look alike.
+  It needs no model and can say why two questions match. Calibrated on the
+  eleven course exams: the median nearest neighbour scored 18%, the 99th
+  percentile 45%, and the one real duplicate found (pdi-2hr-lab's
+  2hr-m4-q1 and 2hr-m4-q5, the same scenario reworded with the same key)
+  62%. `core/similarity.py`; `similarity` on each exam and `nearest` on
+  each item in `GET /api/report`.
+
 ## [1.10.0] - 2026-09-30
 
 ### Added
