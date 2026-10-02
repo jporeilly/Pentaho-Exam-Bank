@@ -105,3 +105,10 @@ def test_bands_follow_the_thresholds():
     assert band(OVERLAP) == "overlap"
     assert band(OVERLAP - 0.01) == "distinct"
     assert 0 < similarity.OVERLAP < similarity.DUPLICATE < 1
+
+
+def test_the_band_follows_the_percentage_shown_not_the_raw_score():
+    """0.3996 is displayed as 40%, so it must not be called distinct."""
+    assert band(0.3996) == "overlap"
+    assert band(0.5496) == "duplicate"
+    assert band(0.3949) == "distinct"

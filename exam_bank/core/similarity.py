@@ -84,10 +84,17 @@ def _shared(a: dict[str, float], b: dict[str, float], n: int = 5) -> list[str]:
     return [w for _, w in sorted(both, reverse=True)[:n]]
 
 
+def _pct(score: float) -> int:
+    return max(0, min(100, round(score * 100)))
+
+
 def band(score: float) -> str:
-    if score >= DUPLICATE:
+    """Banded on the whole percentage the report shows, so a pair displayed
+    as 40% is never called distinct because its raw score was 0.3996."""
+    p = _pct(score)
+    if p >= round(DUPLICATE * 100):
         return "duplicate"
-    if score >= OVERLAP:
+    if p >= round(OVERLAP * 100):
         return "overlap"
     return "distinct"
 
@@ -115,12 +122,10 @@ def analyse(questions: Iterable[Question], *, pair_limit: int = 10) -> dict:
                 best[i] = (s, j)
             if s > best[j][0]:
                 best[j] = (s, i)
-            if s >= OVERLAP:
+            if band(s) != "distinct":
                 flagged.append((s, i, j))
 
-    def pct(s: float) -> int:
-        return max(0, min(100, round(s * 100)))
-
+    pct = _pct
     nearest = {
         qs[i].id: {"id": qs[j].id, "score": pct(s), "band": band(s)}
         for i, (s, j) in enumerate(best)
@@ -139,8 +144,8 @@ def analyse(questions: Iterable[Question], *, pair_limit: int = 10) -> dict:
     return {
         "nearest": nearest,
         "pairs": pairs,
-        "duplicates": sum(1 for s, _, _ in flagged if s >= DUPLICATE),
-        "overlaps": sum(1 for s, _, _ in flagged if s < DUPLICATE),
+        "duplicates": sum(1 for s, _, _ in flagged if band(s) == "duplicate"),
+        "overlaps": sum(1 for s, _, _ in flagged if band(s) == "overlap"),
         "median": pct(scores[len(scores) // 2]),
         "max": pct(scores[-1]),
     }
