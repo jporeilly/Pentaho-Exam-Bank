@@ -239,3 +239,83 @@ describe("when there is nothing, or something is wrong", () => {
     expect(calls.filter((c) => c.includes("/api/report"))).toHaveLength(2);
   });
 });
+
+
+describe("question similarity", () => {
+  const withSimilarity = () =>
+    report({
+      exams: [
+        {
+          ...LAB,
+          similarity: {
+            pairs: [{ a: "q-analyze", b: "q-apply", aStem: "Stem of q-analyze", bStem: "Stem of q-apply",
+                      score: 62, band: "duplicate", shared: ["unique", "customer", "rows"] }],
+            duplicates: 1, overlaps: 2, median: 19, max: 62,
+          },
+        },
+        DI,
+      ],
+      items: [
+        item("q-analyze", "c-lab", "Analyze", { poolOrder: 0, nearest: { id: "q-apply", score: 62, band: "duplicate" } }),
+        item("q-understand", "c-lab", "Understand", { poolOrder: 1, nearest: { id: "q-apply", score: 41, band: "overlap" } }),
+        item("q-apply", "c-lab", "Apply", { poolOrder: 2, nearest: { id: "q-analyze", score: 62, band: "duplicate" } }),
+        item("m1-q1", "c-di", "Remember", { poolOrder: 0, nearest: null }),
+      ],
+    });
+
+  it("lists the closest pairs with their score, band and shared words", async () => {
+    serve(withSimilarity());
+    render(<ReportPane />);
+    await screen.findByRole("heading", { name: "PDI in 2 Hours" });
+    const pair = document.querySelector(".sim-pair") as HTMLElement;
+    expect(pair).toHaveClass("duplicate");
+    expect(within(pair).getByText(/62%/)).toBeInTheDocument();
+    expect(within(pair).getByText("likely duplicate")).toBeInTheDocument();
+    expect(within(pair).getByText("customer")).toBeInTheDocument();
+    // Two overlaps are counted but only the listed pair is drawn.
+    expect(screen.getByText("and 2 more pairs at 40% or above")).toBeInTheDocument();
+  });
+
+  it("gives every question its nearest neighbour, coloured by band", async () => {
+    serve(withSimilarity());
+    render(<ReportPane />);
+    await screen.findByRole("heading", { name: "PDI in 2 Hours" });
+    const badges = Array.from(document.querySelectorAll(".report-table .sim-badge"));
+    expect(badges.map((b) => b.className)).toEqual([
+      "sim-badge duplicate", "sim-badge overlap", "sim-badge duplicate",
+    ]);
+    expect(badges[1]).toHaveTextContent("41%q-apply");
+  });
+
+  it("buckets the nearest-neighbour scores for the histogram", async () => {
+    serve(withSimilarity());
+    render(<ReportPane />);
+    await screen.findByRole("heading", { name: "PDI in 2 Hours" });
+    const cols = Array.from(document.querySelectorAll(".sim-col"));
+    expect(cols).toHaveLength(10);
+    expect(cols[4]).toHaveTextContent("1");      // 41
+    expect(cols[6]).toHaveTextContent("2");      // 62, 62
+    expect(cols[6]).toHaveClass("duplicate");
+    expect(cols[4]).toHaveClass("overlap");
+  });
+
+  it("says when a question is alone in its exam", async () => {
+    serve(withSimilarity());
+    render(<ReportPane />);
+    await userEvent.click(await screen.findByRole("button", { name: /DI Practitioner/ }));
+    expect(screen.getByText("alone in its exam")).toBeInTheDocument();
+  });
+
+  it("names the closest pair when none reaches the overlap band", async () => {
+    const r = withSimilarity();
+    r.exams[0] = { ...r.exams[0], similarity: { pairs: [], duplicates: 0, overlaps: 0, median: 19, max: 33 } };
+    r.items = r.items.map((i) =>
+      i.nearest ? { ...i, nearest: { ...i.nearest, score: i.id === "q-understand" ? 33 : 20, band: "distinct" as const } } : i,
+    );
+    serve(r);
+    render(<ReportPane />);
+    expect(await screen.findByText(/No pair reaches 40%/)).toHaveTextContent(
+      "No pair reaches 40%. The closest is q-understand and q-apply at 33%",
+    );
+  });
+});

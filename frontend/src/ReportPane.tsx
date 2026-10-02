@@ -14,7 +14,15 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { api, ApiError, type Report, type ReportExam, type ReportSummary } from "./api";
+import {
+  api,
+  ApiError,
+  type Report,
+  type ReportExam,
+  type ReportItem,
+  type ReportNearest,
+  type ReportSummary,
+} from "./api";
 
 const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
 
@@ -139,6 +147,113 @@ function BarCheck({ exam }: { exam: ReportExam }) {
   );
 }
 
+const BAND_LABEL: Record<string, string> = {
+  duplicate: "likely duplicate",
+  overlap: "overlap",
+  distinct: "distinct",
+};
+
+/** A question's nearest neighbour as a coloured score and the other id. */
+function NearestBadge({ nearest }: { nearest?: ReportNearest | null }) {
+  if (!nearest) return <span className="faint">alone in its exam</span>;
+  return (
+    <span className={`sim-badge ${nearest.band}`} title={BAND_LABEL[nearest.band]}>
+      <b>{nearest.score}%</b>
+      <span className="mono">{nearest.id}</span>
+    </span>
+  );
+}
+
+const SIM_BUCKETS = ["0–9", "10–19", "20–29", "30–39", "40–49", "50–59", "60–69", "70–79", "80–89", "90–100"];
+
+/** How alike the exam's questions are: the score distribution, then the
+ *  closest pairs with the words they share. Everything comes from the
+ *  server; the buckets are only a count over the items' scores. */
+function Similarity({ exam, items }: { exam: ReportExam; items: ReportItem[] }) {
+  const s = exam.similarity;
+  const scored = items.filter((i) => i.nearest);
+  if (!s || scored.length === 0) {
+    return <p className="muted report-none">Too few questions to compare.</p>;
+  }
+  const counts = Array(10).fill(0) as number[];
+  scored.forEach((i) => counts[Math.min(9, Math.floor(i.nearest!.score / 10))]++);
+  const top = Math.max(...counts, 1);
+  // A bucket straddling a band edge takes the band of its upper end, so a
+  // duplicate is never drawn calmer than it is.
+  const bandOf = (b: number) => (b * 10 + 9 >= 55 ? "duplicate" : b * 10 + 9 >= 40 ? "overlap" : "distinct");
+  const closest = scored.reduce((a, i) => (i.nearest!.score > a.nearest!.score ? i : a), scored[0]);
+  const stemOf = Object.fromEntries(items.map((i) => [i.id, i.stem]));
+  const unlisted = s.duplicates + s.overlaps - s.pairs.length;
+  return (
+    <>
+      <div className="sim-summary">
+        <span>
+          Median nearest <strong>{s.median}%</strong>
+        </span>
+        <span>
+          Highest <strong>{s.max}%</strong>
+        </span>
+        <span>
+          Likely duplicates <strong>{s.duplicates}</strong>
+        </span>
+        <span>
+          Overlaps <strong>{s.overlaps}</strong>
+        </span>
+      </div>
+      <div className="sim-hist" role="img" aria-label="Questions by how similar their nearest neighbour is">
+        {counts.map((c, b) => (
+          <div className={`sim-col ${bandOf(b)}`} key={b}>
+            <span>{c || ""}</span>
+            <i style={{ height: (c / top) * 74 }} />
+          </div>
+        ))}
+      </div>
+      <div className="sim-labels" aria-hidden>
+        {SIM_BUCKETS.map((l) => (
+          <span key={l}>{l}</span>
+        ))}
+      </div>
+      {s.pairs.length > 0 ? (
+        <div className="sim-pairs">
+          {s.pairs.map((p) => (
+            <div className={`sim-pair ${p.band}`} key={`${p.a}|${p.b}`}>
+              <div className="score">
+                {p.score}%<small>{BAND_LABEL[p.band]}</small>
+              </div>
+              <div>
+                <div className="q">
+                  <span className="mono">{p.a}</span>
+                  {p.aStem}
+                </div>
+                <div className="q">
+                  <span className="mono">{p.b}</span>
+                  {p.bStem}
+                </div>
+                <div className="sim-shared" title="The words carrying most of the score">
+                  {p.shared.map((w) => (
+                    <span key={w}>{w}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+          {unlisted > 0 && (
+            <p className="faint">
+              and {unlisted} more pair{unlisted === 1 ? "" : "s"} at 40% or above
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="muted" style={{ marginTop: 14 }}>
+          No pair reaches 40%. The closest is <span className="mono">{closest.id}</span> and{" "}
+          <span className="mono">{closest.nearest!.id}</span> at {closest.nearest!.score}%: &ldquo;
+          {closest.stem}&rdquo; and &ldquo;{stemOf[closest.nearest!.id] ?? ""}&rdquo;
+        </p>
+      )}
+    </>
+  );
+}
+
 const STATUS_NOTE: Record<string, string> = {
   draft: "as imported",
   sme_review: "awaiting a reviewer",
@@ -216,7 +331,7 @@ export function ReportPane({ openCourse = "" }: { openCourse?: string }) {
     <div className="report">
       <div className="toolbar">
         <h2 className="grow">Report</h2>
-        <button className="secondary" onClick={load}>
+        <button className="secondary info" onClick={load}>
           Refresh
         </button>
       </div>
@@ -378,6 +493,18 @@ export function ReportPane({ openCourse = "" }: { openCourse?: string }) {
       </section>
 
       <section className="report-section">
+        <h4>Question similarity</h4>
+        <p className="faint report-aside">
+          Each question&rsquo;s most similar other question in this exam, scored 0&ndash;100% on the
+          wording of its scenario, question and correct answer. 55% and above is a likely duplicate;
+          40&ndash;54% is worth a look.
+        </p>
+        <div className="card">
+          <Similarity exam={exam} items={mine} />
+        </div>
+      </section>
+
+      <section className="report-section">
         <h4>Every question, as classified</h4>
         <div className="report-filter" role="group" aria-label="Filter by Bloom level">
           <button
@@ -415,6 +542,7 @@ export function ReportPane({ openCourse = "" }: { openCourse?: string }) {
                 <th>Status</th>
                 <th title="Opens with a scenario">Scen.</th>
                 <th>Question</th>
+                <th title="The most similar other question in this exam">Nearest</th>
               </tr>
             </thead>
             <tbody>
@@ -433,8 +561,11 @@ export function ReportPane({ openCourse = "" }: { openCourse?: string }) {
                   <td className={"scen" + (q.scenario ? " yes" : "")}>{q.scenario ? "✓" : "–"}</td>
                   <td>
                     <span className="stem">{q.stem}</span>
-                    {q.multi && <span className="pill report-multi">select all</span>}
+                    {q.multi && <span className="pill report-multi">multi-select</span>}
                     <div className="mono faint">{q.id}</div>
+                  </td>
+                  <td className="nowrap">
+                    <NearestBadge nearest={q.nearest} />
                   </td>
                 </tr>
               ))}

@@ -11,6 +11,7 @@ import {
   type Question,
   type QuestionFormat,
 } from "./api";
+import { OptionList } from "./answers";
 import { useVocabulary } from "./vocabulary";
 
 // The backend owns these and validates against them, naming the valid set in
@@ -362,7 +363,7 @@ export function GeneratePane({
             value={form.custom_instructions}
             onChange={(e) => set("custom_instructions", e.target.value)}
           />
-          <button onClick={start} disabled={!form.course_slug || busy || running}>
+          <button className="ai" onClick={start} disabled={!form.course_slug || busy || running}>
             {running ? "Generating…" : "Generate"}
           </button>
           {running && (
@@ -516,7 +517,7 @@ function FormatRows({
               {`shown as “(Choose ${NUMBER_WORDS[row.keys] ?? row.keys})”`}
             </span>
             <button
-              className="secondary"
+              className="secondary danger"
               onClick={() => onChange(rows.filter((_, j) => j !== i))}
               aria-label={`Remove format ${i + 1}`}
             >
@@ -525,7 +526,7 @@ function FormatRows({
           </div>
         ))}
         <button
-          className="secondary"
+          className="secondary add"
           onClick={() =>
             onChange([...rows, rows.length ? { keys: 2, total: 5 } : { keys: 1, total: 4 }])
           }
@@ -566,7 +567,7 @@ function Review({
           Select none
         </button>
         <span className="spacer" />
-        <button onClick={onCommit} disabled={busy || keep.size === 0}>
+        <button className="add" onClick={onCommit} disabled={busy || keep.size === 0}>
           Save {keep.size} to the bank
         </button>
       </div>
@@ -584,20 +585,15 @@ function Review({
             <span style={{ flex: 1 }}>
               {q.scenario && <div className="muted">{q.scenario}</div>}
               <div style={{ fontWeight: 600, margin: "3px 0" }}>{q.stem}</div>
-              <ul style={{ margin: "6px 0", paddingLeft: 20 }}>
-                {(q.option_order.length ? q.option_order : [q.key, ...q.distractors]).map(
-                  (option, i) => {
-                    const correct =
-                      q.question_type === "multi" ? q.keys.includes(option) : option === q.key;
-                    return (
-                      <li key={i} style={{ color: correct ? "var(--ok)" : "var(--text-dim)" }}>
-                        {option}
-                        {correct && " ✓"}
-                      </li>
-                    );
-                  },
+              <OptionList
+                options={(q.option_order.length ? q.option_order : [q.key, ...q.distractors]).map(
+                  (option) => ({
+                    text: option,
+                    correct:
+                      q.question_type === "multi" ? q.keys.includes(option) : option === q.key,
+                  }),
                 )}
-              </ul>
+              />
               {q.explanation && (
                 <div className="faint" style={{ fontSize: 12 }}>
                   {q.explanation}

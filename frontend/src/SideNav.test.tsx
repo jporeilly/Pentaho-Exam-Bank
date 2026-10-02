@@ -46,6 +46,16 @@ const headingText = () =>
   [...document.querySelectorAll(".rail__heading")].map((el) => el.textContent);
 
 describe("the rail", () => {
+  it("gives each group its own colour class", () => {
+    const { container } = render(<SideNav tab="bank" onSelect={() => {}} />);
+    const groups = [...container.querySelectorAll(".rail__group")].map((g) => g.className);
+    expect(groups).toEqual([
+      "rail__group group-content",
+      "rail__group group-questions",
+      "rail__group group-system",
+    ]);
+  });
+
   it("shows every destination, grouped", () => {
     mount();
     for (const label of ITEMS) {

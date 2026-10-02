@@ -252,7 +252,7 @@ export function ImportPane({ onImported }: { onImported?: () => void } = {}) {
           </div>
 
           <div className="toolbar">
-            <button onClick={save} disabled={busy || keep.size === 0}>
+            <button className="add" onClick={save} disabled={busy || keep.size === 0}>
               {busy ? "Saving…" : `Import ${keep.size} of ${preview.count}`}
             </button>
             <button
@@ -270,7 +270,7 @@ export function ImportPane({ onImported }: { onImported?: () => void } = {}) {
               Select none
             </button>
             <button
-              className="secondary"
+              className="secondary info"
               onClick={checkDocs}
               disabled={busy || checking}
               title="Look each question up in docs.pentaho.com and say whether the docs back its answer. Nothing is imported or changed."
@@ -361,7 +361,7 @@ function Row({
           </div>
         )}
       </td>
-      <td className="faint">{answers || <span className="problem-inline">none</span>}</td>
+      <td>{answers ? <span className="key-chip">{answers}</span> : <span className="problem-inline">none</span>}</td>
       {docs && (
         <td>
           {docs.status === "supported" && <span className="pill approved">Backed</span>}

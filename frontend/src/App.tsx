@@ -97,7 +97,7 @@ export function App() {
           // useless, so it is said once here rather than repeated in each.
           <div className="banner">
             {healthError}{" "}
-            <button className="secondary" onClick={loadHealth}>
+            <button className="secondary info" onClick={loadHealth}>
               Retry
             </button>
           </div>

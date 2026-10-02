@@ -561,7 +561,7 @@ function McpStatus({
       <div className="mcp-line">
         {line}
         <span className="spacer" />
-        <button type="button" className="secondary" onClick={onTest} disabled={checking}>
+        <button type="button" className="secondary info" onClick={onTest} disabled={checking}>
           Test connection
         </button>
       </div>
@@ -633,7 +633,7 @@ function GpuPanel() {
       <div className="toolbar">
         <strong>GPU advice</strong>
         <span className="spacer" />
-        <button className="secondary" onClick={check} disabled={busy}>
+        <button className="secondary info" onClick={check} disabled={busy}>
           {busy ? "Checking…" : "Check again"}
         </button>
       </div>

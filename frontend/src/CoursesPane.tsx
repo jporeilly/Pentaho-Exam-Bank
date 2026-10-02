@@ -78,7 +78,7 @@ function CourseRow({
           {course.hasExam ? course.questionCount : <span className="faint">none</span>}
         </td>
         <td>
-          <button className="secondary" onClick={onToggle}>
+          <button className="secondary info" onClick={onToggle}>
             {expanded ? "Hide" : "Contents"}
           </button>
         </td>

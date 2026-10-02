@@ -304,10 +304,10 @@ export function ExamPane() {
       </div>
 
       <div className="toolbar">
-        <button onClick={check} disabled={!ready || busy}>
+        <button className="secondary info" onClick={check} disabled={!ready || busy}>
           {busy && !plan ? "Checking…" : "Check the mix"}
         </button>
-        <button className="secondary" onClick={build} disabled={!ready || busy}>
+        <button onClick={build} disabled={!ready || busy}>
           {busy ? "Building…" : "Build the paper"}
         </button>
         {!balanced && topics.length > 0 && (

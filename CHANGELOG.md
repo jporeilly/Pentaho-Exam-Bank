@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-02
+
 ### Added
 
 - **How alike each exam's questions are.** The report now gives every
@@ -24,7 +26,39 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   percentile 45%, and the one real duplicate found (pdi-2hr-lab's
   2hr-m4-q1 and 2hr-m4-q5, the same scenario reworded with the same key)
   62%. `core/similarity.py`; `similarity` on each exam and `nearest` on
-  each item in `GET /api/report`.
+  each item in `GET /api/report`. The Report screen shows it as a section
+  after Findings (the median and highest score, a chart of
+  nearest-neighbour scores in 10% buckets, the closest pairs with their
+  shared words) and a **Nearest** column in the question list.
+
+### Changed
+
+- **Colour that means something.** Every action was the one teal or a
+  grey, and in the editor a correct answer looked exactly like a
+  distractor. Colour now says what a thing is, the same on every screen
+  (Getting Started has the key):
+
+  - **Correct answers are green with a tick, distractors rose with a
+    cross**, in the editor, in Generate's review, in the AI's proposed
+    answer key and rewrite (both now listed as marked options instead of
+    plain bullets), and as a green chip in Import's preview. One component,
+    `answers.tsx`; the marks are drawn by CSS so they never join a label's
+    text or an option's spoken name.
+  - **Buttons by role**: teal for a screen's main action, violet for
+    anything the AI does, green for adding or keeping, blue for looking
+    without changing, red for removing or rejecting. Filled for the main
+    action, a tint with coloured text for secondary ones. Status moves take
+    the colour of where they lead (Approve green, Reject red). A Delete in a
+    table row stays red text on nothing until the row is hovered, so a list
+    is not a column of red.
+  - **The side bar's three groups each have a colour** (blue for bringing
+    questions in, teal for working with them, violet for the app itself):
+    icons, headings and the current screen's bar, with a thin band in the
+    three colours under the header.
+  - The row being edited in the Bank was tinted red, a leftover from the
+    old branding; it is teal now that red means a wrong answer.
+  - "select all" on multi-select questions in the Report reads
+    "multi-select", matching the house form ("Which two …?").
 
 ## [1.10.0] - 2026-09-30
 

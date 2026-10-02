@@ -220,7 +220,7 @@ export function AdminPane({ onChanged }: { onChanged?: () => void } = {}) {
         </div>
 
         <div className="toolbar">
-          <button className="secondary" onClick={preview} disabled={busy}>
+          <button className="secondary info" onClick={preview} disabled={busy}>
             {busy && !plan ? "Counting…" : "Count what would go"}
           </button>
           {!narrowed && (
@@ -272,6 +272,7 @@ function Backups({
           onChange={(e) => setLabel(e.target.value)}
         />
         <button
+          className="add"
           onClick={() => {
             onCreate(label);
             setLabel("");

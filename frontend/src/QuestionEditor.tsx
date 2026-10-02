@@ -25,6 +25,7 @@ import {
   type Problem,
   type Question,
 } from "./api";
+import { AnswerMark, OptionList } from "./answers";
 import { useVocabulary } from "./vocabulary";
 
 // `Problem` is defined in api.ts and re-exported here. Import reports the same
@@ -41,6 +42,14 @@ const MOVE_LABEL: Record<string, string> = {
   approved: "Approve",
   rejected: "Reject",
   retired: "Retire",
+};
+
+/** A move's colour says where it leads: approving is green, rejecting or
+ *  retiring red, and the moves between review stages blue. */
+const MOVE_TONE: Record<string, string> = {
+  approved: "add",
+  rejected: "danger",
+  retired: "danger",
 };
 
 const STATUS_NAME: Record<string, string> = {
@@ -193,14 +202,22 @@ function Field({
   label,
   hint,
   children,
+  className,
+  mark,
 }: {
   label: string;
   hint?: string;
   children: React.ReactNode;
+  className?: string;
+  /** A tick (correct answers) or a cross (distractors) before the label. */
+  mark?: "correct" | "wrong";
 }) {
   return (
-    <label className="field">
-      <span className="field-label">{label}</span>
+    <label className={className ? `field ${className}` : "field"}>
+      <span className="field-label">
+        {mark && <AnswerMark kind={mark} />}
+        {label}
+      </span>
       {children}
       {hint && <span className="faint field-hint">{hint}</span>}
     </label>
@@ -491,11 +508,11 @@ export function QuestionEditor({
       </Field>
 
       {draft.question_type === "single" ? (
-        <Field label="Correct answer">
+        <Field label="Correct answer" className="answer-key" mark="correct">
           <input value={draft.key} onChange={(e) => set("key", e.target.value)} />
         </Field>
       ) : (
-        <Field label="Correct answers" hint="One per line.">
+        <Field label="Correct answers" hint="One per line." className="answer-key" mark="correct">
           <textarea
             rows={3}
             value={draft.keys.join("\n")}
@@ -509,13 +526,13 @@ export function QuestionEditor({
         </div>
       ))}
 
-      <Field label="Distractors">
+      <Field label="Distractors" mark="wrong">
         <div className="options">
           {draft.distractors.map((d, i) => (
-            <div key={i} className="option-row">
+            <div key={i} className="option-row wrong">
               <input value={d} onChange={(e) => setDistractor(i, e.target.value)} />
               <button
-                className="secondary"
+                className="secondary danger"
                 onClick={() =>
                   set(
                     "distractors",
@@ -528,7 +545,7 @@ export function QuestionEditor({
             </div>
           ))}
           <button
-            className="secondary"
+            className="secondary add"
             onClick={() => set("distractors", [...draft.distractors, ""])}
           >
             Add a distractor
@@ -588,7 +605,7 @@ export function QuestionEditor({
 
         {/* Only the moves the model will accept. See /api/lifecycle. */}
         {moves.map((m) => (
-          <button key={m} className="secondary" onClick={() => move(m)} disabled={busy || dirty}>
+          <button key={m} className={`secondary ${MOVE_TONE[m] ?? "info"}`} onClick={() => move(m)} disabled={busy || dirty}>
             {MOVE_LABEL[m] ?? m}
           </button>
         ))}
@@ -597,7 +614,7 @@ export function QuestionEditor({
         )}
 
         <button
-          className="secondary"
+          className="secondary ai"
           onClick={runRewrite}
           disabled={busy || aiBusy !== ""}
           title="Ask the model for a better wording. Nothing is saved until you do."
@@ -605,7 +622,7 @@ export function QuestionEditor({
           {aiBusy === "rewrite" ? "Rewriting…" : "AI rewrite"}
         </button>
         <button
-          className="secondary"
+          className="secondary ai"
           onClick={runReview}
           disabled={busy || aiBusy !== ""}
           title="Ask the model whether this can be answered correctly as written."
@@ -613,7 +630,7 @@ export function QuestionEditor({
           {aiBusy === "review" ? "Checking…" : "AI check answers"}
         </button>
         <button
-          className="secondary"
+          className="secondary ai"
           onClick={runExplanation}
           disabled={busy || aiBusy !== ""}
           title="Ask the model to write the explanation from the course's pages. Nothing is saved until you do."
@@ -621,7 +638,7 @@ export function QuestionEditor({
           {aiBusy === "explanation" ? "Writing…" : "AI explanation"}
         </button>
         <button
-          className="secondary"
+          className="secondary ai"
           onClick={runAnswer}
           disabled={busy || aiBusy !== ""}
           title="Ask the model which options are correct, from the course's pages. Nothing is saved until you do."
@@ -667,6 +684,7 @@ export function QuestionEditor({
           )}
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
             <button
+              className="add"
               onClick={() => {
                 setDraft({ ...draft, explanation: explained.explanation });
                 setExplained(null);
@@ -693,18 +711,16 @@ export function QuestionEditor({
               ? `Decided from ${answered.groundedOn}.`
               : "No course page was found for this question, so the model decided without one."}
           </p>
-          <ul>
-            {answered.analysis.map((a) => (
-              <li key={a.option} className={a.correct ? "" : "muted"}>
-                <strong>{a.correct ? "Correct" : "Wrong"}:</strong> {a.option}
-                {a.quote && a.quote.toLowerCase() !== "none" && (
-                  <div className="faint" style={{ fontSize: "0.9em" }}>&ldquo;{a.quote}&rdquo;</div>
-                )}
-              </li>
-            ))}
-          </ul>
+          <OptionList
+            label="Proposed answer key"
+            options={answered.analysis.map((a) => ({
+              text: a.option,
+              correct: a.correct,
+              note: a.quote && a.quote.toLowerCase() !== "none" ? `“${a.quote}”` : undefined,
+            }))}
+          />
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-            <button onClick={acceptAnswer}>Use this answer</button>
+            <button className="add" onClick={acceptAnswer}>Use this answer</button>
             <button className="secondary" onClick={() => setAnswered(null)}>
               Discard
             </button>
@@ -725,12 +741,16 @@ export function QuestionEditor({
             <p className="muted" style={{ marginTop: 8 }}>{proposal.proposed.scenario}</p>
           )}
           <p style={{ marginTop: 8 }}>{proposal.proposed.stem}</p>
-          <ul className="muted" style={{ fontSize: "0.9em" }}>
-            <li>Key: {proposal.proposed.key}</li>
-            {proposal.proposed.distractors.map((d, i) => (
-              <li key={i}>{d}</li>
-            ))}
-          </ul>
+          <OptionList
+            label="Proposed options"
+            options={[
+              ...(proposal.proposed.question_type === "multi"
+                ? proposal.proposed.keys
+                : [proposal.proposed.key]
+              ).map((k) => ({ text: k, correct: true })),
+              ...proposal.proposed.distractors.map((d) => ({ text: d, correct: false })),
+            ]}
+          />
           {(proposal.notes ?? []).map((n) => (
             <div key={n.message} className="advice">
               {n.field === "scenario" ? "Scenario: " : "Question: "}
@@ -744,7 +764,7 @@ export function QuestionEditor({
             </div>
           )}
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-            <button onClick={acceptProposal} disabled={proposal.problems.length > 0}>
+            <button className="add" onClick={acceptProposal} disabled={proposal.problems.length > 0}>
               Use this
             </button>
             <button className="secondary" onClick={() => setProposal(null)}>

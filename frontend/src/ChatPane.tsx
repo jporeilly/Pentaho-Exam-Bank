@@ -238,7 +238,7 @@ export function ChatPane({
             <p className="faint">Try one of these, or ask your own.</p>
             <div className="chat-starters">
               {STARTERS.map((s) => (
-                <button type="button" key={s} className="secondary" onClick={() => ask(s)} disabled={noSource}>
+                <button type="button" key={s} className="secondary ai" onClick={() => ask(s)} disabled={noSource}>
                   {s}
                 </button>
               ))}
@@ -293,11 +293,11 @@ export function ChatPane({
           }}
         />
         {busy ? (
-          <button type="button" className="secondary" onClick={() => controller.current?.abort()}>
+          <button type="button" className="secondary danger" onClick={() => controller.current?.abort()}>
             <CircleStop size={14} aria-hidden="true" /> Stop
           </button>
         ) : (
-          <button type="submit" disabled={!input.trim() || noSource}>
+          <button type="submit" className="ai" disabled={!input.trim() || noSource}>
             <Send size={14} aria-hidden="true" /> Ask
           </button>
         )}

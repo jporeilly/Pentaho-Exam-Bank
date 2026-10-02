@@ -90,6 +90,12 @@ A question with more than one correct answer. It asks for them in its own
 words ("Which two …?"); the Content Manager adds *(Choose two)*, and a
 candidate scores only by choosing exactly the right set.
 
+## Nearest neighbour
+
+A question's most similar other question in the same exam, with a similarity
+score from 0 to 100%. The Report shows it for every question; see
+[Question similarity](../guides/07-report.md#question-similarity).
+
 ## Pass mark
 
 The percentage an attempt must reach to pass, set in `exam.json`.

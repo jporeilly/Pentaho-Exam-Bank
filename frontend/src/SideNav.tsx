@@ -128,7 +128,9 @@ export function SideNav({
   return (
     <nav className={"rail" + (collapsed ? " is-collapsed" : "")} aria-label="Sections">
       {navGroups(questions).map((group) => (
-        <div className="rail__group" key={group.heading}>
+        // group-content / group-questions / group-system: each stage of the
+        // work has its colour (icons, heading, the current page's bar).
+        <div className={`rail__group group-${group.heading.toLowerCase()}`} key={group.heading}>
           {/* Still rendered when collapsed, for screen readers: the grouping
               is the point of the rail and it should not vanish with the
               labels. */}

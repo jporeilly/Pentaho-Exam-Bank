@@ -14,6 +14,11 @@ Click a row to open the editor. It holds the scenario, the question, the type
 (one correct answer, or several), the correct answer(s), the distractors, the
 explanation, the topic, the difficulty and the Bloom level.
 
+The correct answer is a **green** field marked ✓ and each distractor a **rose**
+field marked ✗, so the two never look alike. The same colours mark the options
+wherever they are shown: Generate's review, the AI's proposed answer key and
+rewrite, and Import's preview.
+
 Two kinds of message appear under the fields:
 
 - **Problems** (red) stop a save, because the question could not be graded:

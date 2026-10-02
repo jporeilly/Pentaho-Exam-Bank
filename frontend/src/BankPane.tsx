@@ -203,7 +203,7 @@ export function BankPane({
           ))}
         </select>
         <a href={api.exportUrl(exportFormat, { text, certification_id: certification, status })}>
-          <button className="secondary">Export</button>
+          <button className="secondary info">Export</button>
         </a>
       </div>
 
@@ -293,7 +293,7 @@ export function BankPane({
                   </td>
                   <td>
                     <button
-                      className="secondary"
+                      className="secondary danger"
                       onClick={(e) => {
                         // The row opens the editor; this button must not
                         // also open it behind the confirm dialog.

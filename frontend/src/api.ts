@@ -768,6 +768,39 @@ export interface ReportExam extends ReportSummary {
   bar: ReportBar | null;
   findings: ReportFinding[];
   topics: ReportTopic[];
+  /** How alike the exam's questions are (`core/similarity.py`). Absent
+   *  from a server older than 1.11.0. */
+  similarity?: ReportSimilarity;
+}
+
+export type SimilarityBand = "duplicate" | "overlap" | "distinct";
+
+export interface ReportSimilarityPair {
+  a: string;
+  b: string;
+  aStem: string;
+  bStem: string;
+  /** 0-100. */
+  score: number;
+  band: SimilarityBand;
+  /** The words carrying most of the score, largest first. */
+  shared: string[];
+}
+
+export interface ReportSimilarity {
+  /** Pairs at or above the overlap band, closest first, capped. */
+  pairs: ReportSimilarityPair[];
+  /** Counts over ALL such pairs, not just the ones listed. */
+  duplicates: number;
+  overlaps: number;
+  median: number;
+  max: number;
+}
+
+export interface ReportNearest {
+  id: string;
+  score: number;
+  band: SimilarityBand;
 }
 
 export interface ReportItem {
@@ -780,6 +813,9 @@ export interface ReportItem {
   multi: boolean;
   stem: string;
   poolOrder: number;
+  /** The most similar other question in the same exam; null when the exam
+   *  holds only this one, absent from a server older than 1.11.0. */
+  nearest?: ReportNearest | null;
 }
 
 export interface Report extends ReportSummary {

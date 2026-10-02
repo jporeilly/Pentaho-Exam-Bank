@@ -113,6 +113,33 @@ async function openEditor() {
   return screen.findByText("Edit question");
 }
 
+describe("how the answers look", () => {
+  it("draws the correct answer green and each distractor rose, without changing their labels", async () => {
+    fakeServer(question());
+    await openEditor();
+
+    // The tick is CSS, so the label still reads exactly "Correct answer".
+    const key = screen.getByLabelText("Correct answer");
+    expect(key).toHaveValue("CSV input");
+    expect(key.closest(".field")).toHaveClass("answer-key");
+
+    const distractor = screen.getByDisplayValue("Table output");
+    expect(distractor.closest(".option-row")).toHaveClass("wrong");
+    expect(screen.getByDisplayValue("Sort rows").closest(".option-row")).toHaveClass("wrong");
+  });
+
+  it("colours the buttons by what they do", async () => {
+    fakeServer(question());
+    await openEditor();
+
+    expect(screen.getByRole("button", { name: "AI answer key" })).toHaveClass("secondary", "ai");
+    expect(screen.getByRole("button", { name: "Add a distractor" })).toHaveClass("secondary", "add");
+    expect(screen.getAllByRole("button", { name: "Remove" })[0]).toHaveClass("secondary", "danger");
+    expect(screen.getByRole("button", { name: "Reject" })).toHaveClass("danger");
+    expect(screen.getByRole("button", { name: "Send for review" })).toHaveClass("info");
+  });
+});
+
 describe("saving a question", () => {
   it("says it was saved, and the message survives the Bank refreshing the row", async () => {
     fakeServer(question());

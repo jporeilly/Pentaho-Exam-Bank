@@ -65,7 +65,9 @@ needs a human read before it is approved.
   question that opens with statements, and a stray "Choose …" count, as you
   type. AI rewrite is told the same form, and says when it broke it.
 - **Report** each exam against its certification bar: Bloom depth, scenario
-  coverage, draw headroom, the review pipeline, and findings to act on.
+  coverage, draw headroom, the review pipeline, findings to act on, and how
+  alike its questions are (each question's nearest neighbour, near-duplicates
+  flagged).
 - **Publish** the approved questions into a course's `exam.json` as a merge,
   and push them to the courses repo with the course version bumped and the
   change logged.
@@ -82,7 +84,7 @@ needs a human read before it is approved.
 | **Import** | Bring questions in from a file, with a gradeability and duplicate check first |
 | **AI Chat** | Ask about the app or about Pentaho's products; answers come from this app's docs and docs.pentaho.com, with their sources |
 | **Bank** | Search and filter the questions; edit, save, AI rewrite, check, explanation and answer key, move through review |
-| **Report** | One exam at a time against its certification bar |
+| **Report** | One exam at a time against its certification bar, with question similarity |
 | **Exam paper** | A printable, topic-weighted PDF exam |
 | **Publish** | Write the questions into a course, and push them to the courses repo |
 | **Settings** | Your name, the AI provider and model, the Pentaho docs connection, folders, defaults, thresholds |
@@ -170,6 +172,7 @@ Pentaho-Exam-Bank/
 │   │   ├── course_sync.py       #     adopting and re-syncing course exams
 │   │   ├── publisher.py, distribution.py  # publish into a course; push to the courses repo
 │   │   ├── report.py            #     the Report's arithmetic and the certification bars
+│   │   ├── similarity.py        #     each question's nearest neighbour within its exam
 │   │   ├── stem_text.py         #     the question form: counts, scenarios, statements
 │   │   ├── question_generation.py, generation_prompts.py, question_refinement.py
 │   │   ├── question_importer.py #     CSV/JSON/Excel/QTI/Moodle/text/exam.json import
