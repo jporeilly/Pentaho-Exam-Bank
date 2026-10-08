@@ -7,6 +7,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Changed
+
+- **Exam paper, redesigned.** The page is three numbered steps - choose the
+  questions, set the mix, print the paper - divided by hairlines, the numbers
+  in the Questions group's teal. Every certification is a checkbox with its
+  question count, two or three to a row, with Select all and Clear and a
+  running "2 of 11 chosen - 94 questions"; the four-row multi-select it
+  replaces hid seven of eleven behind a scroll and needed Ctrl-click.
+  Difficulty and review status are one line of labelled pills instead of
+  checkboxes whose labels wrapped. Step 2 states the pool the weights divide
+  ("44 questions at the statuses chosen") and its empty state points back to
+  step 1. The answer key is one plain checkbox line, and the disabled Check
+  and Build buttons now say why beside them (no certification, nothing to
+  weight, or weights not at 100%). Logic unchanged; 4 new tests (seen failing
+  on the old pane), 371 frontend tests pass.
+
 ## [1.13.0] - 2026-10-08
 
 ### Added

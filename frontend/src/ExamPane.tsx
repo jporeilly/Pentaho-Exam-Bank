@@ -173,147 +173,185 @@ export function ExamPane() {
 
   const ready = certIds.length > 0 && topics.length > 0 && balanced;
 
+  // What the topics can supply at the chosen statuses: the pool the weights
+  // divide. Difficulty narrows it further when the paper is drawn.
+  const pool = topics.reduce((sum, t) => sum + t.questionCount, 0);
+  const chosenTotal = certifications
+    .filter((c) => certIds.includes(c.id))
+    .reduce((sum, c) => sum + c.questionCount, 0);
+
+  // A disabled button says nothing about why. The reason sits beside it.
+  const blocked =
+    certIds.length === 0
+      ? "Choose at least one certification."
+      : topics.length === 0
+        ? "Nothing to weight at the statuses chosen."
+        : !balanced
+          ? "Weights must total 100%."
+          : "";
+
   return (
     <div className="card exam">
       <p className="lede">
-        Draws a paper from the bank in the proportions you set. Checking first
-        is worth it: where a topic has too few questions the rest are taken
+        Draws a paper from the bank in the proportions you set. Check the mix
+        before you build: where a topic has too few questions the rest are taken
         from elsewhere, so the paper comes out the right length and the wrong
         mix.
       </p>
 
       {error && <div className="banner">{error}</div>}
 
-      <div className="field-row">
-        <label className="field">
-          <span className="field-label">Draw from</span>
-          <select
-            multiple
-            size={Math.min(4, Math.max(2, certifications.length))}
-            value={certIds}
-            onChange={(e) =>
-              setCertIds([...e.target.selectedOptions].map((o) => o.value))
-            }
-          >
-            {certifications.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} — {c.questionCount}
-              </option>
-            ))}
-          </select>
-          <span className="faint field-hint">Ctrl-click for more than one.</span>
-        </label>
-
-        <label className="field">
-          <span className="field-label">Questions</span>
-          <input
-            type="number"
-            min={1}
-            max={500}
-            value={total}
-            onChange={(e) => setTotal(Math.max(1, Number(e.target.value) || 1))}
-          />
-        </label>
-
-        <label className="field">
-          <span className="field-label">Seed</span>
-          <input
-            value={seed}
-            placeholder="Blank for a new paper each time"
-            onChange={(e) => setSeed(e.target.value)}
-          />
-          <span className="faint field-hint">
-            The same seed reprints the same paper.
+      <Step n={1} title="Choose the questions">
+        <div className="cert-bar">
+          <span className="field-label" id="exam-draw-from">
+            Draw from
           </span>
-        </label>
-      </div>
-
-      <div className="field-row">
-        <fieldset className="field checks">
-          <legend className="field-label">Difficulty</legend>
-          {vocabulary.difficulties.map((d) => (
-            <label key={d} className="check">
-              <input
-                type="checkbox"
-                checked={difficulties.includes(d)}
-                onChange={() => toggle(difficulties, d, setDifficulties)}
-              />
-              {d}
-            </label>
-          ))}
-        </fieldset>
-
-        <fieldset className="field checks">
-          <legend className="field-label">Draw questions that are</legend>
-          {STATUSES.map((s) => (
-            <label key={s.value} className="check">
-              <input
-                type="checkbox"
-                checked={statuses.includes(s.value)}
-                onChange={() => toggle(statuses, s.value, setStatuses)}
-              />
-              {s.label}
-            </label>
-          ))}
-        </fieldset>
-      </div>
-
-      {certIds.length === 0 ? (
-        <div className="empty">Choose a certification to draw from.</div>
-      ) : topics.length === 0 ? (
-        <div className="banner warn">
-          Nothing in those certifications has a topic at the statuses chosen, so
-          there is nothing to weight. Questions adopted from a course are drafts
-          until they are reviewed.
+          <span className="faint">
+            {certIds.length === 0
+              ? `${certifications.length} certifications`
+              : `${certIds.length} of ${certifications.length} chosen · ${chosenTotal} questions`}
+          </span>
+          <span className="spacer" />
+          <button
+            className="secondary"
+            onClick={() => setCertIds(certifications.map((c) => c.id))}
+            disabled={certifications.length === 0 || certIds.length === certifications.length}
+          >
+            Select all
+          </button>
+          <button
+            className="secondary"
+            onClick={() => setCertIds([])}
+            disabled={certIds.length === 0}
+          >
+            Clear
+          </button>
         </div>
-      ) : (
-        <Weights
-          topics={topics}
-          weights={weights}
-          total={total}
-          weightTotal={weightTotal}
-          balanced={balanced}
-          onChange={setWeights}
-        />
-      )}
+        <div className="cert-list" role="group" aria-labelledby="exam-draw-from">
+          {certifications.map((c) => (
+            <label key={c.id} className="cert-option">
+              <input
+                type="checkbox"
+                checked={certIds.includes(c.id)}
+                onChange={() => toggle(certIds, c.id, setCertIds)}
+              />
+              <span className="cert-name">{c.name}</span>
+              <span className="cert-count">{c.questionCount}</span>
+            </label>
+          ))}
+        </div>
 
-      <div className="field-row">
-        <label className="field">
-          <span className="field-label">Exam title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="field-label">Institution</span>
-          <input
-            value={institution}
-            placeholder="Optional, printed on the cover"
-            onChange={(e) => setInstitution(e.target.value)}
+        <div className="filter-row">
+          <Chips
+            label="Difficulty"
+            options={vocabulary.difficulties.map((d) => ({ value: d, label: d }))}
+            selected={difficulties}
+            onToggle={(v) => toggle(difficulties, v, setDifficulties)}
           />
-        </label>
-        <label className="field">
-          <span className="field-label">Answer key</span>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={answerKey}
-              onChange={(e) => setAnswerKey(e.target.checked)}
-            />
-            Include at the end
-          </label>
-        </label>
-      </div>
+          <Chips
+            label="Review status"
+            options={STATUSES}
+            selected={statuses}
+            onToggle={(v) => toggle(statuses, v, setStatuses)}
+          />
+        </div>
+      </Step>
 
-      <div className="toolbar">
-        <button className="secondary info" onClick={check} disabled={!ready || busy}>
-          {busy && !plan ? "Checking…" : "Check the mix"}
-        </button>
-        <button onClick={build} disabled={!ready || busy}>
-          {busy ? "Building…" : "Build the paper"}
-        </button>
-        {!balanced && topics.length > 0 && (
-          <span className="faint">Weights must total 100%.</span>
+      <Step
+        n={2}
+        title="Set the mix"
+        aside={
+          topics.length > 0 ? (
+            <span className="faint">
+              {pool} {pool === 1 ? "question" : "questions"} at the statuses chosen
+            </span>
+          ) : null
+        }
+      >
+        <div className="exam-numbers">
+          <label className="field exam-count">
+            <span className="field-label">Questions</span>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={total}
+              onChange={(e) => setTotal(Math.max(1, Number(e.target.value) || 1))}
+            />
+          </label>
+          <label className="field exam-seed">
+            <span className="field-label">Seed</span>
+            <input
+              value={seed}
+              inputMode="numeric"
+              placeholder="Blank for a new paper each time"
+              onChange={(e) => setSeed(e.target.value)}
+            />
+            <span className="faint field-hint">The same seed reprints the same paper.</span>
+          </label>
+        </div>
+
+        {certIds.length === 0 ? (
+          <div className="exam-empty">
+            Choose a certification in step 1 and its topics appear here, ready to
+            weight.
+          </div>
+        ) : topics.length === 0 ? (
+          <div className="banner warn">
+            Nothing in those certifications has a topic at the statuses chosen, so
+            there is nothing to weight. Questions adopted from a course are drafts
+            until they are reviewed.
+          </div>
+        ) : (
+          <Weights
+            topics={topics}
+            weights={weights}
+            total={total}
+            weightTotal={weightTotal}
+            balanced={balanced}
+            onChange={setWeights}
+          />
         )}
-      </div>
+      </Step>
+
+      <Step n={3} title="Print the paper">
+        <div className="exam-numbers">
+          <label className="field exam-title">
+            <span className="field-label">Exam title</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </label>
+          <label className="field exam-title">
+            <span className="field-label">Institution</span>
+            <input
+              value={institution}
+              placeholder="Optional, printed on the cover"
+              onChange={(e) => setInstitution(e.target.value)}
+            />
+          </label>
+        </div>
+        <label className="check exam-key">
+          <input
+            type="checkbox"
+            checked={answerKey}
+            onChange={(e) => setAnswerKey(e.target.checked)}
+          />
+          Include the answer key at the end
+        </label>
+
+        <div className="toolbar exam-actions">
+          <button className="secondary info" onClick={check} disabled={!ready || busy}>
+            {busy && !plan ? "Checking…" : "Check the mix"}
+          </button>
+          <button onClick={build} disabled={!ready || busy}>
+            {busy ? "Building…" : "Build the paper"}
+          </button>
+          {blocked && (
+            <span className={blocked.startsWith("Weights") ? "unbalanced" : "faint"}>
+              {blocked}
+            </span>
+          )}
+        </div>
+      </Step>
 
       {built && (
         <div className="plan card">
@@ -325,6 +363,65 @@ export function ExamPane() {
       )}
 
       {plan && <Plan plan={plan} />}
+    </div>
+  );
+}
+
+/** One numbered stage of the paper: what to draw from, the mix, the print. */
+function Step({
+  n,
+  title,
+  aside,
+  children,
+}: {
+  n: number;
+  title: string;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const id = `exam-step-${n}`;
+  return (
+    <section className="exam-step" aria-labelledby={id}>
+      <div className="exam-step__head">
+        <span className="exam-step__n" aria-hidden="true">
+          {n}
+        </span>
+        <h3 id={id}>{title}</h3>
+        {aside && <span className="exam-step__aside">{aside}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** A labelled row of checkboxes drawn as pills: each choice reads at a glance. */
+function Chips({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  const id = `chips-${label.toLowerCase().replace(/\s+/g, "-")}`;
+  return (
+    <div className="chips" role="group" aria-labelledby={id}>
+      <span className="field-label" id={id}>
+        {label}
+      </span>
+      {options.map((o) => (
+        <label key={o.value} className="chip">
+          <input
+            type="checkbox"
+            checked={selected.includes(o.value)}
+            onChange={() => onToggle(o.value)}
+          />
+          {o.label}
+        </label>
+      ))}
     </div>
   );
 }

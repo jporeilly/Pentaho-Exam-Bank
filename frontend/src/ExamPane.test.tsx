@@ -10,6 +10,10 @@ const CERTS = [
     id: "cert-1", name: "DI Practitioner", description: "",
     sourceType: "pcm", sourceRef: "developer-di-practitioner", questionCount: 48,
   },
+  {
+    id: "cert-2", name: "BA Practitioner", description: "",
+    sourceType: "pcm", sourceRef: "analyst-ba-practitioner", questionCount: 44,
+  },
 ];
 
 const TOPICS: ExamTopic[] = [
@@ -61,7 +65,7 @@ function mockApi(handlers: {
 }
 
 async function pickCertification() {
-  await userEvent.selectOptions(await screen.findByLabelText(/Draw from/), "cert-1");
+  await userEvent.click(await screen.findByRole("checkbox", { name: /DI Practitioner/ }));
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -73,6 +77,58 @@ describe("setting up the weighting", () => {
 
     expect(await screen.findByText(/Choose a certification/)).toBeInTheDocument();
     expect(calls.some((c) => c.path.includes("/exam/topics"))).toBe(false);
+  });
+
+  it("lists every certification as a checkbox, with its question count", async () => {
+    // The multi-select it replaced showed four rows and hid the rest behind a
+    // scroll; every certification is now on screen at once.
+    mockApi();
+    render(<ExamPane />);
+
+    const group = await screen.findByRole("group", { name: "Draw from" });
+    const boxes = await within(group).findAllByRole("checkbox");
+    expect(boxes).toHaveLength(2);
+    expect(within(group).getByText("48")).toBeInTheDocument();
+    expect(within(group).getByText("44")).toBeInTheDocument();
+    expect(screen.getByText("2 certifications")).toBeInTheDocument();
+  });
+
+  it("selects all and clears in one click, and counts what is chosen", async () => {
+    mockApi();
+    render(<ExamPane />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Select all" }));
+    expect(screen.getByRole("checkbox", { name: /DI Practitioner/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /BA Practitioner/ })).toBeChecked();
+    expect(screen.getByText("2 of 2 chosen · 92 questions")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Select all" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByRole("checkbox", { name: /DI Practitioner/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeDisabled();
+  });
+
+  it("says why the buttons are disabled", async () => {
+    mockApi();
+    render(<ExamPane />);
+
+    expect(await screen.findByText("Choose at least one certification.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build the paper" })).toBeDisabled();
+
+    await pickCertification();
+    expect(await screen.findByText("21 questions at the statuses chosen")).toBeInTheDocument();
+    expect(screen.queryByText("Choose at least one certification.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build the paper" })).toBeEnabled();
+  });
+
+  it("draws difficulty and review status as labelled groups of checkboxes", async () => {
+    mockApi();
+    render(<ExamPane />);
+
+    const status = await screen.findByRole("group", { name: "Review status" });
+    expect(within(status).getByRole("checkbox", { name: "Approved" })).toBeChecked();
+    expect(within(status).getByRole("checkbox", { name: "Drafts" })).not.toBeChecked();
+    expect(screen.getByRole("group", { name: "Difficulty" })).toBeInTheDocument();
   });
 
   it("splits the topics evenly to a total of 100", async () => {

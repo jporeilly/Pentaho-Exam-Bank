@@ -420,10 +420,65 @@ tbody tr.selected { background: color-mix(in srgb, var(--accent) 10%, transparen
 .refused li { padding: 5px 0 5px 11px; border-left: 3px solid var(--bad); margin-bottom: 4px; }
 
 /* ── Exam paper ────────────────────────────────────────────────────── */
-.exam .lede { margin: 0 0 16px; color: var(--text-dim); max-width: 66ch; }
-.exam select[multiple] { padding: 4px; }
-.checks { border: 0; margin: 10px 0; padding: 0; }
-.checks legend { padding: 0; }
+.exam .lede { margin: 0 0 6px; color: var(--text-dim); max-width: 66ch; }
+/* Three numbered stages, divided by a hairline rather than boxed: the card is
+   already the box. The numbers take the Questions group's teal, the colour of
+   the rail item that opened this page. (Until 1.13.1 this was three rows of
+   equal columns: a four-line multi-select that hid seven of eleven
+   certifications behind a scroll, and checkbox labels that wrapped.) */
+.exam-step { padding: 18px 0 6px; border-top: 1px solid var(--line); }
+.exam .lede + .exam-step, .exam .banner + .exam-step { border-top: 0; padding-top: 10px; }
+.exam-step__head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.exam-step__head h3 { margin: 0; font-size: 15px; color: var(--text-strong); }
+.exam-step__aside { margin-left: auto; font-size: 13px; font-variant-numeric: tabular-nums; }
+.exam-step__n {
+  flex: none; width: 24px; height: 24px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--group-questions); color: #fff; font-size: 12.5px; font-weight: 700;
+}
+.cert-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.cert-bar .field-label { margin: 0; }
+.cert-bar button { padding: 4px 10px; font-size: 13px; }
+/* Every certification at once: eleven fit in two or three columns, where the
+   multi-select showed four. */
+.cert-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 6px; }
+.cert-option {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 7px 12px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-raised); cursor: pointer;
+}
+.cert-option:hover { background: var(--bg-hover); }
+.cert-option:has(input:checked) {
+  border-color: var(--group-questions);
+  background: color-mix(in srgb, var(--group-questions) 9%, var(--bg-raised));
+}
+.cert-option input, .chip input { margin: 0; accent-color: var(--group-questions); }
+.cert-name { flex: 1; min-width: 0; }
+.cert-count { color: var(--text-faint); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.filter-row { display: flex; flex-wrap: wrap; gap: 10px 36px; margin: 16px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.chips .field-label { margin: 0 6px 0 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  padding: 4px 12px 4px 9px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--bg-raised); cursor: pointer;
+}
+.chip:hover { background: var(--bg-hover); }
+.chip:has(input:checked) {
+  border-color: var(--group-questions); color: var(--text-strong);
+  background: color-mix(in srgb, var(--group-questions) 9%, var(--bg-raised));
+}
+.exam-numbers { display: flex; flex-wrap: wrap; gap: 0 16px; align-items: flex-start; }
+.exam-numbers .field { margin: 0 0 10px; }
+.exam-count { flex: 0 0 130px; }
+.exam-seed { flex: 0 1 320px; }
+.exam-title { flex: 1 1 260px; max-width: 420px; }
+.exam-empty {
+  padding: 18px; margin: 4px 0 12px; text-align: center; color: var(--text-dim);
+  border: 1px dashed var(--line); border-radius: var(--radius);
+}
+.exam-key { margin: 2px 0 0; }
+.exam-actions { margin: 16px 0 4px; }
 .check {
   display: inline-flex;
   align-items: center;
