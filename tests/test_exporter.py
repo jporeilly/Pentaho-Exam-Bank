@@ -249,3 +249,63 @@ class TestPCMExamJSON:
         exam = self._exam(tmp_path, questions)
         q2 = exam["questions"][1]
         assert set(q2["options"]) == {"AES", "RSA", "HTTP", "FTP"}
+
+
+class TestInlineFormatting:
+    """**bold**, *italic* and `code` (1.12.0): each format writes them its own
+    way, and none passes the text through as markup."""
+
+    @pytest.fixture
+    def formatted(self):
+        return [Question(
+            id="f1",
+            scenario="A *developer* edits <config>.",
+            stem="Which file holds **global** variables?",
+            question_type="single",
+            key="`kettle.properties`",
+            distractors=["repositories.xml", "A *.ktr file"],
+            explanation="**Correct:** `kettle.properties` is read at start-up.",
+            topic="Variables", difficulty="Easy", bloom_level="Remember",
+        )]
+
+    def test_moodle_writes_html(self, formatted, tmp_path):
+        path = tmp_path / "q.xml"
+        export_moodle_xml(formatted, path)
+        root = ET.parse(path).getroot()
+        q = root.find("question[@type='multichoice']")
+        text = q.find("questiontext/text").text
+        assert "<strong>global</strong>" in text
+        assert "<em>developer</em>" in text and "&lt;config&gt;" in text
+        answers = [a.find("text").text for a in q.findall("answer")]
+        assert "<code>kettle.properties</code>" in answers
+        assert "A *.ktr file" in answers, "a wildcard is not formatting"
+        assert "<strong>Correct:</strong>" in q.find("generalfeedback/text").text
+        assert q.find("name/text").text == "Which file holds global variables?"
+
+    def test_qti_uses_inline_elements(self, formatted, tmp_path):
+        path = tmp_path / "q.xml"
+        export_qti21(formatted, path)
+        xml = path.read_text(encoding="utf-8")
+        assert "<strong>global</strong>" in xml
+        assert "<code>kettle.properties</code>" in xml
+        assert "**" not in xml and "`" not in xml
+
+    def test_text_is_plain(self, formatted, tmp_path):
+        path = tmp_path / "q.txt"
+        export_text(formatted, path)
+        out = path.read_text(encoding="utf-8")
+        assert "Which file holds global variables?" in out
+        assert "kettle.properties" in out and "`" not in out and "**" not in out
+        assert "A *.ktr file" in out
+
+    def test_docx_styles_runs(self, formatted, tmp_path):
+        docx = pytest.importorskip("docx")
+        from exam_bank.core.exporter import export_docx
+
+        path = tmp_path / "q.docx"
+        export_docx(formatted, path)
+        runs = [r for p in docx.Document(str(path)).paragraphs for r in p.runs]
+        by_text = {r.text: r for r in runs}
+        assert by_text["global"].bold and by_text["developer"].italic
+        assert by_text["kettle.properties"].font.name == "Consolas"
+        assert not any("**" in r.text or "`" in r.text for r in runs)

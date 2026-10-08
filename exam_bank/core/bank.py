@@ -546,8 +546,8 @@ class ExamBankDB:
         )
         self.conn.commit()
 
-    def search(
-        self,
+    @staticmethod
+    def _where(
         text: str = "",
         topic: str = "",
         difficulty: str = "",
@@ -557,21 +557,33 @@ class ExamBankDB:
         source_file: str = "",
         assigned_sme: str = "",
         tags: str = "",
-        limit: int = 100,
-        offset: int = 0,
-        sort: str = DEFAULT_SORT,
-    ) -> List[Question]:
-        conditions = []
-        params = []
+        id: str = "",
+        exact_topic: str = "",
+    ) -> tuple[str, list]:
+        """The WHERE clause and its parameters for a set of filters.
 
+        One builder for search() and search_count(): they used to carry a
+        copy each, so a filter added to the page would also have to be
+        remembered in the count, or the pager would lie."""
+        conditions: list[str] = []
+        params: list = []
         if text:
+            # "answers" means every option: the key, the keys and the
+            # distractors, not only key_answer.
             conditions.append(
-                "(stem LIKE ? OR scenario LIKE ? OR key_answer LIKE ? OR explanation LIKE ?)"
+                "(stem LIKE ? OR scenario LIKE ? OR key_answer LIKE ? OR keys_json LIKE ?"
+                " OR distractors LIKE ? OR explanation LIKE ?)"
             )
-            params.extend([f"%{text}%"] * 4)
+            params.extend([f"%{text}%"] * 6)
+        if id:
+            conditions.append("id LIKE ?")
+            params.append(f"%{id}%")
         if topic:
             conditions.append("topic LIKE ?")
             params.append(f"%{topic}%")
+        if exact_topic:
+            conditions.append("topic = ?")
+            params.append(exact_topic)
         if difficulty:
             conditions.append("difficulty = ?")
             params.append(difficulty)
@@ -593,62 +605,27 @@ class ExamBankDB:
         if tags:
             conditions.append("tags LIKE ?")
             params.append(f'%"{tags}"%')
+        return (" AND ".join(conditions) if conditions else "1=1"), params
 
-        where = " AND ".join(conditions) if conditions else "1=1"
+    def search(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        sort: str = DEFAULT_SORT,
+        **filters: str,
+    ) -> List[Question]:
+        """A page of questions matching the filters (see _where)."""
+        where, params = self._where(**filters)
         # An unknown sort falls back rather than raising: this is a query
         # string from a URL, and a typo should not 500 a browse.
         order = SORTS.get(sort, SORTS[DEFAULT_SORT])
         query = f"SELECT * FROM questions WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-
-        rows = self.conn.execute(query, params).fetchall()
+        rows = self.conn.execute(query, [*params, limit, offset]).fetchall()
         return [self._row_to_question(r) for r in rows]
 
-    def search_count(
-        self,
-        text: str = "",
-        topic: str = "",
-        difficulty: str = "",
-        bloom_level: str = "",
-        status: str = "",
-        certification_id: str = "",
-        source_file: str = "",
-        assigned_sme: str = "",
-        tags: str = "",
-    ) -> int:
+    def search_count(self, **filters: str) -> int:
         """Return total matching question count for pagination."""
-        conditions = []
-        params = []
-        if text:
-            conditions.append(
-                "(stem LIKE ? OR scenario LIKE ? OR key_answer LIKE ? OR explanation LIKE ?)"
-            )
-            params.extend([f"%{text}%"] * 4)
-        if topic:
-            conditions.append("topic LIKE ?")
-            params.append(f"%{topic}%")
-        if difficulty:
-            conditions.append("difficulty = ?")
-            params.append(difficulty)
-        if bloom_level:
-            conditions.append("bloom_level = ?")
-            params.append(bloom_level)
-        if status:
-            conditions.append("status = ?")
-            params.append(status)
-        if certification_id:
-            conditions.append("certification_id = ?")
-            params.append(certification_id)
-        if source_file:
-            conditions.append("source_file LIKE ?")
-            params.append(f"%{source_file}%")
-        if assigned_sme:
-            conditions.append("assigned_sme = ?")
-            params.append(assigned_sme)
-        if tags:
-            conditions.append("tags LIKE ?")
-            params.append(f'%"{tags}"%')
-        where = " AND ".join(conditions) if conditions else "1=1"
+        where, params = self._where(**filters)
         row = self.conn.execute(f"SELECT COUNT(*) FROM questions WHERE {where}", params).fetchone()
         return row[0] if row else 0
 

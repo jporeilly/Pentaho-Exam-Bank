@@ -7,6 +7,50 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-08
+
+### Added
+
+- **Filter every column of the Bank.** A filter row under the headings:
+  part of an ID (`m4`, `ba-m4-q9`), a search of the text, and a topic,
+  difficulty, Bloom level or status picked from a list. Difficulty and
+  Bloom level have their own columns now (they were a grey line under the
+  question). A picked topic matches EXACTLY - on today's bank *Concepts* is
+  9 questions where the old contains-match took 25, catching *Key
+  Concepts*, *Concepts & Terminology* and *Components & Concepts*. **Clear
+  filters** appears while any is set. Export takes the same filters, so it
+  still exports exactly what is on screen. New: `GET /api/topics`, and `id`
+  and `exact_topic` on `GET /api/questions` and `GET /api/export/{fmt}`.
+- **Bold, italic and code in question text.** A **B** / *I* / `</>` bar in
+  the editor, and Ctrl+B / Ctrl+I, format the selection in the scenario,
+  the question, an answer or the explanation; pressing again takes it off,
+  and the words stay selected. A field with formatting previews it. The
+  text keeps the markers (`**`, `*`, `` ` ``), so CSV, JSON and the course's
+  `exam.json` carry them unchanged; the Bank's list, Generate's review, the
+  report and the AI panels draw them; Word writes bold, italic and Consolas
+  runs, QTI inline `<strong>`/`<em>`/`<code>`, Moodle HTML; plain text and
+  the PDF paper show the words without them. The Content Manager's quiz
+  draws the same three (its next release). The rules are strict, because
+  the bank already held asterisks that are not formatting: run over all 489
+  questions, a looser first version turned JSONPath wildcards (`$.orders[*]
+  ... email[*]`) into a 271-character italic. Now it formats 24 spans, all
+  intended - nine backtick names and the emphasised words authors had
+  typed. One contract, `frontend/src/inlineFormat.cases.json`, tests the
+  TypeScript parser, the Python one (`core/inline_format.py`) and the
+  Content Manager's copy.
+
+### Changed
+
+- **Search reaches every answer.** The text search took the key and the
+  explanation but not the distractors or a multi-select's keys, though its
+  box said "answers". It takes all of them now.
+- **The Bank's table stays up** while it loads and when nothing matches, so
+  the filters - and the search, which now lives in the table - are never
+  out of reach.
+- `search()` and `search_count()` share one WHERE builder (`_where`): each
+  carried its own copy, and a filter added to one but not the other would
+  make the pager disagree with the page.
+
 ## [1.11.0] - 2026-10-02
 
 ### Added

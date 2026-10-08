@@ -7,6 +7,7 @@ import {
   type Question,
   type QuestionFilters,
 } from "./api";
+import { Formatted, plainText } from "./inlineFormat";
 import { QuestionEditor } from "./QuestionEditor";
 import { statusLabel, useVocabulary } from "./vocabulary";
 
@@ -46,6 +47,14 @@ export function BankPane({
   const [text, setText] = useState("");
   const [certification, setCertification] = useState("");
   const [status, setStatus] = useState("");
+  // The column filters. Topic is matched EXACTLY: it is picked from the
+  // list, and a contains-match would also catch a topic whose name holds
+  // another's.
+  const [idText, setIdText] = useState("");
+  const [topic, setTopic] = useState("");
+  const [difficulty, setDifficulty] = useState("");
+  const [bloom, setBloom] = useState("");
+  const [topics, setTopics] = useState<{ topic: string; questionCount: number }[]>([]);
   // Course order by default. `pool_order` is the position each question held
   // in its course's exam.json, and the authors write a pool lab by lab, so
   // this is the order the workshops teach it - and topics come out as
@@ -71,14 +80,34 @@ export function BankPane({
       .catch(() => {});
   }, []);
 
-  const filters: QuestionFilters = {
+  // What is being looked at, minus paging: the list and Export share it, so
+  // what is exported is exactly what is on screen.
+  const selection: QuestionFilters = {
     text,
+    id: idText,
+    exact_topic: topic,
+    difficulty,
+    bloom_level: bloom,
     certification_id: certification,
     status,
-    sort,
-    limit: pageSize,
-    offset,
   };
+  const filters: QuestionFilters = { ...selection, sort, limit: pageSize, offset };
+  const columnFiltered = Boolean(text || idText || topic || difficulty || bloom || status);
+
+  // The topics on offer follow the certification. One that is not in the
+  // new certification is dropped, or the table would sit empty for a
+  // reason no longer on screen.
+  useEffect(() => {
+    api
+      .topics(certification)
+      .then((answer) => {
+        // A filter's choices must never be able to take the table down.
+        const list = Array.isArray(answer) ? answer : [];
+        setTopics(list);
+        setTopic((t) => (t && !list.some((x) => x.topic === t) ? "" : t));
+      })
+      .catch(() => setTopics([]));
+  }, [certification]);
 
   const load = useCallback(() => {
     // Every keystroke starts a request, and they do not necessarily come back
@@ -103,7 +132,7 @@ export function BankPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // `sort` was missing here, so on the first page (offset already 0)
     // switching Course order / Recently updated changed nothing on screen.
-  }, [text, certification, status, sort, offset, pageSize]);
+  }, [text, idText, topic, difficulty, bloom, certification, status, sort, offset, pageSize]);
 
   useEffect(load, [load]);
 
@@ -138,8 +167,18 @@ export function BankPane({
     setOffset(0);
   };
 
+  const clearColumnFilters = () =>
+    changeFilter(() => {
+      setText("");
+      setIdText("");
+      setTopic("");
+      setDifficulty("");
+      setBloom("");
+      setStatus("");
+    });
+
   async function remove(question: Question) {
-    if (!confirm(`Delete "${question.stem.slice(0, 60)}"?`)) return;
+    if (!confirm(`Delete "${plainText(question.stem).slice(0, 60)}"?`)) return;
     try {
       await api.deleteQuestion(question.id);
       load();
@@ -155,12 +194,6 @@ export function BankPane({
   return (
     <div>
       <div className="toolbar">
-        <input
-          className="grow"
-          placeholder="Search stems, scenarios, answers…"
-          value={text}
-          onChange={(e) => changeFilter(() => setText(e.target.value))}
-        />
         <select
           value={certification}
           onChange={(e) => changeFilter(() => setCertification(e.target.value))}
@@ -182,14 +215,12 @@ export function BankPane({
           <option value="course">Course order</option>
           <option value="updated">Recently updated</option>
         </select>
-        <select value={status} onChange={(e) => changeFilter(() => setStatus(e.target.value))}>
-          <option value="">Any status</option>
-          {vocabulary.statuses.map((s) => (
-            <option key={s} value={s}>
-              {statusLabel(vocabulary, s)}
-            </option>
-          ))}
-        </select>
+        {columnFiltered && (
+          <button className="secondary" onClick={clearColumnFilters}>
+            Clear filters
+          </button>
+        )}
+        <span className="spacer" />
         <select
           value={exportFormat}
           onChange={(e) => setExportFormat(e.target.value)}
@@ -202,7 +233,7 @@ export function BankPane({
             </option>
           ))}
         </select>
-        <a href={api.exportUrl(exportFormat, { text, certification_id: certification, status })}>
+        <a href={api.exportUrl(exportFormat, selection)}>
           <button className="secondary info">Export</button>
         </a>
       </div>
@@ -250,24 +281,109 @@ export function BankPane({
       )}
 
       <div className="card">
-        {!questions ? (
-          <div className="empty">Loading…</div>
-        ) : questions.length === 0 ? (
-          <div className="empty">No questions match those filters.</div>
-        ) : (
-          <table>
+        {/* Always drawn - loading, empty or failed: the filter row is where
+            the search lives, and the only way to undo a filter that emptied
+            the table. */}
+        <table>
             <thead>
               <tr>
                 <th style={{ width: 110 }}>ID</th>
                 <th>Question</th>
                 <th style={{ width: 150 }}>Topic</th>
+                <th style={{ width: 96 }}>Difficulty</th>
+                <th style={{ width: 104 }}>Bloom</th>
                 <th style={{ width: 100 }}>Status</th>
                 <th style={{ width: 60, textAlign: "right" }}>Order</th>
                 <th style={{ width: 80 }} />
               </tr>
+              <tr className="filter-row">
+                <th>
+                  <input
+                    aria-label="Filter by ID"
+                    placeholder="ID"
+                    value={idText}
+                    onChange={(e) => changeFilter(() => setIdText(e.target.value))}
+                  />
+                </th>
+                <th>
+                  <input
+                    aria-label="Search question text"
+                    placeholder="Search stems, scenarios, answers…"
+                    value={text}
+                    onChange={(e) => changeFilter(() => setText(e.target.value))}
+                  />
+                </th>
+                <th>
+                  <select
+                    aria-label="Filter by topic"
+                    value={topic}
+                    onChange={(e) => changeFilter(() => setTopic(e.target.value))}
+                  >
+                    <option value="">All</option>
+                    {topics.map((t) => (
+                      <option key={t.topic} value={t.topic}>
+                        {t.topic} ({t.questionCount})
+                      </option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select
+                    aria-label="Filter by difficulty"
+                    value={difficulty}
+                    onChange={(e) => changeFilter(() => setDifficulty(e.target.value))}
+                  >
+                    <option value="">All</option>
+                    {vocabulary.difficulties.map((d) => (
+                      <option key={d}>{d}</option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select
+                    aria-label="Filter by Bloom level"
+                    value={bloom}
+                    onChange={(e) => changeFilter(() => setBloom(e.target.value))}
+                  >
+                    <option value="">All</option>
+                    {vocabulary.bloomLevels.map((b) => (
+                      <option key={b}>{b}</option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select
+                    aria-label="Filter by status"
+                    value={status}
+                    onChange={(e) => changeFilter(() => setStatus(e.target.value))}
+                  >
+                    <option value="">All</option>
+                    {vocabulary.statuses.map((s) => (
+                      <option key={s} value={s}>
+                        {statusLabel(vocabulary, s)}
+                      </option>
+                    ))}
+                  </select>
+                </th>
+                <th />
+                <th />
+              </tr>
             </thead>
             <tbody>
-              {questions.map((q) => (
+              {!questions ? (
+                <tr>
+                  <td colSpan={8} className="empty">
+                    Loading…
+                  </td>
+                </tr>
+              ) : questions.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="empty">
+                    No questions match those filters.
+                  </td>
+                </tr>
+              ) : null}
+              {(questions ?? []).map((q) => (
                 <tr
                   key={q.id}
                   className={editing?.id === q.id ? "q-row selected" : "q-row"}
@@ -275,16 +391,17 @@ export function BankPane({
                 >
                   <td className="mono faint">{q.id.slice(0, 12)}</td>
                   <td>
-                    {q.stem}
+                    <Formatted text={q.stem} />
                     <div className="faint" style={{ fontSize: 12 }}>
                       {q.question_type === "multi"
                         ? `${q.keys.length} correct`
                         : "1 correct"}{" "}
-                      of {q.option_order.length || q.distractors.length + 1} ·{" "}
-                      {q.difficulty} · {q.bloom_level}
+                      of {q.option_order.length || q.distractors.length + 1}
                     </div>
                   </td>
                   <td className="muted">{q.topic}</td>
+                  <td className="muted">{q.difficulty}</td>
+                  <td className="muted">{q.bloom_level}</td>
                   <td>
                     <span className={`pill ${q.status}`}>{q.status.replace("_", " ")}</span>
                   </td>
@@ -308,7 +425,6 @@ export function BankPane({
               ))}
             </tbody>
           </table>
-        )}
       </div>
 
       <div className="toolbar" style={{ marginTop: 14 }}>

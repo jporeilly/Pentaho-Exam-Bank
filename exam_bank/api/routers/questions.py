@@ -60,6 +60,14 @@ def lifecycle() -> dict[str, Any]:
     }}
 
 
+@router.get("/api/topics")
+def list_topics(certification_id: str = "", db: ExamBankDB = Depends(get_db)) -> list[dict[str, Any]]:
+    """Every topic with questions, in the order the course teaches them -
+    for the Bank's topic filter. One certification's when given."""
+    counts = db.get_topic_counts(certification_id)
+    return [{"topic": topic, "questionCount": n} for topic, n in counts.items()]
+
+
 @router.get("/api/questions")
 def list_questions(
     db: ExamBankDB = Depends(get_db),
@@ -71,6 +79,8 @@ def list_questions(
     certification_id: str = "",
     assigned_sme: str = "",
     tags: str = "",
+    question_id: str = Query("", alias="id"),
+    exact_topic: str = "",
     sort: str = "course",
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -80,7 +90,7 @@ def list_questions(
     filters = dict(
         text=text, topic=topic, difficulty=difficulty, bloom_level=bloom_level,
         status=status, certification_id=certification_id,
-        assigned_sme=assigned_sme, tags=tags,
+        assigned_sme=assigned_sme, tags=tags, id=question_id, exact_topic=exact_topic,
     )
     # sort is deliberately NOT in filters: search_count shares that dict
     # and takes no ordering - a count does not have one.

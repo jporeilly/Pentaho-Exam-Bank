@@ -13,7 +13,7 @@
  * same STATUS_TRANSITIONS table the model enforces, so the buttons offered
  * are exactly the moves that will be accepted.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   ApiError,
@@ -26,7 +26,19 @@ import {
   type Question,
 } from "./api";
 import { AnswerMark, OptionList } from "./answers";
+import { Formatted, hasFormat, toggleWrap, type Marker } from "./inlineFormat";
 import { useVocabulary } from "./vocabulary";
+
+/** How a field's formatting will look, shown only once it has some. */
+function FormatPreview({ text }: { text: string }) {
+  if (!hasFormat(text)) return null;
+  return (
+    <span className="format-preview">
+      <span className="visually-hidden">Preview: </span>
+      <Formatted text={text} />
+    </span>
+  );
+}
 
 // `Problem` is defined in api.ts and re-exported here. Import reports the same
 // shape from the server, computed by `core/validation.py` from the same rules,
@@ -295,6 +307,72 @@ export function QuestionEditor({
     set("distractors", next);
   }
 
+  // Formatting: the bar's buttons and Ctrl+B / Ctrl+I act on the text field
+  // the author is in. Each field hands over a FUNCTIONAL update, so a button
+  // pressed long after the field was focused cannot write a stale draft
+  // over edits made since.
+  const active = useRef<{
+    el: HTMLInputElement | HTMLTextAreaElement;
+    apply: (value: string) => void;
+  } | null>(null);
+  const [canFormat, setCanFormat] = useState(false);
+
+  // React writes the new value and drops the caret at the end, so the
+  // selection goes back on the same words once that value is committed.
+  // A layout effect, not requestAnimationFrame: a frame never comes while
+  // the window is not painting, and the selection was simply lost.
+  const pendingSelection = useRef<{
+    el: HTMLInputElement | HTMLTextAreaElement;
+    start: number;
+    end: number;
+  } | null>(null);
+  useLayoutEffect(() => {
+    const p = pendingSelection.current;
+    if (!p) return;
+    pendingSelection.current = null;
+    p.el.focus();
+    p.el.setSelectionRange(p.start, p.end);
+  }, [draft]);
+
+  function applyFormat(marker: Marker) {
+    const a = active.current;
+    if (!a) return;
+    const { el } = a;
+    const r = toggleWrap(el.value, el.selectionStart ?? 0, el.selectionEnd ?? 0, marker);
+    pendingSelection.current = { el, start: r.start, end: r.end };
+    a.apply(r.value);
+    setNotice("");
+  }
+
+  function formattable(apply: (value: string) => void) {
+    return {
+      "data-fmt": "1",
+      onFocus: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        active.current = { el: e.currentTarget, apply };
+        setCanFormat(true);
+      },
+      onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+        const marker = ({ b: "**", i: "*" } as Record<string, Marker>)[e.key.toLowerCase()];
+        if (!marker) return;
+        e.preventDefault();
+        active.current = { el: e.currentTarget, apply };
+        applyFormat(marker);
+      },
+    };
+  }
+
+  const setText =
+    (field: "scenario" | "stem" | "key" | "explanation") => (value: string) =>
+      setDraft((d) => ({ ...d, [field]: value }));
+  const setKeysText = (value: string) => setDraft((d) => ({ ...d, keys: value.split("\n") }));
+  const setDistractorText = (i: number) => (value: string) =>
+    setDraft((d) => {
+      const next = [...d.distractors];
+      next[i] = value;
+      return { ...d, distractors: next };
+    });
+
   async function save() {
     setBusy(true);
     setError("");
@@ -451,7 +529,17 @@ export function QuestionEditor({
   };
 
   return (
-    <div className="editor card">
+    <div
+      className="editor card"
+      onFocus={(e) => {
+        // Into a field that takes no formatting (Topic, a select): the bar
+        // has nothing to act on. The bar's own buttons keep the field.
+        const t = e.target as HTMLElement;
+        if (t.dataset.fmt || t.closest(".format-bar")) return;
+        active.current = null;
+        setCanFormat(false);
+      }}
+    >
       <div className="toolbar">
         <strong>Edit question</strong>
         <code className="mono faint">{draft.id.length > 16 ? draft.id.slice(0, 12) : draft.id}</code>
@@ -464,6 +552,35 @@ export function QuestionEditor({
 
       {error && <div className="banner">{error}</div>}
 
+      <div className="format-bar" role="toolbar" aria-label="Text formatting">
+        {(
+          [
+            ["**", "Bold (Ctrl+B)", <strong key="b">B</strong>],
+            ["*", "Italic (Ctrl+I)", <em key="i">I</em>],
+            ["`", "Code", <code key="c">{"</>"}</code>],
+          ] as [Marker, string, React.ReactNode][]
+        ).map(([marker, title, face]) => (
+          <button
+            key={marker}
+            type="button"
+            className="secondary fmt"
+            title={title}
+            aria-label={title}
+            disabled={!canFormat}
+            // Keep the field focused, and its selection, through the click.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => applyFormat(marker)}
+          >
+            {face}
+          </button>
+        ))}
+        <span className="faint format-hint">
+          {canFormat
+            ? "Formats the selection in the field you are in."
+            : "Click into the scenario, question, an answer or the explanation to format it."}
+        </span>
+      </div>
+
       <Field
         label="Scenario"
         hint="Statements that set the scene, shown above the question. Not a question."
@@ -472,7 +589,9 @@ export function QuestionEditor({
           rows={2}
           value={draft.scenario}
           onChange={(e) => set("scenario", e.target.value)}
+          {...formattable(setText("scenario"))}
         />
+        <FormatPreview text={draft.scenario} />
       </Field>
       {notesFor("scenario").map((n) => (
         <div key={n.message} className="advice">
@@ -484,7 +603,13 @@ export function QuestionEditor({
         label="Question"
         hint="Only the question, ending in “?”. The number to choose is added for you."
       >
-        <textarea rows={3} value={draft.stem} onChange={(e) => set("stem", e.target.value)} />
+        <textarea
+          rows={3}
+          value={draft.stem}
+          onChange={(e) => set("stem", e.target.value)}
+          {...formattable(setText("stem"))}
+        />
+        <FormatPreview text={draft.stem} />
       </Field>
       {forField("stem").map((p) => (
         <div key={p.message} className="problem">
@@ -509,7 +634,12 @@ export function QuestionEditor({
 
       {draft.question_type === "single" ? (
         <Field label="Correct answer" className="answer-key" mark="correct">
-          <input value={draft.key} onChange={(e) => set("key", e.target.value)} />
+          <input
+            value={draft.key}
+            onChange={(e) => set("key", e.target.value)}
+            {...formattable(setText("key"))}
+          />
+          <FormatPreview text={draft.key} />
         </Field>
       ) : (
         <Field label="Correct answers" hint="One per line." className="answer-key" mark="correct">
@@ -517,7 +647,11 @@ export function QuestionEditor({
             rows={3}
             value={draft.keys.join("\n")}
             onChange={(e) => set("keys", e.target.value.split("\n"))}
+            {...formattable(setKeysText)}
           />
+          {draft.keys.map((k, i) => (
+            <FormatPreview key={i} text={k} />
+          ))}
         </Field>
       )}
       {forField("keys").map((p) => (
@@ -530,7 +664,11 @@ export function QuestionEditor({
         <div className="options">
           {draft.distractors.map((d, i) => (
             <div key={i} className="option-row wrong">
-              <input value={d} onChange={(e) => setDistractor(i, e.target.value)} />
+              <input
+                value={d}
+                onChange={(e) => setDistractor(i, e.target.value)}
+                {...formattable(setDistractorText(i))}
+              />
               <button
                 className="secondary danger"
                 onClick={() =>
@@ -542,6 +680,7 @@ export function QuestionEditor({
               >
                 Remove
               </button>
+              <FormatPreview text={d} />
             </div>
           ))}
           <button
@@ -563,7 +702,9 @@ export function QuestionEditor({
           rows={3}
           value={draft.explanation}
           onChange={(e) => set("explanation", e.target.value)}
+          {...formattable(setText("explanation"))}
         />
+        <FormatPreview text={draft.explanation} />
       </Field>
 
       <div className="field-row">
@@ -675,7 +816,9 @@ export function QuestionEditor({
               ? `Written from ${explained.groundedOn}.`
               : "No course page was found for this question, so the model wrote it without one. Check every fact."}
           </p>
-          <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{explained.explanation}</p>
+          <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+            <Formatted text={explained.explanation} />
+          </p>
           {explained.unnamed.length > 0 && (
             <div className="advice">
               It never names: {explained.unnamed.join("; ")}. The explanation should
@@ -738,9 +881,13 @@ export function QuestionEditor({
             <p className="muted">The model returned this unchanged.</p>
           )}
           {proposal.proposed.scenario && (
-            <p className="muted" style={{ marginTop: 8 }}>{proposal.proposed.scenario}</p>
+            <p className="muted" style={{ marginTop: 8 }}>
+              <Formatted text={proposal.proposed.scenario} />
+            </p>
           )}
-          <p style={{ marginTop: 8 }}>{proposal.proposed.stem}</p>
+          <p style={{ marginTop: 8 }}>
+            <Formatted text={proposal.proposed.stem} />
+          </p>
           <OptionList
             label="Proposed options"
             options={[

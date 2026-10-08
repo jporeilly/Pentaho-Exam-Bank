@@ -25,7 +25,9 @@ function mockApi(questions: Question[], total = questions.length) {
     const body = String(url).includes("/api/certifications")
       ? [{ id: "c1", name: "DI Practitioner", description: "", sourceType: "pcm",
            sourceRef: "developer-di-practitioner", questionCount: total }]
-      : { items: questions, total, limit: 25, offset: 0 };
+      : String(url).includes("/api/topics")
+        ? [{ topic: "Getting Started", questionCount: 3 }, { topic: "Joins", questionCount: 2 }]
+        : { items: questions, total, limit: 25, offset: 0 };
     return Promise.resolve(
       new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } }),
     );
@@ -89,7 +91,7 @@ describe("BankPane", () => {
     await waitFor(() => expect(calls.at(-1)).toContain("offset=25"));
 
     await userEvent.selectOptions(
-      screen.getByDisplayValue("Any status"),
+      screen.getByRole("combobox", { name: "Filter by status" }),
       "approved",
     );
     await waitFor(() => {
@@ -154,7 +156,7 @@ describe("BankPane", () => {
     render(<BankPane />);
     await screen.findByText("Which step reads a file?");
 
-    await userEvent.selectOptions(screen.getByDisplayValue("Any status"), "draft");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Filter by status" }), "draft");
 
     await waitFor(() => {
       const link = screen.getByRole("button", { name: "Export" })
@@ -221,5 +223,47 @@ describe("export", () => {
     await waitFor(() => expect(href()).toContain("/api/export/docx"));
     await userEvent.selectOptions(screen.getByLabelText("Export format"), "csv");
     expect(href()).toContain("/api/export/csv");
+  });
+});
+
+describe("column filters", () => {
+  it("filters by id, exact topic, difficulty and Bloom level, and Export follows", async () => {
+    const calls = mockApi([question()], 1);
+    render(<BankPane />);
+    await screen.findByText("Which step reads a file?");
+
+    await userEvent.type(screen.getByRole("textbox", { name: "Filter by ID" }), "m4");
+    // The topic list comes from the bank, so wait for it to arrive.
+    await screen.findByRole("option", { name: "Joins (2)" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Filter by topic" }), "Joins");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Filter by difficulty" }), "Hard");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Filter by Bloom level" }), "Analyze");
+
+    await waitFor(() => {
+      const last = calls.filter((c) => c.includes("/api/questions")).at(-1)!;
+      expect(last).toContain("id=m4");
+      // Picked from the list, so matched exactly - not a contains-match.
+      expect(last).toContain("exact_topic=Joins");
+      expect(last).not.toMatch(/[?&]topic=/);
+      expect(last).toContain("difficulty=Hard");
+      expect(last).toContain("bloom_level=Analyze");
+    });
+    const href = screen.getByRole("button", { name: "Export" }).closest("a")!.getAttribute("href")!;
+    expect(href).toContain("exact_topic=Joins");
+    expect(href).toContain("id=m4");
+  });
+
+  it("keeps the filter row when nothing matches, and Clear filters undoes them all", async () => {
+    const calls = mockApi([], 0);
+    render(<BankPane />);
+    await screen.findByText("No questions match those filters.");
+
+    const id = screen.getByRole("textbox", { name: "Filter by ID" });
+    await userEvent.type(id, "zz");
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    expect(id).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+    await waitFor(() => expect(calls.at(-1)).not.toContain("id="));
   });
 });

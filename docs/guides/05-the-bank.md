@@ -2,13 +2,22 @@
 
 The **Bank** screen lists the questions, 25 to a page by default.
 
-- **Search** matches stems, scenarios and answers.
-- Filter by **certification** and **status**.
+- Pick a **certification** above the table to see one course's questions.
+- The row under the column headings **filters each column**: type part of an
+  **ID** (`m4`, `ba-m4-q9`), **search** the text (the scenario, the question,
+  every answer and the explanation), or pick a **topic**, **difficulty**,
+  **Bloom level** or **status**. Filters combine. A topic is matched exactly,
+  so *Concepts* does not also bring in *Key Concepts*. **Clear filters**
+  appears while any is set, and the filter row stays when nothing matches, so
+  you can always undo what emptied the table.
 - **Course order** sorts a course's questions in the order its exam was
   written, lab by lab; **Recently updated** puts the latest edits first.
 - **Export** downloads what the filters currently show, in the format chosen
   beside it: CSV, JSON, QTI 2.1, Moodle XML, plain text or Word. It starts on
   the default export format set in [Settings](../admin/01-settings.md).
+
+The list draws each question's formatting (**bold**, *italic*, `code`), as
+the course will.
 
 Click a row to open the editor. It holds the scenario, the question, the type
 (one correct answer, or several), the correct answer(s), the distractors, the
@@ -18,6 +27,14 @@ The correct answer is a **green** field marked ✓ and each distractor a **rose*
 field marked ✗, so the two never look alike. The same colours mark the options
 wherever they are shown: Generate's review, the AI's proposed answer key and
 rewrite, and Import's preview.
+
+**Formatting.** The **B**, *I* and **`</>`** buttons above the fields make the
+selected words bold, italic or code, in whichever text field you are in (the
+scenario, the question, an answer or the explanation); **Ctrl+B** and
+**Ctrl+I** do the same. Pressing one again on the same words takes it off. A
+field that carries formatting shows a preview under it. See
+[Formatting](../writing/01-how-a-question-is-written.md#formatting) for what
+the markers are and where they show.
 
 Two kinds of message appear under the fields:
 

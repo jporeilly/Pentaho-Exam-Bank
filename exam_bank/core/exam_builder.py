@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from fpdf import FPDF
 
 from .bank import _TOPIC_ORDER, Question, ExamBankDB
+from .inline_format import to_plain
 from .stem_text import question_only
 
 
@@ -520,7 +521,7 @@ def generate_exam_pdf(
             # Indent with a subtle left border
             y_sc = pdf.get_y()
             pdf.set_x(pdf.l_margin + 8)
-            pdf.multi_cell(page_w - 8, 5, _latin1_safe(q.scenario))
+            pdf.multi_cell(page_w - 8, 5, _latin1_safe(to_plain(q.scenario)))
             _accent_bar(pdf, pdf.l_margin + 4, y_sc, pdf.get_y() - y_sc, w=0.4)
             pdf.set_text_color(0, 0, 0)
             pdf.ln(2)
@@ -540,7 +541,7 @@ def generate_exam_pdf(
         pdf.set_font("Helvetica", "B", 10)
         # The paper adds its own count, so a count already in the stem
         # would print twice.
-        stem_text = _latin1_safe(question_only(q.stem))
+        stem_text = _latin1_safe(question_only(to_plain(q.stem)))
         if num_correct > 1:
             stem_text += f"  (Choose {num_correct})"
         pdf.multi_cell(0, 6, f" {stem_text}")
@@ -574,7 +575,7 @@ def generate_exam_pdf(
             pdf.set_xy(pdf.l_margin + 16, y_ch)
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(40, 40, 40)
-            pdf.multi_cell(page_w - 16, 5.5, _latin1_safe(choice))
+            pdf.multi_cell(page_w - 16, 5.5, _latin1_safe(to_plain(choice)))
             pdf.set_text_color(0, 0, 0)
             pdf.ln(1)
 
@@ -630,7 +631,7 @@ def generate_exam_pdf(
                     pdf.set_font("Helvetica", "", 9)
                     pdf.set_text_color(80, 80, 80)
                     pdf.set_x(pdf.l_margin + 14)
-                    pdf.multi_cell(page_w - 14, 5, _latin1_safe(explanation))
+                    pdf.multi_cell(page_w - 14, 5, _latin1_safe(to_plain(explanation)))
                     pdf.set_text_color(0, 0, 0)
 
                 # Left accent bar spanning the entry

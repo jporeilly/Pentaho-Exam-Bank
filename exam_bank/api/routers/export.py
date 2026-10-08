@@ -61,6 +61,8 @@ def export_questions(
     certification_id: str = "",
     assigned_sme: str = "",
     tags: str = "",
+    question_id: str = Query("", alias="id"),
+    exact_topic: str = "",
     filename: str = "",
 ) -> FileResponse:
     """Export the questions matching the filters, as a download.
@@ -74,7 +76,7 @@ def export_questions(
     questions = _selection(db, dict(
         text=text, topic=topic, difficulty=difficulty, bloom_level=bloom_level,
         status=status, certification_id=certification_id,
-        assigned_sme=assigned_sme, tags=tags,
+        assigned_sme=assigned_sme, tags=tags, id=question_id, exact_topic=exact_topic,
     ))
 
     path = _temp_path(extension)

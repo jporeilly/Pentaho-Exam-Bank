@@ -23,6 +23,7 @@ import {
   type ReportNearest,
   type ReportSummary,
 } from "./api";
+import { Formatted } from "./inlineFormat";
 
 const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
 
@@ -247,7 +248,10 @@ function Similarity({ exam, items }: { exam: ReportExam; items: ReportItem[] }) 
         <p className="muted" style={{ marginTop: 14 }}>
           No pair reaches 40%. The closest is <span className="mono">{closest.id}</span> and{" "}
           <span className="mono">{closest.nearest!.id}</span> at {closest.nearest!.score}%: &ldquo;
-          {closest.stem}&rdquo; and &ldquo;{stemOf[closest.nearest!.id] ?? ""}&rdquo;
+          <Formatted text={closest.stem} />
+          &rdquo; and &ldquo;
+          <Formatted text={stemOf[closest.nearest!.id] ?? ""} />
+          &rdquo;
         </p>
       )}
     </>
@@ -560,7 +564,9 @@ export function ReportPane({ openCourse = "" }: { openCourse?: string }) {
                   </td>
                   <td className={"scen" + (q.scenario ? " yes" : "")}>{q.scenario ? "✓" : "–"}</td>
                   <td>
-                    <span className="stem">{q.stem}</span>
+                    <span className="stem">
+                      <Formatted text={q.stem} />
+                    </span>
                     {q.multi && <span className="pill report-multi">multi-select</span>}
                     <div className="mono faint">{q.id}</div>
                   </td>

@@ -11,6 +11,7 @@
  * "Correct answer" still reads as "Correct answer", and the option's words
  * are its name.
  */
+import { Formatted } from "./inlineFormat";
 
 export function AnswerMark({ kind }: { kind: "correct" | "wrong" }) {
   return <span className={`answer-mark ${kind}`} aria-hidden />;
@@ -32,7 +33,7 @@ export function OptionList({ options, label }: { options: ShownOption[]; label?:
           <AnswerMark kind={o.correct ? "correct" : "wrong"} />
           <span>
             <span className="visually-hidden">{o.correct ? "Correct: " : "Wrong: "}</span>
-            {o.text}
+            <Formatted text={o.text} />
             {o.note && <span className="opt-quote">{o.note}</span>}
           </span>
         </li>

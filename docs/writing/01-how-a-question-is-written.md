@@ -35,6 +35,28 @@ Shown after the exam. It says why each correct answer is right and each
 distractor is wrong, naming each option by its text, never by a letter,
 because options are shuffled.
 
+## Formatting
+
+Three kinds, and only these: **bold**, *italic* and `code`. Use code for
+things the learner types or sees on screen - a file (`kettle.properties`),
+a variable (`${INPUT_DIR}`), a step or a menu path - and bold or italic
+sparingly, for the one word a question turns on (*not*, *first*, *only*).
+
+They are stored as markers in the text, the way they are typed: `**bold**`,
+`*italic*`, `` `code` ``. The editor's buttons and Ctrl+B / Ctrl+I write them
+for you. Because they are plain text, they travel with the question:
+
+- **The course** draws them in the exam once its Content Manager is a release
+  later than 0.7.12; an older one shows the markers as typed.
+- **Word, QTI and Moodle** exports carry them as real bold, italic and code.
+- **CSV and JSON** keep the markers, so a round trip loses nothing.
+- **Plain text** and the **printed exam paper** show the words without them.
+
+An asterisk that is not formatting stays an asterisk: `[Sales] * [Quantity]`,
+`$.orders[*]`, `industrial/*/sensor` and `*.ktr` are left alone, and
+underscores never format. To show a literal `**` pair, put a backslash in
+front of each asterisk (`\*`).
+
 ## When a question breaks the form
 
 The editor checks the scenario and the question as you type, and shows a note

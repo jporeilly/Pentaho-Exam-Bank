@@ -7,7 +7,7 @@
  * prop changed, and BankPane hands the saved question straight back in. Only
  * the two together show it.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -294,5 +294,79 @@ describe("AI explanation and AI answer key", () => {
     await screen.findByRole("status");
 
     expect(server.bodies.at(-1)).toMatchObject({ key: "CSV input", tags: ["imported"] });
+  });
+});
+
+describe("formatting the text", () => {
+  // Bold, italic and code are markers in the text (**, *, `), so the bank,
+  // the exports and the course's exam.json all carry them as plain strings.
+  // The bar and the shortcuts only ever wrap or unwrap the selection.
+  const select = (el: HTMLInputElement | HTMLTextAreaElement, word: string) => {
+    el.focus();
+    const at = el.value.indexOf(word);
+    el.setSelectionRange(at, at + word.length);
+  };
+
+  it("Ctrl+B bolds the selected words, previews them, and saves the markers", async () => {
+    const server = fakeServer(question());
+    // A window that is not painting never delivers a frame. The selection
+    // was once put back in requestAnimationFrame and was lost exactly there.
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    await openEditor();
+    const stem = screen.getByDisplayValue("Which step reads a file?") as HTMLTextAreaElement;
+
+    select(stem, "reads");
+    await userEvent.keyboard("{Control>}b{/Control}");
+
+    expect(stem).toHaveValue("Which step **reads** a file?");
+    // The same words stay selected, so a second press unbolds them.
+    expect(stem.value.slice(stem.selectionStart, stem.selectionEnd)).toBe("reads");
+    await userEvent.keyboard("{Control>}b{/Control}");
+    expect(stem).toHaveValue("Which step reads a file?");
+    await userEvent.keyboard("{Control>}b{/Control}");
+    const preview = stem.closest(".field")!.querySelector(".format-preview")!;
+    expect(preview.querySelector("strong")).toHaveTextContent("reads");
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText(/Saved at/);
+    expect(server.bodies.at(-1)!.stem).toBe("Which step **reads** a file?");
+  });
+
+  it("the bar waits for a text field, and leaves when the author moves to one it cannot format", async () => {
+    fakeServer(question());
+    await openEditor();
+    const italic = screen.getByRole("button", { name: "Italic (Ctrl+I)" });
+    expect(italic).toBeDisabled();
+
+    const scenario = screen.getByDisplayValue("A developer is loading a file.") as HTMLTextAreaElement;
+    select(scenario, "loading");
+    await waitFor(() => expect(italic).toBeEnabled());
+    await userEvent.click(italic);
+    expect(scenario).toHaveValue("A developer is *loading* a file.");
+
+    await userEvent.click(screen.getByDisplayValue("Getting Started")); // Topic: no formatting
+    expect(italic).toBeDisabled();
+  });
+
+  it("code on one distractor touches only that distractor", async () => {
+    fakeServer(question({ distractors: ["Table output", "Sort rows"] }));
+    await openEditor();
+    const sort = screen.getByDisplayValue("Sort rows") as HTMLInputElement;
+    select(sort, "Sort rows");
+    await userEvent.click(screen.getByRole("button", { name: "Code" }));
+
+    expect(sort).toHaveValue("`Sort rows`");
+    expect(screen.getByDisplayValue("Table output")).toBeInTheDocument();
+    const row = sort.closest(".option-row")!;
+    expect(row.querySelector(".format-preview code")).toHaveTextContent("Sort rows");
+  });
+
+  it("the Bank's list draws the formatting rather than the markers", async () => {
+    fakeServer(question({ stem: "Which step **reads** a `.csv` file?" }));
+    render(<BankPane />);
+    const bold = await screen.findByText("reads");
+    expect(bold.tagName).toBe("STRONG");
+    expect(screen.getByText(".csv").tagName).toBe("CODE");
+    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument();
   });
 });

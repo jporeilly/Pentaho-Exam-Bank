@@ -4,7 +4,6 @@ import csv
 import io
 import hashlib
 import json
-import html
 import random
 from pathlib import Path
 from typing import List
@@ -20,6 +19,7 @@ except ImportError:
     HAS_DOCX = False
 
 from .bank import Question
+from .inline_format import fill_element, runs, to_html, to_plain
 from .stem_text import question_only
 
 
@@ -285,7 +285,7 @@ def export_qti21(questions: List[Question], path: Path):
     for q in questions:
         item = SubElement(section, "assessmentItem", {
             "identifier": q.id,
-            "title": q.stem[:60],
+            "title": to_plain(q.stem)[:60],
             "adaptive": "false",
             "timeDependent": "false",
         })
@@ -304,27 +304,27 @@ def export_qti21(questions: List[Question], path: Path):
 
         if q.scenario:
             scenario_p = SubElement(item_body, "p")
-            scenario_p.text = q.scenario
+            fill_element(scenario_p, q.scenario)
 
         choice_interaction = SubElement(item_body, "choiceInteraction", {
             "responseIdentifier": "RESPONSE",
             "shuffle": "true",
             "maxChoices": "1",
         })
-        SubElement(choice_interaction, "prompt").text = q.stem
+        fill_element(SubElement(choice_interaction, "prompt"), q.stem)
 
         # Key
         key_choice = SubElement(choice_interaction, "simpleChoice", {
             "identifier": "choice_key",
         })
-        key_choice.text = q.key
+        fill_element(key_choice, q.key)
 
         # Distractors
         for i, d in enumerate(q.distractors):
             dist_choice = SubElement(choice_interaction, "simpleChoice", {
                 "identifier": f"choice_d{i + 1}",
             })
-            dist_choice.text = d
+            fill_element(dist_choice, d)
 
         # Response processing
         resp_proc = SubElement(item, "responseProcessing", {
@@ -346,20 +346,20 @@ def export_moodle_xml(questions: List[Question], path: Path):
 
         # Name
         name_el = SubElement(question_el, "name")
-        SubElement(name_el, "text").text = q.stem[:80]
+        SubElement(name_el, "text").text = to_plain(q.stem)[:80]
 
         # Question text (scenario + stem)
         qt = SubElement(question_el, "questiontext", {"format": "html"})
         body = ""
         if q.scenario:
-            body += f"<p><em>{html.escape(q.scenario)}</em></p>"
-        body += f"<p>{html.escape(q.stem)}</p>"
+            body += f"<p><em>{to_html(q.scenario)}</em></p>"
+        body += f"<p>{to_html(q.stem)}</p>"
         SubElement(qt, "text").text = body
 
         # General feedback (explanation)
         if q.explanation:
             fb = SubElement(question_el, "generalfeedback", {"format": "html"})
-            SubElement(fb, "text").text = f"<p>{html.escape(q.explanation)}</p>"
+            SubElement(fb, "text").text = f"<p>{to_html(q.explanation)}</p>"
 
         SubElement(question_el, "defaultgrade").text = "1"
         SubElement(question_el, "penalty").text = "0.3333333"
@@ -368,12 +368,12 @@ def export_moodle_xml(questions: List[Question], path: Path):
 
         # Correct answer
         ans_key = SubElement(question_el, "answer", {"fraction": "100", "format": "html"})
-        SubElement(ans_key, "text").text = html.escape(q.key)
+        SubElement(ans_key, "text").text = to_html(q.key)
 
         # Distractors
         for d in q.distractors:
             ans_d = SubElement(question_el, "answer", {"fraction": "0", "format": "html"})
-            SubElement(ans_d, "text").text = html.escape(d)
+            SubElement(ans_d, "text").text = to_html(d)
 
         # Tags
         if q.topic:
@@ -399,10 +399,10 @@ def export_text(questions: List[Question], path: Path, include_answers: bool = T
         lines.append("")
 
         if q.scenario:
-            lines.append(f"Scenario: {q.scenario}")
+            lines.append(f"Scenario: {to_plain(q.scenario)}")
             lines.append("")
 
-        lines.append(q.stem)
+        lines.append(to_plain(q.stem))
         lines.append("")
 
         # Shuffle choices for display
@@ -414,7 +414,7 @@ def export_text(questions: List[Question], path: Path, include_answers: bool = T
         key_letter = ""
         for letter_idx, answer_idx in enumerate(indices):
             letter = chr(65 + letter_idx)  # A, B, C, D
-            lines.append(f"  {letter}) {answers[answer_idx]}")
+            lines.append(f"  {letter}) {to_plain(answers[answer_idx])}")
             if answer_idx == 0:
                 key_letter = letter
         lines.append("")
@@ -422,11 +422,25 @@ def export_text(questions: List[Question], path: Path, include_answers: bool = T
         if include_answers:
             lines.append(f"Correct Answer: {key_letter}")
             if q.explanation:
-                lines.append(f"Explanation: {q.explanation}")
+                lines.append(f"Explanation: {to_plain(q.explanation)}")
         lines.append("")
         lines.append("")
 
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _add_formatted(para, text, bold=False, italic=False, color=None, literal=False):
+    """Write question text into a Word paragraph as styled runs: **bold**,
+    *italic* and `code` (Consolas) on top of the paragraph's own style."""
+    pieces = [(text or "", False, False, False)] if literal else runs(text)
+    for chunk, b, i, code in pieces:
+        run = para.add_run(chunk)
+        run.bold = bold or b
+        run.italic = italic or i
+        if code:
+            run.font.name = "Consolas"
+        if color is not None:
+            run.font.color.rgb = color
 
 
 def export_docx(questions: List[Question], path: Path):
@@ -466,13 +480,11 @@ def export_docx(questions: List[Question], path: Path):
         # -- Scenario (italic) --
         if q.scenario:
             scenario_para = doc.add_paragraph()
-            scenario_run = scenario_para.add_run(q.scenario)
-            scenario_run.italic = True
+            _add_formatted(scenario_para, q.scenario, italic=True)
 
         # -- Stem (bold) --
         stem_para = doc.add_paragraph()
-        stem_run = stem_para.add_run(q.stem)
-        stem_run.bold = True
+        _add_formatted(stem_para, q.stem, bold=True)
 
         # -- Build labelled choices --
         correct_set = set(q.correct_answers)
@@ -488,10 +500,10 @@ def export_docx(questions: List[Question], path: Path):
 
         for label, answer in zip(labels, all_answers):
             choice_para = doc.add_paragraph(style="List Bullet")
-            choice_run = choice_para.add_run(f"{label}: {answer}")
-            if answer in correct_set:
-                choice_run.font.color.rgb = RGBColor(0x00, 0x80, 0x00)  # green
-                choice_run.bold = True
+            correct = answer in correct_set
+            green = RGBColor(0x00, 0x80, 0x00) if correct else None
+            _add_formatted(choice_para, f"{label}: ", bold=correct, color=green, literal=True)
+            _add_formatted(choice_para, answer, bold=correct, color=green)
 
         # -- Explanation --
         if q.explanation:
@@ -499,7 +511,7 @@ def export_docx(questions: List[Question], path: Path):
             exp_para = doc.add_paragraph()
             exp_label = exp_para.add_run("Explanation: ")
             exp_label.bold = True
-            exp_para.add_run(q.explanation)
+            _add_formatted(exp_para, q.explanation)
 
         # -- Horizontal rule between questions (skip after last) --
         if i < len(questions):

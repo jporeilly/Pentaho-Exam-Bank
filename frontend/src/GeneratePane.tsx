@@ -12,6 +12,7 @@ import {
   type QuestionFormat,
 } from "./api";
 import { OptionList } from "./answers";
+import { Formatted, plainText } from "./inlineFormat";
 import { useVocabulary } from "./vocabulary";
 
 // The backend owns these and validates against them, naming the valid set in
@@ -579,12 +580,18 @@ function Review({
               type="checkbox"
               checked={keep.has(q.id)}
               onChange={() => onToggle(q.id)}
-              aria-label={`Keep: ${q.stem}`}
+              aria-label={`Keep: ${plainText(q.stem)}`}
               style={{ marginTop: 4 }}
             />
             <span style={{ flex: 1 }}>
-              {q.scenario && <div className="muted">{q.scenario}</div>}
-              <div style={{ fontWeight: 600, margin: "3px 0" }}>{q.stem}</div>
+              {q.scenario && (
+                <div className="muted">
+                  <Formatted text={q.scenario} />
+                </div>
+              )}
+              <div style={{ fontWeight: 600, margin: "3px 0" }}>
+                <Formatted text={q.stem} />
+              </div>
               <OptionList
                 options={(q.option_order.length ? q.option_order : [q.key, ...q.distractors]).map(
                   (option) => ({
@@ -596,7 +603,7 @@ function Review({
               />
               {q.explanation && (
                 <div className="faint" style={{ fontSize: 12 }}>
-                  {q.explanation}
+                  <Formatted text={q.explanation} />
                 </div>
               )}
               <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>

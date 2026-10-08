@@ -197,7 +197,12 @@ export interface Job {
 
 export interface QuestionFilters {
   text?: string;
+  /** Part of a question id, e.g. "m4" or "ba-m4-q9". */
+  id?: string;
+  /** Contains-match on the topic (older callers). */
   topic?: string;
+  /** One topic exactly, as picked from the Bank's column filter. */
+  exact_topic?: string;
   difficulty?: string;
   bloom_level?: string;
   status?: string;
@@ -1124,6 +1129,9 @@ export const api = {
     }),
 
   /** Export is a file download, so it is a URL the browser fetches, not JSON. */
+  /** Every topic with questions, in course order; one certification's when given. */
+  topics: (certification_id = "") =>
+    request<{ topic: string; questionCount: number }[]>(`/api/topics${query({ certification_id })}`),
   exportUrl: (format: string, filters: QuestionFilters = {}) =>
     `${BASE}/api/export/${format}${query({ ...filters })}`,
 };
