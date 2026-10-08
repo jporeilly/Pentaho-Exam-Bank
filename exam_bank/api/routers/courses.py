@@ -20,7 +20,7 @@ from ...core import course_sync
 from ...core.bank import ExamBankDB
 from ...core.context_budget import source_budget_chars
 from ...core.pcm_reader import list_pcm_courses, list_pcm_labs, load_pcm_course, read_course_json
-from ...core import distribution
+from ...core import distribution, results_service
 from ...core.publisher import PublishRefused, apply as apply_publish, plan as plan_publish
 from ...utils.config import ASSETS_DIR, config
 from ..deps import courses_dir, get_db
@@ -150,6 +150,9 @@ class PublishRequest(BaseModel):
     #: Also push the exam to the courses repo installed apps sync from. See
     #: core/distribution.py. Off unless asked for: it publishes to a remote.
     push: bool = False
+    #: Switch who marks the exam: "app" (keys in exam.json) or "server" (the
+    #: results service; published without keys). None keeps the exam's own.
+    grading: str | None = None
 
 
 def _publish_plan(slug: str, body: PublishRequest, db: ExamBankDB):
@@ -193,7 +196,8 @@ def _publish_plan(slug: str, body: PublishRequest, db: ExamBankDB):
         certification_id=body.certification_id, status=body.status, limit=5000
     )
     try:
-        return plan_publish(exam_path, questions, source_label=certification.name)
+        return plan_publish(exam_path, questions, source_label=certification.name,
+                            grading=body.grading)
     except PublishRefused as e:
         # 409, not 400: the request is well formed and the caller is not wrong
         # to have made it - the course or the selection is in a state that
@@ -223,6 +227,11 @@ def _plan_json(slug: str, made) -> dict[str, Any]:
         # sentence rather than being told a number changed somewhere.
         "descriptionBefore": made.description_before,
         "descriptionAfter": made.description_after,
+        # Who marks it, before and after. A server-graded exam is written
+        # without correct/correctIndices/explanation.
+        "grading": made.grading,
+        "gradingBefore": made.grading_before,
+        "resultsService": results_service.configured(),
     }
 
 
@@ -241,6 +250,29 @@ def _push_preview(slug: str) -> dict[str, Any]:
         return _preflight(slug).as_dict()
     except distribution.DistributionRefused as e:
         return {"available": False, "reason": str(e)}
+
+
+def _course_level(slug: str) -> int:
+    """The course's level (1 Practitioner ... 3 Certified). The results service
+    shows a candidate the answers after the exam only below level 3."""
+    try:
+        data = read_course_json(_course_dir(slug) / "course.json")
+        return int((data.get("level") or {}).get("number") or 1)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 1
+
+
+def _upload_keys(slug: str, made) -> int:
+    """Store a server-graded plan's keys on the results service, or raise 409
+    saying nothing was written."""
+    try:
+        return results_service.upload_keys(
+            str(made.document.get("webhookUrl") or ""), slug,
+            int(made.document.get("passMark") or 80), _course_level(slug), made.keyed_items)
+    except results_service.ResultsServiceError as e:
+        raise HTTPException(
+            409, f"Nothing was written: the answer keys could not be stored on the results "
+                 f"service, and a server-graded exam cannot be published without them. {e}") from e
 
 
 def _course_title(slug: str) -> str:
@@ -289,11 +321,18 @@ def publish_course_exam_questions(
         except distribution.DistributionRefused as e:
             raise HTTPException(409, str(e)) from e
 
+    # A server-graded exam is written without its keys, so they must be on
+    # the results service FIRST: written the other way round, a failed upload
+    # would leave a course whose exam nothing can mark.
+    keys_stored = _upload_keys(slug, made) if made.grading == "server" else None
+
     try:
         apply_publish(made, expect_sha=body.expect_sha)
     except PublishRefused as e:
         raise HTTPException(409, str(e)) from e
     result = {**_plan_json(slug, made), "written": True}
+    if keys_stored is not None:
+        result["keysStored"] = keys_stored
 
     if pre is not None:
         summary = {
@@ -310,6 +349,18 @@ def publish_course_exam_questions(
             # machine. Said as such rather than as a failed publish.
             result["push"] = {"error": str(e), "failedAt": "before-push"}
     return result
+
+
+@router.post("/api/courses/{slug}/exam/keys")
+def upload_course_exam_keys(
+    slug: str, body: PublishRequest, db: ExamBankDB = Depends(get_db)
+) -> dict[str, Any]:
+    """Store the course's answer keys on the results service, writing nothing
+    else - the step before switching a course to server grading, so its keys
+    are there before any learner's app needs them."""
+    made = _publish_plan(slug, body.model_copy(update={"grading": "server"}), db)
+    return {"courseId": slug, "keysStored": _upload_keys(slug, made),
+            "level": _course_level(slug)}
 
 
 class SyncRequest(BaseModel):

@@ -45,6 +45,11 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
   const [slug, setSlug] = useState(openCourse);
   const [certId, setCertId] = useState("");
   const [status, setStatus] = useState("approved");
+  // Who marks the exam. "" keeps the exam's own setting; switching to
+  // "server" publishes it without keys, which the results service holds.
+  const [grading, setGrading] = useState<"" | "app" | "server">("");
+  const [serviceReady, setServiceReady] = useState<{ configured: boolean; env: string } | null>(null);
+  const [keysNotice, setKeysNotice] = useState("");
 
   const [plan, setPlan] = useState<PublishPlan | null>(null);
   // Push to the courses repo with the write. Defaults on whenever the plan
@@ -54,6 +59,10 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<PublishPlan | null>(null);
+
+  useEffect(() => {
+    api.resultsService().then(setServiceReady).catch(() => setServiceReady(null));
+  }, []);
 
   useEffect(() => {
     Promise.all([api.courses(), api.certifications()])
@@ -87,7 +96,8 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
     setPlan(null);
     setDone(null);
     setError("");
-  }, [slug, certId, status]);
+    setKeysNotice("");
+  }, [slug, certId, status, grading]);
 
   const course = useMemo(() => courses.find((c) => c.slug === slug), [courses, slug]);
   const chosen = Boolean(slug && certId);
@@ -99,7 +109,7 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
     setBusy(true);
     setError("");
     try {
-      const made = await api.planPublish(slug, certId, status);
+      const made = await api.planPublish(slug, certId, status, grading);
       setPlan(made);
       setPush(Boolean(made.push?.available));
     } catch (e) {
@@ -116,7 +126,7 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
     setError("");
     try {
       const result = await api.publish(
-        slug, certId, plan.sourceSha, status, push && Boolean(plan.push?.available),
+        slug, certId, plan.sourceSha, status, push && Boolean(plan.push?.available), grading,
       );
       setDone(result);
       setPlan(null);
@@ -125,6 +135,25 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
       // the plan was on screen. The plan is dropped rather than left looking
       // current, because it now describes a file that no longer exists.
       setPlan(null);
+      setError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadKeys() {
+    setBusy(true);
+    setError("");
+    setKeysNotice("");
+    try {
+      const r = await api.uploadKeys(slug, certId, status);
+      setKeysNotice(
+        `The results service now holds ${r.keysStored} answer keys for this course. ` +
+          (r.level >= 3
+            ? "As a certification, candidates will see their score only."
+            : "Candidates will see the answers and explanations after submitting."),
+      );
+    } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -170,6 +199,19 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
         </label>
 
         <label className="field">
+          <span className="field-label">Marked by</span>
+          <select
+            value={grading}
+            onChange={(e) => setGrading(e.target.value as "" | "app" | "server")}
+            aria-label="Marked by"
+          >
+            <option value="">As the exam is now</option>
+            <option value="app">The app (keys in exam.json)</option>
+            <option value="server">The results service (keys kept private)</option>
+          </select>
+        </label>
+
+        <label className="field">
           <span className="field-label">Status</span>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             {STATUSES.map((s) => (
@@ -196,10 +238,34 @@ export function PublishPane({ openCourse = "" }: { openCourse?: string }) {
         <button onClick={makePlan} disabled={!ready || busy}>
           {busy && !plan ? "Checking…" : "Check what would change"}
         </button>
+        <button
+          className="secondary"
+          onClick={uploadKeys}
+          disabled={!ready || busy || !serviceReady?.configured}
+          title={
+            serviceReady?.configured
+              ? "Store this course's answer keys on the results service. Writes nothing to the course."
+              : `Set ${serviceReady?.env ?? "the admin secret"} first`
+          }
+        >
+          Upload keys only
+        </button>
         {!chosen && (
           <span className="faint">Choose a course and a certification.</span>
         )}
       </div>
+      {keysNotice && (
+        <div className="banner ok-note" role="status">
+          {keysNotice}
+        </div>
+      )}
+      {serviceReady && !serviceReady.configured && grading === "server" && (
+        <div className="banner warn">
+          Server grading needs the results service's admin secret: set the{" "}
+          <code>{serviceReady.env}</code> environment variable to the script's ADMIN_SECRET, then
+          restart the Exam Bank.
+        </div>
+      )}
 
       {done && <Wrote plan={done} />}
       {plan && (
@@ -309,6 +375,28 @@ function Plan({
         )}
       </ul>
 
+      {plan.grading !== plan.gradingBefore && (
+        <div className={plan.grading === "server" ? "banner warn" : "banner"}>
+          <strong>
+            Marked by: {plan.gradingBefore === "server" ? "the results service" : "the app"} →{" "}
+            {plan.grading === "server" ? "the results service" : "the app"}.
+          </strong>{" "}
+          {plan.grading === "server"
+            ? "The exam is published without its answer keys or explanations; the results " +
+              "service holds them and marks each attempt. Its keys are uploaded first - if that " +
+              "fails, nothing is written. Only switch once every machine that sits this exam has " +
+              "a Content Manager with server grading: an older app cannot mark an exam with no keys."
+            : "The keys and explanations go back into exam.json, where anyone who opens the " +
+              "public courses repo can read them."}
+        </div>
+      )}
+      {plan.grading === "server" && plan.grading === plan.gradingBefore && (
+        <p className="faint">
+          Marked by the results service: published without keys, and the keys there are refreshed
+          before the file is written.
+        </p>
+      )}
+
       {plan.preservedKeys.length > 0 && (
         <p className="preserved faint">
           Left untouched: {plan.preservedKeys.map((k) => (
@@ -347,7 +435,7 @@ function Plan({
       </div>
 
       <div className="toolbar">
-        <button onClick={onPublish} disabled={busy}>
+        <button onClick={onPublish} disabled={busy || (plan.grading === "server" && !plan.resultsService)}>
           {busy ? "Publishing…" : canPush && push ? "Publish and push" : "Publish to the course"}
         </button>
         <span className="faint">

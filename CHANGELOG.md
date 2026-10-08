@@ -25,6 +25,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   different subsets of the pool. `core/item_analysis.py` (the `responses`
   table), `POST /api/results/import`, `GET /api/results/analysis`; guide
   `docs/guides/10-results.md`.
+- **Server grading: answer keys off the public repo.** Publish gains
+  **Marked by**: the app (keys in exam.json, as before) or the results
+  service, whose exam.json is published WITHOUT `correct` /
+  `correctIndices` / `explanation`; the exam gets `"grading": "server"`.
+  Every server-graded publish first uploads the keys - as option texts,
+  with the pass mark and the course level - to the results Apps Script
+  (`set_keys`), and writes nothing if that fails. **Upload keys only**
+  stores them without publishing, for switching a course over in the right
+  order. The admin secret is read from `PEB_RESULTS_ADMIN_SECRET` at call
+  time and never stored; the UI sees a boolean. Results gains **Pull from
+  results service** (`export_results`, no emails). Nothing reads keys back
+  from a server-graded course: course sync skips it with a note, and
+  importing its exam.json is refused - both would otherwise have replaced
+  the bank's keys with guesses. `core/results_service.py`;
+  `POST /api/courses/{slug}/exam/keys`, `GET /api/results/service`,
+  `POST /api/results/pull`; `grading` on the publish plan and write.
 
 ## [1.12.0] - 2026-10-08
 

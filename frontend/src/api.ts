@@ -631,6 +631,14 @@ export interface PublishPlan {
    *  so this is the one piece of authored text a publish may touch. */
   descriptionBefore: string;
   descriptionAfter: string;
+  /** Who marks the exam after this publish, and before it: "app" (keys in
+   *  exam.json) or "server" (the results service; published without keys). */
+  grading: "app" | "server";
+  gradingBefore: "app" | "server";
+  /** Whether the results service's admin secret is set (never its value). */
+  resultsService: boolean;
+  /** On a server-graded write: how many keys the results service now holds. */
+  keysStored?: number;
   written?: boolean;
   /** On a plan: whether the exam could also be pushed to the courses repo
    *  installed apps sync from, and to which course version; if not, why. */
@@ -1127,11 +1135,25 @@ export const api = {
     }),
 
   /** What publishing would change in the course's exam.json. Writes nothing. */
-  planPublish: (slug: string, certification_id: string, status = "approved") =>
+  planPublish: (slug: string, certification_id: string, status = "approved", grading = "") =>
     request<PublishPlan>(
       `/api/courses/${encodeURIComponent(slug)}/exam/questions/plan`,
+      {
+        method: "POST",
+        body: JSON.stringify({ certification_id, status, ...(grading ? { grading } : {}) }),
+      },
+    ),
+  /** Store the course's answer keys on the results service; writes nothing else. */
+  uploadKeys: (slug: string, certification_id: string, status = "approved") =>
+    request<{ courseId: string; keysStored: number; level: number }>(
+      `/api/courses/${encodeURIComponent(slug)}/exam/keys`,
       { method: "POST", body: JSON.stringify({ certification_id, status }) },
     ),
+  /** Whether the results service's admin secret is set - a boolean only. */
+  resultsService: () => request<{ configured: boolean; env: string }>("/api/results/service"),
+  /** Pull the Detail rows from the results service into the item analysis. */
+  pullResults: () =>
+    request<ResultsImport & { services: number }>("/api/results/pull", { method: "POST" }),
   /** Replace the course's questions. `expect_sha` comes from a plan, and the
    *  server refuses the write without it — so this cannot be called first. */
   publish: (
@@ -1140,12 +1162,15 @@ export const api = {
     expect_sha: string,
     status = "approved",
     push = false,
+    grading = "",
   ) =>
     request<PublishPlan & { push?: PushResult }>(
       `/api/courses/${encodeURIComponent(slug)}/exam/questions`,
       {
         method: "POST",
-        body: JSON.stringify({ certification_id, status, expect_sha, push }),
+        body: JSON.stringify({
+          certification_id, status, expect_sha, push, ...(grading ? { grading } : {}),
+        }),
       },
     ).then((r) => ({ ...r, pushed: push ? (r.push as PushResult | undefined) : undefined })),
 

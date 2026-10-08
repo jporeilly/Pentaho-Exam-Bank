@@ -426,6 +426,13 @@ def import_from_pcm_exam_json(path: Path) -> List[Question]:
     data = read_course_json(path)
     if not isinstance(data, dict):
         return []
+    if data.get("grading") == "server":
+        # Published without its keys (they live on the results service), so
+        # every question would come in with a guessed answer.
+        raise ValueError(
+            "This exam is graded on the results service, so its file carries no answer keys "
+            "and cannot be imported. Its questions are already in the bank that published it."
+        )
     exam_title = str(data.get("title") or "").strip()
 
     questions = []

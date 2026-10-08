@@ -37,6 +37,9 @@ function plan(over: Partial<PublishPlan> = {}): PublishPlan {
     preservedKeys: ["title", "passMark", "webhookSecret", "intake"],
     descriptionBefore: "",
     descriptionAfter: "",
+    grading: "app",
+    gradingBefore: "app",
+    resultsService: true,
     ...over,
   };
 }
@@ -45,6 +48,7 @@ function plan(over: Partial<PublishPlan> = {}): PublishPlan {
 function mockApi(handlers: {
   plan?: PublishPlan | { status: number; detail: string };
   publish?: PublishPlan | { status: number; detail: string };
+  serviceConfigured?: boolean;
 }) {
   const calls: Array<{ path: string; body: unknown }> = [];
   vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
@@ -68,6 +72,10 @@ function mockApi(handlers: {
       return "status" in r ? json({ detail: r.detail }, r.status) : json(r);
     }
     if (path.includes("/certifications")) return json(CERTS);
+    if (path.includes("/api/results/service")) {
+      return json({ configured: handlers.serviceConfigured ?? true, env: "PEB_RESULTS_ADMIN_SECRET" });
+    }
+    if (path.includes("/exam/keys")) return json({ courseId: "demo-course", keysStored: 2, level: 1 });
     return json(COURSES);
   });
   return calls;
@@ -441,5 +449,42 @@ describe("pushing to the courses repo", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Publish and push" }));
     expect(await screen.findByText(/the push stopped at the courses stage/)).toBeInTheDocument();
     expect(screen.getByText(/only the courses repo is behind/)).toBeInTheDocument();
+  });
+});
+
+describe("server grading", () => {
+  it("warns before switching to the results service, and asks for it on the write", async () => {
+    const calls = mockApi({ plan: plan({ grading: "server", gradingBefore: "app" }) });
+    render(<PublishPane openCourse="demo-course" />);
+    await choose("Marked by", "server");
+    await check();
+    expect(await screen.findByText(/the app → the results service/)).toBeInTheDocument();
+    expect(screen.getByText(/an older app cannot mark an exam with no keys/)).toBeInTheDocument();
+    expect(calls.find((c) => c.path.endsWith("/plan"))?.body).toMatchObject({ grading: "server" });
+    await userEvent.click(screen.getByRole("button", { name: /Publish/ }));
+    const write = calls.find((c) => c.path.endsWith("/exam/questions"));
+    expect(write?.body).toMatchObject({ grading: "server", expect_sha: "abc123" });
+  });
+
+  it("uploads the keys alone, writing nothing to the course", async () => {
+    const calls = mockApi({});
+    render(<PublishPane openCourse="demo-course" />);
+    await screen.findByDisplayValue(/Demo Practitioner/);
+    const upload = await screen.findByRole("button", { name: "Upload keys only" });
+    await vi.waitFor(() => expect(upload).toBeEnabled());
+    await userEvent.click(upload);
+    expect(await screen.findByText(/now holds 2 answer keys/)).toBeInTheDocument();
+    expect(calls.some((c) => c.path.endsWith("/exam/questions"))).toBe(false);
+  });
+
+  it("cannot publish a server-graded exam without the admin secret", async () => {
+    mockApi({ plan: plan({ grading: "server", gradingBefore: "server", resultsService: false }),
+              serviceConfigured: false });
+    render(<PublishPane openCourse="demo-course" />);
+    await choose("Marked by", "server");
+    expect(await screen.findByText(/needs the results service's admin secret/)).toBeInTheDocument();
+    await check();
+    expect(await screen.findByRole("button", { name: /Publish/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Upload keys only" })).toBeDisabled();
   });
 });

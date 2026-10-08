@@ -112,6 +112,8 @@ class CourseOutcome:
     #: Ids this course shares with another course. Refused, never written.
     conflicts: list[dict[str, str]] = field(default_factory=list)
     error: str = ""
+    #: Why the course was read but nothing taken from it (not an error).
+    note: str = ""
 
     @property
     def in_course(self) -> int:
@@ -134,6 +136,7 @@ class CourseOutcome:
             "conflicts": self.conflicts,
             "changedIds": self.changed[:50],
             "error": self.error,
+            "note": self.note,
         }
 
 
@@ -197,6 +200,20 @@ def _read_course(course_dir: Path, db: ExamBankDB,
     if cert:
         outcome.certification_id = cert.id
         outcome.certification_name = cert.name
+
+    # A server-graded exam is published WITHOUT its keys and explanations
+    # (they live on the results service), so its file cannot be adopted
+    # back: every question would read as changed, and an overwrite would
+    # replace the bank's keys with nothing. Only the bank writes a course's
+    # questions, so there is nothing newer in the file to take.
+    try:
+        grading = read_course_json(exam).get("grading")
+    except (ValueError, OSError):
+        grading = None
+    if grading == "server":
+        outcome.note = ("graded on the results service: its exam.json carries no keys, so the "
+                        "bank is the source of its questions and nothing is taken back")
+        return outcome
 
     try:
         questions = import_from_pcm_exam_json(exam)

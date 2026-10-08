@@ -24,6 +24,7 @@ export function ResultsPane() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [onlyFlagged, setOnlyFlagged] = useState(false);
+  const [service, setService] = useState<{ configured: boolean; env: string } | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
@@ -37,6 +38,27 @@ export function ResultsPane() {
   }, []);
 
   useEffect(load, [load]);
+  useEffect(() => {
+    api.resultsService().then(setService).catch(() => setService(null));
+  }, []);
+
+  async function pull() {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const r = await api.pullResults();
+      setNotice(
+        `Pulled ${r.rows} answers from ${r.attempts} attempt${r.attempts === 1 ? "" : "s"}` +
+          ` (${r.added} new). The bank now holds ${r.totalResponses}.`,
+      );
+      load();
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function importFile(f: File) {
     setBusy(true);
@@ -82,8 +104,20 @@ export function ResultsPane() {
             if (f) void importFile(f);
           }}
         />
+        <button
+          className="secondary info"
+          disabled={busy || !service?.configured}
+          onClick={pull}
+          title={
+            service?.configured
+              ? "Read the results straight from the results service"
+              : `Needs the results service's admin secret (${service?.env ?? "an environment variable"})`
+          }
+        >
+          Pull from results service
+        </button>
         <button className="info" disabled={busy} onClick={() => file.current?.click()}>
-          {busy ? "Importing…" : "Import results CSV"}
+          {busy ? "Working…" : "Import results CSV"}
         </button>
       </div>
 

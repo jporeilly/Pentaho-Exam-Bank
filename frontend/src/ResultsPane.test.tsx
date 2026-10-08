@@ -98,3 +98,37 @@ describe("ResultsPane", () => {
     await waitFor(() => expect(screen.getByText(/not the results Sheet's Detail tab/)).toBeInTheDocument());
   });
 });
+
+describe("pulling from the results service", () => {
+  function service(configured: boolean) {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      calls.push(String(url));
+      const u = String(url);
+      const body = u.includes("/api/results/service")
+        ? { configured, env: "PEB_RESULTS_ADMIN_SECRET" }
+        : u.includes("/api/results/pull")
+          ? { rows: 12, added: 12, attempts: 2, courses: ["developer-di-practitioner"], totalResponses: 12, services: 1 }
+          : { ...ANALYSIS, exams: [] };
+      return Promise.resolve(new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } }));
+    });
+    return calls;
+  }
+
+  it("is unavailable without the admin secret", async () => {
+    service(false);
+    render(<ResultsPane />);
+    await screen.findByText("No results imported yet.");
+    expect(screen.getByRole("button", { name: "Pull from results service" })).toBeDisabled();
+  });
+
+  it("pulls and says what came in", async () => {
+    const calls = service(true);
+    render(<ResultsPane />);
+    const pull = await screen.findByRole("button", { name: "Pull from results service" });
+    await waitFor(() => expect(pull).toBeEnabled());
+    await userEvent.click(pull);
+    expect(await screen.findByText(/Pulled 12 answers from 2 attempts \(12 new\)/)).toBeInTheDocument();
+    expect(calls.some((c) => c.includes("/api/results/pull"))).toBe(true);
+  });
+});

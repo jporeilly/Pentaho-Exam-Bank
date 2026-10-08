@@ -28,6 +28,17 @@ from .bank import Question
 from .exporter import pcm_exam_items
 
 
+#: What a server-graded exam leaves out of the published file: the answer and
+#: the explanation that names it. The results service holds them instead
+#: (results_service.upload_keys); the public repo never sees them.
+KEY_FIELDS = ("correct", "correctIndices", "explanation")
+GRADING_MODES = ("app", "server")
+
+
+def strip_keys(item: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in item.items() if k not in KEY_FIELDS}
+
+
 class PublishRefused(Exception):
     """Refuse to write, with a reason the author can act on.
 
@@ -69,6 +80,13 @@ class PublishPlan:
     # description already agrees, which is the usual case.
     description_before: str = ""
     description_after: str = ""
+    # Who marks the exam: "app" (keys in exam.json, today's way) or "server"
+    # (the results service; exam.json published without keys).
+    grading: str = "app"
+    grading_before: str = "app"
+    # Server grading only: the items WITH their keys, for the upload that must
+    # succeed before the key-less file is written. Never written anywhere.
+    keyed_items: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def is_noop(self) -> bool:
@@ -84,6 +102,7 @@ class PublishPlan:
             or self.changed
             or self.reordered
             or self.description_after
+            or self.grading != self.grading_before
         )
 
 
@@ -191,7 +210,8 @@ def _load(path: Path) -> tuple[dict[str, Any], str, str]:
 
 
 def plan(
-    exam_path: Path, questions: list[Question], *, source_label: str = ""
+    exam_path: Path, questions: list[Question], *, source_label: str = "",
+    grading: str | None = None,
 ) -> PublishPlan:
     """What publishing ``questions`` into ``exam_path`` would do.
 
@@ -232,6 +252,24 @@ def plan(
         )
 
     items = pcm_exam_items(questions, source_label=source_label)
+
+    # Grading: the exam's own setting unless the caller is switching it.
+    grading_before = str(document.get("grading") or "app")
+    mode = grading or grading_before
+    if mode not in GRADING_MODES:
+        raise PublishRefused(
+            f"Unknown grading '{mode}'. An exam is marked by the app ('app') or by the "
+            "results service ('server')."
+        )
+    keyed_items: list[dict[str, Any]] = []
+    if mode == "server":
+        if not str(document.get("webhookUrl") or "").startswith("https://"):
+            raise PublishRefused(
+                f"{exam_path.parent.name} has no results service (webhookUrl), so nothing could "
+                "mark a server-graded exam. Set the webhook in the Content Editor first."
+            )
+        keyed_items = items
+        items = [strip_keys(item) for item in items]
 
     ids = [str(item.get("id", "")) for item in items]
     duplicates = sorted({i for i in ids if ids.count(i) > 1})
@@ -283,6 +321,10 @@ def plan(
     # file that lists `questions` before `webhookUrl` still does afterwards.
     merged = dict(document)
     merged["questions"] = items
+    if mode == "server":
+        merged["grading"] = "server"
+    else:
+        merged.pop("grading", None)
 
     # The pool size the description claims is the one thing a publish can
     # invalidate in prose, and verify-course.mjs fails the build over it.
@@ -305,12 +347,16 @@ def plan(
         unchanged=len(new_by_id) - len(added) - len(changed),
         reordered=kept_before != kept_after,
         preserved_keys=[
-            k for k in document if k != "questions" and not (k == "description" and description_after)
+            k for k in document
+            if k not in ("questions", "grading") and not (k == "description" and description_after)
         ],
         before_count=len(old_items),
         after_count=len(items),
         description_before=description_before,
         description_after=description_after,
+        grading=mode,
+        grading_before=grading_before,
+        keyed_items=keyed_items,
     )
 
 
