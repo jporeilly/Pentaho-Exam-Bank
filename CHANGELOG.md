@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-10-08
+
 ### Changed
 
 - **Exam paper, redesigned.** The page is three numbered steps - choose the
