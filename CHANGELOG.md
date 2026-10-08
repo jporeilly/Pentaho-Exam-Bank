@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-08
+
 ### Added
 
 - **Results: how each question performs with real candidates.** A new
