@@ -36,7 +36,15 @@ GRADING_MODES = ("app", "server")
 
 
 def strip_keys(item: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in item.items() if k not in KEY_FIELDS}
+    """The item without its answer. A multi-select question keeps HOW MANY to
+    choose (``choose``): the Content Manager shows "(Choose two)" and lets the
+    candidate tick several, which it otherwise works out by counting the keys.
+    The count is on screen anyway; which options it names is the secret."""
+    out = {k: v for k, v in item.items() if k not in KEY_FIELDS}
+    indices = item.get("correctIndices")
+    if isinstance(indices, list) and len(indices) > 1:
+        out["choose"] = len(indices)
+    return out
 
 
 class PublishRefused(Exception):

@@ -175,6 +175,13 @@ def test_nothing_reads_keys_back_from_a_server_graded_course(client, course, cer
     assert outcome.note and not (outcome.new or outcome.changed or outcome.unusable)
 
 
+def test_a_multi_select_question_keeps_how_many_to_choose():
+    stripped = publisher.strip_keys({"id": "m", "options": ["a", "b", "c"], "correctIndices": [0, 2],
+                                     "explanation": "a and c"})
+    assert stripped == {"id": "m", "options": ["a", "b", "c"], "choose": 2}
+    assert "choose" not in publisher.strip_keys({"id": "s", "options": ["a", "b"], "correct": 1})
+
+
 def test_keys_are_texts_for_single_and_multi():
     keys = results_service.keys_from_items([
         {"id": "a", "options": ["x", "y", "z"], "correct": 2},
