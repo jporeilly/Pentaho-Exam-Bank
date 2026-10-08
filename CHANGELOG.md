@@ -7,6 +7,25 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **Results: how each question performs with real candidates.** A new
+  screen under Questions. Import the results Sheet's Detail tab as a CSV
+  (re-importing adds only new attempts; candidates' emails are never
+  kept) and every question shows its % correct, its discrimination (the
+  point-biserial against the rest of the attempt's score, plus the % right
+  among the strongest and weakest quarter) and how often each option is
+  picked, with the key in green. From 20 attempts it flags very easy and
+  very hard questions, ones that barely separate candidates, ones that
+  stronger candidates get wrong more often (clearly negative - a near-zero
+  score at these cohort sizes is noise and reads as weak), a distractor the
+  strongest candidates prefer to the key, and distractors almost nobody
+  picks; it also notes answers marked against an earlier key. Ability is
+  each attempt's percentage on what it drew, because attempts draw
+  different subsets of the pool. `core/item_analysis.py` (the `responses`
+  table), `POST /api/results/import`, `GET /api/results/analysis`; guide
+  `docs/guides/10-results.md`.
+
 ## [1.12.0] - 2026-10-08
 
 ### Added

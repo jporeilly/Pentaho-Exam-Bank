@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import {
   BookOpen,
   ChartColumn,
+  ClipboardCheck,
   Database,
   FileText,
   LibraryBig,
@@ -33,6 +34,7 @@ export type Tab =
   | "generate"
   | "bank"
   | "report"
+  | "results"
   | "import"
   | "chat"
   | "exam"
@@ -78,6 +80,9 @@ export function navGroups(questions?: number): NavGroup[] {
         // After Bank: you read an exam's balance once its questions are in,
         // and before you draw a paper from it.
         { id: "report", label: "Report", icon: ChartColumn },
+        // After Report: the report reads the questions as written, Results
+        // reads them as candidates answered them.
+        { id: "results", label: "Results", icon: ClipboardCheck },
         { id: "exam", label: "Exam paper", icon: FileText },
         { id: "publish", label: "Publish", icon: Send },
       ],

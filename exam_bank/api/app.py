@@ -24,7 +24,7 @@ from ..core import auto_backup, auto_export
 from ..core.providers import ProviderError
 from .routers import (
     admin, certifications, chat, courses, docs, exam, export, generation, importing,
-    questions, report, settings, system,
+    questions, report, results, settings, system,
 )
 
 log = logging.getLogger(__name__)
@@ -136,6 +136,7 @@ app.include_router(admin.router)
 app.include_router(docs.router)
 app.include_router(chat.router)
 app.include_router(report.router)
+app.include_router(results.router)
 
 
 # ── the built front end ─────────────────────────────────────────

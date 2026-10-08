@@ -1092,3 +1092,27 @@ header.bar::after {
   width: 100%; min-width: 0; padding: 4px 6px; font-size: 12px;
 }
 td.empty { text-align: center; color: var(--text-faint); padding: 18px 10px; }
+
+
+/* ── Results: item analysis (1.13.0) ──────────────────────────────────
+   Quiet by default: info flags are faint, a warning amber, a "check the
+   key" red. An option's bar is its share of answers; the key is green. */
+.checkbox-inline { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-dim); }
+.results-how { margin: 0 0 12px; font-size: 13px; max-width: 72ch; }
+.results-exam { margin-bottom: 22px; }
+.results-thin td { color: var(--text-dim); }
+.results-flag { font-size: 12px; margin-top: 3px; }
+.results-flag.info { color: var(--text-faint); }
+.results-flag.warn { color: var(--warn); }
+.results-flag.bad { color: var(--bad); font-weight: 600; }
+.results-options { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.results-options li {
+  position: relative; display: flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 1px 6px; border-radius: 4px; overflow: hidden;
+  background: var(--bg-input);
+}
+.results-bar { position: absolute; inset: 0 auto 0 0; background: var(--wrong-bg); }
+.results-options li.correct .results-bar { background: var(--key-bg); }
+.results-options li.correct { font-weight: 600; color: var(--key-ink); }
+.results-opt-text { position: relative; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.results-opt-share { position: relative; font-variant-numeric: tabular-nums; color: var(--text-dim); }

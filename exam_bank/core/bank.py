@@ -392,6 +392,9 @@ class ExamBankDB:
             CREATE INDEX IF NOT EXISTS idx_questions_cert ON questions(certification_id);
             CREATE INDEX IF NOT EXISTS idx_questions_sme ON questions(assigned_sme);
         """)
+        # Candidate responses for item analysis; the table is defined where it is used.
+        from .item_analysis import SCHEMA as RESPONSES_SCHEMA
+        self.conn.executescript(RESPONSES_SCHEMA)
         self.conn.commit()
 
     def _migrate(self):

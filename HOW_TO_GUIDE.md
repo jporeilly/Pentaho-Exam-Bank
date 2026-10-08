@@ -30,6 +30,7 @@ PDF exam; **Settings**, **Admin** and **Documentation** look after the app.
 - [The Bank: finding, editing and saving questions](docs/guides/05-the-bank.md)
 - [Review: moving a question through its statuses](docs/guides/06-review.md)
 - [The Report](docs/guides/07-report.md) — Bloom levels and the certification bars.
+- [Results](docs/guides/10-results.md) — how each question performs with real candidates.
 - [Building a printed exam paper](docs/guides/08-exam-paper.md)
 - [Publishing to a course](docs/guides/09-publishing.md)
 

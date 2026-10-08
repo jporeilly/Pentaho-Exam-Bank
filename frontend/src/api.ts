@@ -195,6 +195,60 @@ export interface Job {
   error: string;
 }
 
+export interface ResultsImport {
+  rows: number;
+  added: number;
+  attempts: number;
+  courses: string[];
+  totalResponses: number;
+}
+
+export interface ResultsOption {
+  text: string;
+  correct: boolean;
+  chosen: number;
+  share: number;
+  upperChosen: number;
+}
+
+export interface ResultsItem {
+  id: string;
+  stem: string;
+  topic: string;
+  difficulty: string;
+  attempts: number;
+  correct: number;
+  /** Share answering correctly (classical difficulty). */
+  p: number | null;
+  /** Point-biserial against the rest of the attempt's score, -1..1. */
+  discrimination: number | null;
+  upperP: number | null;
+  lowerP: number | null;
+  suggestedDifficulty: string | null;
+  options: ResultsOption[];
+  blank: number;
+  flags: { level: "info" | "warn" | "bad"; text: string }[];
+}
+
+export interface ResultsExam {
+  courseId: string;
+  certificationId: string;
+  name: string;
+  attempts: number;
+  meanScore: number | null;
+  firstAttempt: string;
+  lastAttempt: string;
+  judged: number;
+  flagged: number;
+  items: ResultsItem[];
+}
+
+export interface ResultsAnalysis {
+  minAttempts: number;
+  totalResponses: number;
+  exams: ResultsExam[];
+}
+
 export interface QuestionFilters {
   text?: string;
   /** Part of a question id, e.g. "m4" or "ba-m4-q9". */
@@ -1129,6 +1183,12 @@ export const api = {
     }),
 
   /** Export is a file download, so it is a URL the browser fetches, not JSON. */
+  /** Upsert the results Sheet's Detail tab (CSV text). */
+  importResults: (csv: string) =>
+    request<ResultsImport>("/api/results/import", { method: "POST", body: JSON.stringify({ csv }) }),
+  /** Item analysis per exam; one certification's when given. */
+  resultsAnalysis: (certification_id = "") =>
+    request<ResultsAnalysis>(`/api/results/analysis${query({ certification_id })}`),
   /** Every topic with questions, in course order; one certification's when given. */
   topics: (certification_id = "") =>
     request<{ topic: string; questionCount: number }[]>(`/api/topics${query({ certification_id })}`),
