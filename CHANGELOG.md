@@ -7,6 +7,20 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Bank's column filters were stacked in the first column** (1.13.1).
+  The Exam paper redesign styled its pill row with a bare
+  `.filter-row { display: flex }`, and `filter-row` is also the class on the
+  Bank table's filter `<tr>`: the row became a flex box and its eight
+  filters piled up under ID. The Exam paper's row is now `.exam-filters`.
+  New guard, `styles.tables.test.ts`: it reads styles.css and every
+  component and fails when a class whose bare rule sets `display` is on a
+  table element. This is the second such clash (`.row` was the first), and
+  jsdom never applies the stylesheet, so no pane test could see it. Seen
+  failing on this clash; a first assertion checks it found what it checks
+  (it caught `styles.css?raw` arriving empty under Vitest).
+
 ## [1.13.1] - 2026-10-08
 
 ### Changed
