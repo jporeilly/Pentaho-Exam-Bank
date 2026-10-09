@@ -455,7 +455,9 @@ tbody tr.selected { background: color-mix(in srgb, var(--accent) 10%, transparen
 .cert-option input, .chip input { margin: 0; accent-color: var(--group-questions); }
 .cert-name { flex: 1; min-width: 0; }
 .cert-count { color: var(--text-faint); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.filter-row { display: flex; flex-wrap: wrap; gap: 10px 36px; margin: 16px 0 6px; }
+/* Not `.filter-row`: that is the Bank table's <tr>, and a bare display rule
+   on it made the row a flex box (1.13.1). styles.tables.test.ts guards this. */
+.exam-filters { display: flex; flex-wrap: wrap; gap: 10px 36px; margin: 16px 0 6px; }
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .chips .field-label { margin: 0 6px 0 0; }
 .chip {
