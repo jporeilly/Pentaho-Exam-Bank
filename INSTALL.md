@@ -42,6 +42,31 @@ To check an installed copy, run `desktop\scripts\verify-install.ps1` from a
 checkout: it confirms the launcher, the bundled Python and the interface are
 present, starts the app, and reports the version it answers with.
 
+### No Content Manager on this machine: the seeded installer
+
+The installer above looks for a Content Manager checkout and, finding none,
+opens with nothing to read. To test a clean machine, or demo without a
+checkout, build the **seeded** installer instead:
+
+```bat
+cd desktop
+npm install
+npm run dist:seeded
+```
+
+It needs, on the build machine, a Content Manager checkout to take the
+course text from (`PCM_REPO`, or the sibling folder). It writes
+`dist\Pentaho Exam Bank_<version>_x64-seeded-setup.exe` beside the plain
+one. The courses are laid out under
+`%APPDATA%\com.pentaho.exam-bank\pcm-seed\courses` on first run, and a
+real checkout, once present, takes over. If the Content Editor's own
+seeded installer is also installed, the bank reads *its* copy so the two
+apps share one set of courses.
+
+A seeded copy is not a git repository, so **Publish and push** is not
+offered; publishing still writes the course's `exam.json`. Settings has the
+courses folder if you want to point the bank at a real checkout later.
+
 ---
 
 ## 2. Author — run it from a checkout

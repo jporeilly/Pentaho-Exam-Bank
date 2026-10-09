@@ -6,6 +6,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional
 
+from . import seed as _seed
+
 # Where the CODE is: the repo root, two levels above this package
 # (exam_bank/utils/config.py). Everything that needs a path off it imports
 # PROJECT_ROOT from here rather than re-deriving its own `parent.parent...`
@@ -160,8 +162,9 @@ def _default_pcm_courses_dir() -> str:
 
     Order matters. An explicit environment variable is a deliberate choice
     and outranks anything found by searching; the installer's hint is a
-    machine-wide fact; the sibling is the developer convenience it always
-    was. Nothing found returns "" — unconfigured, which the UI already
+    machine-wide fact; a seeded installer's bundled courses (see seed.py)
+    come after every real checkout; the sibling is the developer
+    convenience it always was. Nothing found returns "" — unconfigured, which the UI already
     reports properly. A guessed path would fail later and further from the
     cause.
     """
@@ -177,6 +180,18 @@ def _default_pcm_courses_dir() -> str:
     hint = _installer_hint()
     if hint:
         return str(hint / "courses")
+
+    # A seeded installer's own courses. The Content Editor's copy first
+    # when it has laid one out, so the two apps read and write ONE set of
+    # courses rather than two that drift; then this app's own seed. Both
+    # rank below every real checkout, and this runs only on a machine
+    # that has none.
+    editor_seed = _seed.editor_courses_dir()
+    if editor_seed is not None:
+        return str(editor_seed)
+    own_seed = _seed.ensure(ASSETS_DIR, PROJECT_ROOT)
+    if own_seed is not None:
+        return str(own_seed)
 
     sibling = PROJECT_ROOT.parent / "Pentaho-Content-Manager" / "courses"
     return str(sibling) if sibling.is_dir() else ""

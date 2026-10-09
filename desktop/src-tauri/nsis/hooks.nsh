@@ -34,6 +34,10 @@
   DetailPrint "Removing the previous application files..."
   RMDir /r "$INSTDIR\app"
   RMDir /r "$INSTDIR\python"
+  ; The bundled seed of a seeded installer is replaced wholesale too. The
+  ; copy an author works in lives in %APPDATA%\com.pentaho.exam-bank\pcm-seed
+  ; and nothing here touches it.
+  RMDir /r "$INSTDIR\seed"
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
@@ -90,6 +94,7 @@
   ; arrived as bundled resources.
   RMDir /r "$INSTDIR\app"
   RMDir /r "$INSTDIR\python"
+  RMDir /r "$INSTDIR\seed"
 
   ; The user's bank is NOT removed. It lives in %APPDATA%\com.pentaho.exam-bank
   ; and is their work, not ours - the same rule every app in this suite

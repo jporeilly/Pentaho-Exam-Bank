@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends
 from ... import __version__
 from ...core import providers
 from ...core.bank import ExamBankDB
-from ...utils.config import DB_PATH, config
+from ...utils import seed
+from ...utils.config import ASSETS_DIR, DB_PATH, config
 from .. import launch
 from ..deps import get_db
 
@@ -63,6 +64,11 @@ def health(db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
             "path": config.pcm_courses_dir,
             "configured": bool(config.pcm_courses_dir),
             "contentManagerVersion": content_manager_version(config.pcm_courses_dir),
+            # True when these are the copy a seeded installer laid down (this
+            # app's or the Content Editor's) rather than a checkout. Said
+            # because "Publish and push" needs a repository and this is not
+            # one, and an author deserves to know why before they try.
+            "seeded": seed.is_seeded(config.pcm_courses_dir, ASSETS_DIR),
         },
         # What the process was opened for, when something launched it with a
         # course in mind. Reported here because the client already asks for
