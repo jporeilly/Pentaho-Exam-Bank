@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-10-09
+
 ### Fixed
 
 - **The Bank's column filters were stacked in the first column** (1.13.1).
