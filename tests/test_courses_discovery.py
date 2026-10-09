@@ -33,6 +33,9 @@ def no_registry(monkeypatch):
     """
     monkeypatch.setattr(config, "_installer_hint", lambda: None)
     monkeypatch.delenv("PCM_REPO", raising=False)
+    # The Content Editor's seeded copy lives in %APPDATA%, which the same
+    # machine-dependence applies to.
+    monkeypatch.setattr(config._seed, "editor_courses_dir", lambda: None)
 
 
 def test_the_environment_wins(monkeypatch, courses):

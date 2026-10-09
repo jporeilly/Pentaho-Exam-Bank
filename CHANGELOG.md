@@ -7,6 +7,39 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **A seeded installer, for a machine with no Content Manager checkout.**
+  `npm run dist:seeded` (in `desktop/`) builds
+  `Pentaho Exam Bank_<version>_x64-seeded-setup.exe`, which carries the
+  text of some Content Manager courses and opens onto them. The plain
+  installer is unchanged and stays the right one for an author who has a
+  checkout.
+  - **What it carries**: only what the bank reads - `course.json`,
+    `SUMMARY.md`, `exam.json`, `glossary.json` and each lab's
+    `manifest.json` and `guide.md`. Lab files, images and sample data stay
+    behind, so all twelve courses are about 3 MB. Only files git tracks
+    ship (the distribution repo is public); outside git a file-type rule
+    and a short skip list apply. `PEB_SEED_COURSES=a,b` picks a subset.
+  - **First run** lays the courses out under the app's data folder
+    (`%APPDATA%\com.pentaho.exam-bank\pcm-seed\courses`). It ranks below
+    `PCM_REPO`, the installer's registry hint and any real checkout.
+  - **Shared with the Content Editor.** When the editor's own seeded copy
+    exists (`%APPDATA%\com.pentaho.content-editor\pcm-seed`), the bank
+    reads that one instead of its own, so an author edits labs in the
+    editor and generates questions from the same text, not two copies that
+    drift.
+  - **Additive.** A course is copied only if missing; an author's exams
+    survive every upgrade and nothing is deleted.
+  - **What a seeded copy cannot do**: *Publish and push* commits in an
+    authoring repository, and a seeded copy is not one, so the push is not
+    offered. Publishing still writes the course's `exam.json`.
+  - `/api/health` reports `courses.seeded`.
+- `desktop/scripts/stage-seed.mjs`, plain Node, tested under pytest on any
+  OS; it will not delete a directory that is not a seed.
+- `collect-installer.ps1 -Suffix <name>` keeps a seeded and a plain
+  installer of one version side by side in `dist\`.
+
 ## [1.13.1] - 2026-10-08
 
 ### Changed
