@@ -225,3 +225,47 @@ def test_more_than_one_flow_line_is_noted():
 def test_style_notes_include_the_flow():
     notes = style_notes(_q(explanation="Rows go on.\n\nFilter rows \u2192 Preview"))
     assert any(f == "explanation" and '"Preview"' in m for f, m in notes)
+
+
+# --- Code blocks (1.16.0) ---------------------------------------------------------------
+
+SQL = "```sql\nSELECT 'Stream Lookup'  FROM t\nWHERE note = 'can''t' -> x\n```"
+
+
+def test_a_code_block_is_kept_exactly_as_written():
+    text = "The **filter** can't see it:\n\n" + SQL + "\n\nThe 'Stream Lookup' step doesn't run."
+    out = tidy(text)
+    assert SQL in out, "nothing inside the fence moves"
+    assert out.startswith("The **filter** cannot see it:")
+    assert out.endswith("The Stream lookup step does not run.")
+
+
+def test_quotes_in_a_code_block_are_not_noted():
+    assert text_notes("Run it:\n\n" + SQL) == []
+
+
+def test_a_code_block_outside_the_explanation_is_noted():
+    notes = style_notes(_q(stem="Which query?\n```sql\nSELECT 1\n```"))
+    assert ("stem", "A code block belongs in the explanation only.") in notes
+
+
+def test_one_short_parsable_json_block_has_no_notes():
+    assert style_notes(_q(explanation="**JSONPath** walks it.\n\n```json\n{\"a\": [1, 2]}\n```")) == []
+
+
+def test_a_broken_json_block_is_noted():
+    notes = style_notes(_q(explanation="It walks it.\n\n```json\n{\"a\": [1, 2,]}\n```"))
+    assert any("JSON block does not parse" in m for f, m in notes)
+
+
+def test_two_blocks_or_a_long_one_are_noted():
+    two = style_notes(_q(explanation="A.\n\n```\nx\n```\n\nB.\n\n```\ny\n```"))
+    assert any("More than one code block" in m for f, m in two)
+    long = "\n".join(f"line {i}" for i in range(15))
+    assert any("runs to 15 lines" in m for f, m in style_notes(_q(explanation=f"A.\n\n```\n{long}\n```")))
+
+
+def test_the_explanation_checks_read_the_prose_not_the_code():
+    from exam_bank.core.explanation_style import explanation_notes
+
+    assert explanation_notes("It holds rows.\n\n```\nstatus = 'Correct:' -- option B\n```") == []

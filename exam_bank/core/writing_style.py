@@ -28,14 +28,31 @@ before the author sees it, so what is proposed is already tidy.
 from __future__ import annotations
 
 import copy
+import json
 import re
 from typing import Callable, List, Tuple
 
+from .inline_format import blocks
 from .pdi_names import JOB_ENTRIES, STEPS
 
-# --- Code spans are left alone -------------------------------------------
+# --- Code is left alone ------------------------------------------------------
+
+# A fenced code block (1.16.0), as inline_format.blocks reads one: a line of
+# ``` with an optional language, the code, a line of ```. Kept verbatim -
+# SQL has its quotes, a sample its own spacing.
+_FENCED = re.compile(r"^[ \t]*```[\w+.-]*[ \t]*\r?\n(?:.*\n)*?[ \t]*```[ \t]*\r?$", re.M)
 
 _CODE = re.compile(r"`[^`\n]+`")
+
+
+def _outside_fences(text: str, fix: Callable[[str], str]) -> str:
+    out, last = [], 0
+    for m in _FENCED.finditer(text):
+        out.append(fix(text[last:m.start()]))
+        out.append(m.group(0))
+        last = m.end()
+    out.append(fix(text[last:]))
+    return "".join(out)
 
 
 def _outside_code(text: str, fix: Callable[[str], str]) -> str:
@@ -50,7 +67,7 @@ def _outside_code(text: str, fix: Callable[[str], str]) -> str:
 
 
 def _without_code(text: str) -> str:
-    return _CODE.sub(" ", text)
+    return _CODE.sub(" ", _FENCED.sub(" ", text))
 
 
 # --- PDI's names -----------------------------------------------------------
@@ -164,14 +181,18 @@ def _tidy_prose(s: str) -> str:
 _CODE_NUMBER = re.compile(r"`(-?\d[\d,]*(?:\.\d+)?)`")
 
 
+def _tidy_text(text: str) -> str:
+    text = text.translate(_CURLY)
+    text = "\n".join(line.rstrip() for line in text.split("\n"))
+    text = _CODE_NUMBER.sub(r"\1", text)
+    return _outside_code(text, _tidy_prose)
+
+
 def tidy(text: str | None) -> str:
     """The text with the standard's mechanical rules applied; code untouched."""
     if not text:
         return text or ""
-    text = text.translate(_CURLY)
-    text = "\n".join(line.rstrip() for line in text.split("\n"))
-    text = _CODE_NUMBER.sub(r"\1", text)
-    return _outside_code(text, _tidy_prose).strip()
+    return _outside_fences(text, _tidy_text).strip()
 
 
 def tidy_question(question):
@@ -261,7 +282,7 @@ def flow_notes(text: str) -> List[str]:
     a step. A flow that names what PDI has no step for teaches the wrong
     thing, so each name is checked against PDI's own.
     """
-    lines = [line for line in (text or "").split("\n") if "→" in line]
+    lines = [line for line in _FENCED.sub("", text or "").split("\n") if "→" in line]
     notes: List[str] = []
     if len(lines) > 1:
         notes.append("More than one flow line. Keep the one the answer is about, or none.")
@@ -281,9 +302,37 @@ def flow_notes(text: str) -> List[str]:
     return notes
 
 
+# Past this a block stops illustrating and starts being a listing to study.
+_LONG_BLOCK = 12
+
+
+def code_notes(question) -> List[Tuple[str, str]]:
+    """Notes on code blocks (1.16.0): explanation only, one at most, short,
+    and a JSON block that parses - a model asked for a sample can invent a
+    broken one, and a broken sample teaches the wrong syntax."""
+    notes: List[Tuple[str, str]] = []
+    for field, texts in (("scenario", [question.scenario]), ("stem", [question.stem]),
+                         ("options", _options(question))):
+        if any(_FENCED.search(t or "") for t in texts):
+            notes.append((field, "A code block belongs in the explanation only."))
+    found = [b for b in blocks(question.explanation) if b[0] == "code"]
+    if len(found) > 1:
+        notes.append(("explanation", "More than one code block. Keep the one the answer turns on."))
+    for _kind, code, lang in found:
+        lines = code.count("\n") + 1
+        if lines > _LONG_BLOCK:
+            notes.append(("explanation", f"The code block runs to {lines} lines. Show only the part the answer turns on."))
+        if lang.lower() == "json":
+            try:
+                json.loads(code)
+            except ValueError as e:
+                notes.append(("explanation", f"The JSON block does not parse ({e.msg}, line {e.lineno}). Fix it or drop it."))
+    return notes
+
+
 def style_notes(question) -> List[Tuple[str, str]]:
     """(field, message) for what the writing standard leaves to the author."""
-    notes: List[Tuple[str, str]] = []
+    notes: List[Tuple[str, str]] = code_notes(question)
     for field in ("scenario", "stem", "explanation"):
         notes += [(field, m) for m in text_notes(getattr(question, field, "") or "")]
     notes += [("explanation", m) for m in flow_notes(question.explanation)]

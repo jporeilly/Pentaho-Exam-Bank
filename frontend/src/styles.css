@@ -1235,3 +1235,21 @@ td.empty { text-align: center; color: var(--text-faint); padding: 18px 10px; }
 }
 .house-style__section ul { margin: 0; padding-left: 20px; line-height: 1.55; }
 .house-style__section li + li { margin-top: 3px; }
+
+/* A code block in an explanation (1.16.0): drawn as typed, in the same
+   mono face and ground as inline code, scrolling sideways rather than
+   wrapping - a wrapped JSON line reads as two. */
+.fmt-code {
+  display: block;
+  margin: 0.65em 0;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-strong);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.45;
+  white-space: pre;
+  overflow-x: auto;
+}
+.fmt-code + .fmt-p, .fmt-p + .fmt-code { margin-top: 0.65em; }

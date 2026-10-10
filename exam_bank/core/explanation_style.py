@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from typing import List
 
+from .inline_format import blocks
+
 # "Correct:" / "Incorrect:" used as a verdict on an option: followed by a
 # colon ("'X' - Incorrect: ...") or after a dash ("X - Correct."). Prose such
 # as "the correct setting is" is neither.
@@ -32,8 +34,10 @@ _LONG_PARAGRAPH = 700
 
 
 def explanation_notes(text: str | None) -> List[str]:
-    """What the author should look at in this explanation; [] when nothing."""
-    text = (text or "").strip()
+    """What the author should look at in this explanation; [] when nothing.
+    The prose only: a code block (1.16.0) is read as code, not as writing."""
+    paragraphs = [b[1] for b in blocks(text) if b[0] == "p"]
+    text = "\n\n".join(paragraphs)
     if not text:
         return []
     notes: List[str] = []
@@ -47,7 +51,6 @@ def explanation_notes(text: str | None) -> List[str]:
             "It refers to an answer by its letter. The options are shuffled, "
             "so name it by what it says."
         )
-    paragraphs = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
     if any(len(p) > _LONG_PARAGRAPH for p in paragraphs):
         notes.append(
             "One paragraph runs past 700 characters. Split it with a blank line "

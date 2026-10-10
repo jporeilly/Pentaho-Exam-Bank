@@ -364,6 +364,26 @@ describe("formatting the text", () => {
     expect(italic).toBeDisabled();
   });
 
+  it("a code block is for the explanation only, and the card draws it as code", async () => {
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    fakeServer(question({ explanation: "It reads every item:\n$.items[*]" }));
+    await openEditor();
+    const block = screen.getByRole("button", { name: "Code block (explanation only)" });
+
+    select(screen.getByDisplayValue("Which step reads a file?") as HTMLTextAreaElement, "reads");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Bold (Ctrl+B)" })).toBeEnabled());
+    expect(block).toBeDisabled();
+
+    const explanation = screen.getByDisplayValue(/It reads every item/) as HTMLTextAreaElement;
+    select(explanation, "$.items[*]");
+    await waitFor(() => expect(block).toBeEnabled());
+    await userEvent.click(block);
+
+    expect(explanation).toHaveValue("It reads every item:\n\n```\n$.items[*]\n```");
+    const card = explanation.closest(".field")!.parentElement!.querySelector(".explanation-card")!;
+    expect(card.querySelector("pre.fmt-code")).toHaveTextContent("$.items[*]");
+  });
+
   it("code on one distractor touches only that distractor", async () => {
     fakeServer(question({ distractors: ["Table output", "Sort rows"] }));
     await openEditor();

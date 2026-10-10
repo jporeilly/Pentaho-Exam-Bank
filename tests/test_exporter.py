@@ -309,3 +309,51 @@ class TestInlineFormatting:
         assert by_text["global"].bold and by_text["developer"].italic
         assert by_text["kettle.properties"].font.name == "Consolas"
         assert not any("**" in r.text or "`" in r.text for r in runs)
+
+
+class TestCodeBlocks:
+    """A code block in an explanation (1.16.0): each format draws it as code,
+    its lines kept and never read as formatting."""
+
+    EXPLANATION = (
+        "The **wildcard** walks the array:\n\n"
+        "```json\n{\"customers\": [{\"region_code\": \"*N*\"}]}\n```\n\n"
+        "so `$.customers[*].region_code` reads every one."
+    )
+
+    @pytest.fixture
+    def coded(self):
+        return [Question(
+            id="c1", stem="Which expression reads every region?", question_type="single",
+            key="`$.customers[*].region_code`",
+            distractors=["`$.region_code[*]`", "`$.customers.region_code`"],
+            explanation=self.EXPLANATION, topic="JSON", difficulty="Medium", bloom_level="Apply",
+        )]
+
+    def test_moodle_writes_pre_code(self, coded, tmp_path):
+        path = tmp_path / "q.xml"
+        export_moodle_xml(coded, path)
+        fb = ET.parse(path).getroot().find("question[@type='multichoice']/generalfeedback/text").text
+        assert '<pre><code class="language-json">{"customers": [{"region_code": "*N*"}]}</code></pre>' in fb
+        assert "<strong>wildcard</strong>" in fb and "<em>N</em>" not in fb
+
+    def test_text_indents_the_code(self, coded, tmp_path):
+        path = tmp_path / "q.txt"
+        export_text(coded, path, include_answers=True)
+        out = path.read_text(encoding="utf-8")
+        assert '\n    {"customers": [{"region_code": "*N*"}]}\n' in out
+        assert "```" not in out
+
+    def test_word_sets_the_code_in_consolas(self, coded, tmp_path):
+        docx = pytest.importorskip("docx")
+        from exam_bank.core.exporter import export_docx
+
+        path = tmp_path / "q.docx"
+        export_docx(coded, path)
+        runs = [r for p in docx.Document(str(path)).paragraphs for r in p.runs]
+        # The exact line, alone in its run: the inline parser, given a fence,
+        # reads it as one long `code` span - Consolas too, but with the
+        # fence's backticks and its "json" around it.
+        code = [r for r in runs if r.text == '{"customers": [{"region_code": "*N*"}]}']
+        assert code and code[0].font.name == "Consolas"
+        assert not any("`" in r.text for r in runs if r.font.name != "Consolas" or "json" in r.text)

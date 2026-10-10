@@ -7,6 +7,50 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **Code blocks in explanations.** About 64 of the bank's questions are
+  about code (JSONPath, SQL, variables and properties, expressions); their
+  explanations can now show it: a line of ``` with an optional language, the
+  code, a line of ```. Kept whole - blank lines, indentation, `*` and
+  backticks - and never parsed for formatting. The formatting contract
+  gains a block layer (`blocks()` in `inlineFormat.tsx` and
+  `core/inline_format.py`, the `blocks` cases in `inlineFormat.cases.json`);
+  a fence that never closes stays text.
+  - **Where it shows**: the editor's card and the bulk review as a `<pre>`;
+    Moodle as `<pre><code class="language-…">`; Word in Consolas, a line per
+    line; the printed paper in Courier; plain text indented four spaces; CSV,
+    JSON and exam.json keep the fences. The course draws it from the
+    Content Manager release after 0.7.22.
+  - **The editor's { } button** wraps the selection in fences, a blank line
+    from the prose; it works in the Explanation field only.
+  - **The AI is told** when one helps (a question about code), at most one,
+    eight lines, and only code the question gives or a minimal sample of
+    what it describes. **The app keeps code verbatim** - tidy and the notes
+    skip it, so SQL keeps its quotes - and **notes** a code block outside the
+    explanation, more than one, one past 12 lines, or a `json` block that
+    does not parse.
+
+### Fixed
+
+- **A reply holding a code block is read whole.** A model wraps its JSON in
+  a ```json fence, and the rewrite, generation and its auto-fix took the
+  text between the first two fences - which, once an explanation held a
+  code block, was half the JSON. 2hr-m3-q10 failed every rewrite. One
+  extractor now (`generation_parsing`) tries the outermost fence, then the
+  first, then the bare text; the rewrite's and auto-fix's own copies are
+  gone. Live: 2hr-m3-q10 and di-m3-q2 now come back with a JSON sample of
+  the structure their scenarios describe, both samples parsing.
+
+### Changed
+
+- **More room for course material in a generation call.** The window kept
+  4,500 tokens for the reply because gemma4 used to think first; since
+  1.14.0 nothing thinks. Measured with thinking off, three questions took
+  638 tokens. The reserve is now 2,500, which gives back the room the
+  longer house rules took: at an 8,192 window a section of about 10,700
+  characters fits, where 4,500 left 2,676.
+
 ## [1.15.0] - 2026-10-10
 
 ### Added

@@ -26,7 +26,7 @@ import {
   type Question,
 } from "./api";
 import { AnswerMark, OptionList } from "./answers";
-import { Formatted, hasFormat, toggleWrap, type Marker } from "./inlineFormat";
+import { Formatted, hasFormat, toggleWrap, wrapFence, type Marker } from "./inlineFormat";
 import { ExplanationCard, ProposedQuestion } from "./ProposalView";
 import { useVocabulary } from "./vocabulary";
 
@@ -317,6 +317,8 @@ export function QuestionEditor({
     apply: (value: string) => void;
   } | null>(null);
   const [canFormat, setCanFormat] = useState(false);
+  // A code block is for the explanation only (1.16.0).
+  const [canBlock, setCanBlock] = useState(false);
 
   // React writes the new value and drops the caret at the end, so the
   // selection goes back on the same words once that value is committed.
@@ -345,12 +347,23 @@ export function QuestionEditor({
     setNotice("");
   }
 
-  function formattable(apply: (value: string) => void) {
+  function applyBlock() {
+    const a = active.current;
+    if (!a) return;
+    const { el } = a;
+    const r = wrapFence(el.value, el.selectionStart ?? 0, el.selectionEnd ?? 0);
+    pendingSelection.current = { el, start: r.start, end: r.end };
+    a.apply(r.value);
+    setNotice("");
+  }
+
+  function formattable(apply: (value: string) => void, blocks = false) {
     return {
       "data-fmt": "1",
       onFocus: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         active.current = { el: e.currentTarget, apply };
         setCanFormat(true);
+        setCanBlock(blocks);
       },
       onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
@@ -539,6 +552,7 @@ export function QuestionEditor({
         if (t.dataset.fmt || t.closest(".format-bar")) return;
         active.current = null;
         setCanFormat(false);
+        setCanBlock(false);
       }}
     >
       <div className="toolbar">
@@ -575,6 +589,17 @@ export function QuestionEditor({
             {face}
           </button>
         ))}
+        <button
+          type="button"
+          className="secondary fmt"
+          title="Code block (explanation only)"
+          aria-label="Code block (explanation only)"
+          disabled={!canBlock}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={applyBlock}
+        >
+          <code>{"{ }"}</code>
+        </button>
         <span className="faint format-hint">
           {canFormat
             ? "Formats the selection in the field you are in."
@@ -707,7 +732,7 @@ export function QuestionEditor({
           className="explanation-input"
           value={draft.explanation}
           onChange={(e) => set("explanation", e.target.value)}
-          {...formattable(setText("explanation"))}
+          {...formattable(setText("explanation"), true)}
         />
         <ExplanationCard text={draft.explanation} label="How candidates see it" />
       </Field>

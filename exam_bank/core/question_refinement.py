@@ -113,17 +113,10 @@ Return ONLY a JSON object with these keys:
         timeout=120.0,
     )
 
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response, re.DOTALL)
-    text = fence_match.group(1) if fence_match else response
-
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        return None
-
-    try:
-        data = json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
+    # The shared extractor: an explanation may now hold a code block, whose
+    # fences sit inside the JSON (generation_parsing).
+    data = _extract_json_object(response)
+    if data is None:
         return None
 
     # A COPY. This used to assign straight onto the argument, so calling it

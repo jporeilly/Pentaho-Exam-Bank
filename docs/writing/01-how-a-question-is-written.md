@@ -46,6 +46,22 @@ question explains each of its correct answers.
   Table input → Filter rows → Table output. Most explanations have none. An
   AI proposal says so when its flow names something that is not a PDI step,
   or draws more than one. The printed exam paper prints the arrow as `->`.
+- Only when the question is about code - a JSONPath or regular expression,
+  SQL, a properties or JSON file - a code block showing the piece the answer
+  turns on: at most one, at most eight lines, and only code the question
+  gives or a minimal sample of what it describes (from 1.16.0):
+
+  ````
+  The wildcard reads every element of the array:
+
+  ```json
+  {"customers": [{"region_code": "N"}, {"region_code": "S"}]}
+  ```
+  ````
+
+  A proposal says so when a code block sits outside the explanation, when
+  there is more than one, when one runs past 12 lines, or when a `json`
+  block does not parse.
 
 > A **header row** is the first line of a delimited file, and the CSV file
 > input step reads it as the column names by default.
@@ -122,6 +138,13 @@ for you. Because they are plain text, they travel with the question:
 - **Word, QTI and Moodle** exports carry them as real bold, italic and code.
 - **CSV and JSON** keep the markers, so a round trip loses nothing.
 - **Plain text** and the **printed exam paper** show the words without them.
+
+A **code block** in an explanation goes the same way: the editor's card and
+Moodle draw it as code, Word sets it in Consolas, the printed paper in
+Courier, plain text indents it four spaces, and CSV, JSON and the course's
+exam.json keep the fences. The course draws it once its Content Manager is a
+release later than 0.7.22; an older one shows the ``` lines as typed. The
+editor's **{ }** button (Explanation only) puts the selection between fences.
 
 An asterisk that is not formatting stays an asterisk: `[Sales] * [Quantity]`,
 `$.orders[*]`, `industrial/*/sensor` and `*.ktr` are left alone, and

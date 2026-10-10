@@ -59,5 +59,20 @@
     { "in": "first\r\n\r\nsecond", "paragraphs": ["first", "second"] },
     { "in": "the **key** idea\n\nwhy it **matters**", "paragraphs": ["the **key** idea", "why it **matters**"] },
     { "in": "**not\n\nbold**", "paragraphs": ["**not", "bold**"] }
+  ],
+  "aboutBlocks": "Code blocks sit beside paragraphs (1.16.0): a line of ``` with an optional language name, the code, and a line of ``` make one block, kept whole - blank lines, indentation, asterisks and backticks included - and never parsed for markers. Fence lines may carry surrounding spaces. Prose between blocks splits into paragraphs as above. A fence that never closes is not a block: its line stays text. Blocks are [\"p\", text] or [\"code\", text, language].",
+  "blocks": [
+    { "in": "", "blocks": [] },
+    { "in": "just prose\n\nin two", "blocks": [["p", "just prose"], ["p", "in two"]] },
+    { "in": "Given:\n\n```json\n{\"a\": [1, 2]}\n```\n\nthen `$.a[*]` reads both.",
+      "blocks": [["p", "Given:"], ["code", "{\"a\": [1, 2]}", "json"], ["p", "then `$.a[*]` reads both."]] },
+    { "in": "Before\n```sql\nSELECT *\n  FROM t\n\nWHERE a = 'x'\n```\nAfter",
+      "blocks": [["p", "Before"], ["code", "SELECT *\n  FROM t\n\nWHERE a = 'x'", "sql"], ["p", "After"]] },
+    { "in": "```\n**not bold** and `not code`\n```", "blocks": [["code", "**not bold** and `not code`", ""]] },
+    { "in": "  ```properties  \nKEY=value\n  ```  ", "blocks": [["code", "KEY=value", "properties"]] },
+    { "in": "a fence ```json that is inline\nstays prose", "blocks": [["p", "a fence ```json that is inline\nstays prose"]] },
+    { "in": "```json\nnever closed\n\nmore", "blocks": [["p", "```json\nnever closed"], ["p", "more"]] },
+    { "in": "one\r\n```\r\nx = 1\r\n```\r\ntwo", "blocks": [["p", "one"], ["code", "x = 1", ""], ["p", "two"]] },
+    { "in": "```\n```", "blocks": [["code", "", ""]] }
   ]
 }

@@ -100,17 +100,10 @@ Return ONLY a JSON object with these keys (nothing else):
         print(f"[AUTO-FIX] AI call failed: {e}")
         return None
 
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response, re.DOTALL)
-    text = fence_match.group(1) if fence_match else response
-
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        return None
-
-    try:
-        data = json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
+    # The shared extractor: the explanation may hold a code block, whose
+    # fences sit inside the JSON (generation_parsing).
+    data = _extract_json_object(response)
+    if data is None:
         return None
 
     # Apply only choices + explanation — leave everything else untouched

@@ -45,6 +45,13 @@ EXPLANATION_RULES = """\
   path the answer is about - Table input → Filter rows → Table output.
   Never a generic name ("Input step") or something that is not a step
   ("Preview").
+- Where the question is about code - a JSONPath or regular expression, SQL,
+  a properties or JSON file - a code block may show the piece the answer
+  turns on: a line of ``` with the language (json, sql, properties, regex),
+  the code, and a line of ```, as a paragraph of its own. Inside the JSON
+  string that is "\\n\\n```json\\n{...}\\n```\\n\\n". At most one, at most
+  eight lines, and only code the question gives or a minimal sample of the
+  structure it describes. Most explanations need none.
 - Refer to an answer by what it says, never by a letter or position: the
   options are shuffled."""
 
@@ -110,8 +117,8 @@ EXPLANATION_REWRITE_RULES = """\
   gives about why the correct answer is right - including caveats and
   numbers - and drop only what it says about the wrong options.
 - Add no fact the current explanation does not state. If it says little,
-  the new one says little. A flow line of steps the question names is not a
-  new fact."""
+  the new one says little. A flow line of steps the question names, or a
+  code block of code or structure the question gives, is not a new fact."""
 
 
 GENERATION_SYSTEM_PROMPT = """\
