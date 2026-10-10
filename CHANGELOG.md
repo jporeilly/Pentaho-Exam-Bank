@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-10
+
 ### Added
 
 - **AI rewrite all, in the Bank.** Rewrites every question the filters show
