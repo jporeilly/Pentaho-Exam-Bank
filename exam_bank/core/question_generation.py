@@ -10,11 +10,12 @@ from ..utils.config import config
 from .bank import Question
 from .source import SlideInfo
 from .generation_prompts import (
-    EXPLANATION_RULES, GENERATION_SYSTEM_PROMPT, _build_question_specs, build_prompt,
+    EXPLANATION_RULES, GENERATION_SYSTEM_PROMPT, WRITING_RULES, _build_question_specs, build_prompt,
 )
 from .generation_parsing import _extract_json_array, _extract_json_object, validate_key_against_notes
 from .stem_text import question_only
 from .validation import problems_with
+from .writing_style import tidy_question
 
 
 # What the AI can fix by rewriting the options: a distractor that repeats a
@@ -76,6 +77,7 @@ if needed for length balance.
 - Replace any distractor that duplicates a key with a different plausible wrong answer.
 - Replace "All/None of the above" with a specific, plausible wrong answer.
 {EXPLANATION_RULES}
+{WRITING_RULES}
 
 Return ONLY a JSON object with these keys (nothing else):
 ```json
@@ -270,7 +272,9 @@ def generate_questions(
             else:
                 print(f"[GENERATE] Auto-fix failed for question {i+1}, keeping original")
 
-        questions.append(q)
+        # The writing standard's mechanical half (quotes, PDI's step names,
+        # contractions), which a model told the rule still slips on.
+        questions.append(tidy_question(q))
 
     return questions
 

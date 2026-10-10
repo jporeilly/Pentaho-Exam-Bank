@@ -144,6 +144,21 @@ describe("the bulk AI rewrite", () => {
   });
 });
 
+describe("the writing standard's notes", () => {
+  it("names the answers and draws the advice's code as code", async () => {
+    fakeServer([entry("q1", {
+      notes: [{ field: "options", message: "Single quotes around 'sales'. Use `code` for a name." }],
+    })], 0);
+    mount(1);
+    await userEvent.click(screen.getByRole("button", { name: "Rewrite 1 question" }));
+    const row = (await screen.findByText("q1")).closest("li")!;
+
+    const note = row.querySelector(".advice")!;
+    expect(note).toHaveTextContent(/^Answers: Single quotes around 'sales'/);
+    expect(note.querySelector("code")).toHaveTextContent("code");
+  });
+});
+
 describe("what a rewrite changed", () => {
   it("names the parts, so a changed question stands out from a polished explanation", async () => {
     const { changedParts } = await import("./BulkRewrite");

@@ -824,7 +824,7 @@ export function QuestionEditor({
           <ExplanationCard text={explained.explanation} />
           {(explained.notes ?? []).map((note) => (
             <div key={note} className="advice">
-              {note}
+              <Formatted text={note} />
             </div>
           ))}
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>

@@ -17,8 +17,10 @@ from ...core.generation_prompts import (
     EXPLANATION_RULES,
     PROOFREAD_RULES,
     SCENARIO_AND_STEM_RULES,
+    WRITING_RULES,
 )
 from ...core.grounding import Grounding, grounding_for
+from ...core.writing_style import style_notes, text_notes
 from ...core.stem_text import form_notes
 from .. import jobs
 from ...core.validation import problems_with
@@ -67,6 +69,7 @@ def house_style() -> dict[str, Any]:
         "sections": [
             {"title": "Scenario and question", "rules": SCENARIO_AND_STEM_RULES},
             {"title": "Explanation", "rules": EXPLANATION_RULES},
+            {"title": "Quotes, names and punctuation", "rules": WRITING_RULES},
             {"title": "When a question is rewritten",
              "rules": PROOFREAD_RULES + "\n" + EXPLANATION_REWRITE_RULES},
         ]
@@ -307,6 +310,9 @@ def _proposal_json(question, proposed) -> dict[str, Any]:
         ] + [
             {"field": "explanation", "message": m}
             for m in explanation_notes(proposed.explanation)
+        ] + [
+            # The writing standard: what tidy could not settle on its own.
+            {"field": f, "message": m} for f, m in style_notes(proposed)
         ],
         "unchanged": question_json(proposed) == question_json(question),
     }
@@ -529,7 +535,7 @@ def ai_write_explanation(question_id: str, db: ExamBankDB = Depends(get_db)) -> 
         # Where it breaks the house rule (correct answer only, paragraphs).
         # Until 1.14.0 this listed the options the text never named, when
         # the rule was to name every one.
-        "notes": explanation_notes(text),
+        "notes": explanation_notes(text) + text_notes(text),
     }
 
 

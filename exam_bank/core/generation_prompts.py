@@ -50,12 +50,50 @@ EXPLANATION_RULES = """\
 # polishes them, it does not re-author them.
 PROOFREAD_RULES = """\
 - Scenario, question and answers: fix spelling, grammar, punctuation and
-  clumsy wording ONLY. Where a sentence is already correct, keep it word for
-  word. Never change what the question asks, the details it gives (sizes,
-  names, conditions), or what an answer says.
+  clumsy wording ONLY, and bring quotes, names and punctuation to the writing
+  standard. Where a sentence is already correct, keep it word for word. Never
+  change what the question asks, the details it gives (sizes, names,
+  conditions), or what an answer says.
 - Do not change which answers are correct, do not make the correct answers
   stand out from the others, and do not add bold to the scenario, the
   question or the answers - only the explanation uses bold."""
+
+# Quotes, names and punctuation (1.15.0). The owner, reviewing the first bulk
+# rewrite: single quotes everywhere, used no standard way. A survey of the
+# 489 questions found 143 single-quoted spans doing six jobs - a field name
+# ('region_code'), a value ('undefined'), a path, a step ('Stream Lookup'), an
+# ordinary word ('sales' records), an option's text - and "Stream Lookup"
+# beside PDI's own "Stream lookup". One rule per job, below; the mechanical
+# part is applied after the model as well (core/writing_style.py), because a
+# model told the rule still slips.
+WRITING_RULES = """\
+- `code` (backticks) only for an exact name or literal as it appears in a
+  file, field, query or screen: field, column, table and key names, file
+  names, paths, variables, expressions, and literal values as typed -
+  `region_code`, `$.customers[*].region_code`, `kettle.properties`,
+  `${INPUT_DIR}`, `Y`. Never in quotation marks. NOT for ordinary nouns
+  (customer data, order records, a region file) and NOT for numbers in a
+  sentence (a price of 49.99, 20 rows).
+- PDI steps, job entries, perspectives and menu items are named exactly as PDI
+  shows them, as plain text without quotes: Stream lookup, Filter rows, Text
+  file input, Select values. Add "step" or "option" where the name could be
+  read as an ordinary word: the Copy option.
+- No quotation marks around ordinary words or for emphasis: sales records, not
+  'sales' records. Never single quotes. Double quotes only for words quoted
+  exactly as written, such as an error message.
+- Straight quotes and apostrophes, never curly ones. No contractions: does
+  not, cannot, it is.
+- American spelling (normalize, behavior, color), except in a product's own
+  names (Row normaliser).
+- The answers to one question share one form: all full sentences ending in a
+  period, or all short phrases with none. Formatting must never single out
+  an answer: if the correct answer has `code` in it, the wrong answers name
+  things in `code` too - or no answer uses it.
+- A serial comma before "and" or "or" in a list of three or more: fields,
+  rows, and steps.
+- Numbers: one to nine in words, 10 and above in digits, and digits for every
+  value, size or count with a unit (5 GB, 3 ms); thousands with commas
+  (10,000)."""
 
 # For a rewrite of an explanation that already exists. The same trial had the
 # model replace a verified fact (a canvas preview starts every step, so a
@@ -106,12 +144,15 @@ FORMAT - real certification exam style:
 """ + SCENARIO_AND_STEM_RULES + """
 - **key** / **keys** - the correct answer(s): true, and about the concept.
 - **distractors** - plausible but wrong. A common misconception, a confusion with a
-  neighbouring feature, or a partial truth. Similar in length to the key,
+  neighboring feature, or a partial truth. Similar in length to the key,
   grammatically consistent with the stem. Never "All/None of the above".
 """ + EXPLANATION_RULES + """
 - **key_source_text** - a short quote from the section showing this TOPIC is part of
   the course. It anchors the question to the syllabus and need NOT contain the
   answer. Internal only; never shown to a candidate.
+
+WRITING - quotes, names and punctuation, in every field a candidate sees:
+""" + WRITING_RULES + """
 
 Answer with the JSON array and nothing else. Do not think aloud, explain yourself,
 or add commentary before or after it.
@@ -121,8 +162,9 @@ EXAMPLE of the exact format expected:
 team keeps its own copy of the customer record."
   Stem: "What are two reasons to use Pentaho Data Integration (PDI) to break down \
 those data silos?"
-  Keys: ["PDI can provide a comprehensive 360 view of the master data, e.g customer \
-or patient.", "PDI creates a central, searchable data repository the entire data estate."]
+  Keys: ["PDI can provide a complete 360-degree view of the master data, such as \
+customer or patient records.", "PDI creates a central, searchable data repository for \
+the entire data estate."]
   Distractors: ["PDI automatically classifies disparate data for easier search and \
 retrieval.", "PDI helps businesses comply with key regulations like HIPAA and EHR."]
   Explanation: "PDI **integrates disparate sources** into one unified view of the \

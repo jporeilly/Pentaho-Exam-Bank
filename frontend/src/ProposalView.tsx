@@ -17,6 +17,7 @@ type Note = { field: string; message: string };
 const FIELD_LABEL: Record<string, string> = {
   scenario: "Scenario",
   stem: "Question",
+  options: "Answers",
   explanation: "Explanation",
 };
 
@@ -69,7 +70,7 @@ export function ProposedQuestion({
       {notes.map((n) => (
         <div key={`${n.field}:${n.message}`} className="advice">
           {FIELD_LABEL[n.field] ? `${FIELD_LABEL[n.field]}: ` : ""}
-          {n.message}
+          <Formatted text={n.message} />
         </div>
       ))}
       {problems.length > 0 && (

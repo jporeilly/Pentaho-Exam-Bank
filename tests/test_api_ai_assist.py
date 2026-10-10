@@ -281,7 +281,9 @@ def test_an_explanation_that_still_judges_every_option_says_so(client, question,
 
     body = client.post("/api/questions/q-ai/ai/explanation").json()
 
-    assert len(body["notes"]) == 1 and "Correct/Incorrect" in body["notes"][0]
+    assert "Correct/Incorrect" in body["notes"][0]
+    # Quoting each option by its text breaks the writing standard too (1.15.0).
+    assert any("Single quotes around 'Moves and shapes rows'" in n for n in body["notes"][1:])
 
 
 def test_the_answer_key_is_proposed_by_option_text_and_nothing_is_saved(client, question, db_path, monkeypatch):
@@ -625,3 +627,45 @@ def test_the_house_style_is_the_rules_the_prompts_carry(client):
     for constant in (gp.SCENARIO_AND_STEM_RULES, gp.EXPLANATION_RULES,
                      gp.PROOFREAD_RULES, gp.EXPLANATION_REWRITE_RULES):
         assert constant in rules
+
+
+# --- the writing standard (1.15.0) -------------------------------------------
+
+
+def test_every_prompt_carries_the_writing_standard(question, monkeypatch):
+    from exam_bank.core import generation_prompts as gp
+    from exam_bank.core import question_refinement as qr
+
+    assert gp.WRITING_RULES in gp.GENERATION_SYSTEM_PROMPT
+    prompts = _capture(monkeypatch, REWRITE)
+    qr.improve_question(question, model="m")
+    qr.generate_explanation(question, model="m")
+    assert len(prompts) == 2
+    assert all(gp.WRITING_RULES in p["prompt"] for p in prompts)
+
+
+def test_a_rewrite_comes_back_tidied_with_what_is_left_noted(client, question, monkeypatch):
+    _stub_generate(monkeypatch, json.dumps({
+        "scenario": "A team enriches 'sales' records with a 'Stream Lookup' step.",
+        "stem": "Which field does the lookup match on?",
+        "key": "The 'region_code' field",
+        "distractors": ["The 'sales' table", "The 'row_id' field", "The file name"],
+        "explanation": "A **Stream lookup** matches on the key field and doesn\u2019t filter rows.",
+    }))
+
+    body = client.post("/api/questions/q-ai/ai/rewrite", json={}).json()
+
+    p = body["proposed"]
+    assert p["scenario"] == "A team enriches 'sales' records with a Stream lookup step."
+    assert p["key"] == "The `region_code` field"
+    assert p["distractors"][1] == "The `row_id` field"
+    assert p["explanation"] == "A **Stream lookup** matches on the key field and does not filter rows."
+    quotes = [n for n in body["notes"] if "Single quotes around 'sales'" in n["message"]]
+    assert {n["field"] for n in quotes} == {"scenario", "options"}
+
+
+def test_the_house_style_shows_the_writing_standard(client):
+    from exam_bank.core import generation_prompts as gp
+
+    sections = client.get("/api/house-style").json()["sections"]
+    assert {"title": "Quotes, names and punctuation", "rules": gp.WRITING_RULES} in sections

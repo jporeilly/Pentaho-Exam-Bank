@@ -7,6 +7,62 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **A writing standard for quotes, names and punctuation.** Reviewing the
+  first bulk rewrite, the owner found single quotes everywhere, used no
+  standard way. A survey of the 489 questions: 143 single-quoted spans doing
+  six jobs (field names, values, paths, step names, ordinary words, option
+  text), "Stream Lookup" 15 times beside PDI's "Stream lookup" 37, 26 curly
+  quotes, 5 contractions. `WRITING_RULES` gives one rule per job - `code` for
+  an exact name or value, PDI's own step names plain, no quotes on ordinary
+  words, double quotes only to quote - plus straight quotes, no
+  contractions, American spelling, answers in one form, a serial comma and
+  numbers. Generation, AI rewrite (one or all), AI fix and AI explanation
+  carry it, and the house style panel shows it as *Quotes, names and
+  punctuation*.
+- **The mechanical half is applied by the app** (`core/writing_style.py`),
+  after the model, to every proposal: curly quotes straightened, "n't"
+  written out (not inside a double-quoted quotation), spaces closed up, a
+  Title Case step name put back to PDI's, quotes taken off a step name, a
+  quoted identifier or path put in code, a bare number taken out of code,
+  and code taken off the correct answer when no wrong answer has any. Every
+  copy of an answer (key, keys, order) is tidied alike. Dry run on the live
+  bank: 77 fields in 51 questions; every kind of change checked, with a
+  sample read in full.
+- **PDI's step and job-entry names** (`core/pdi_names.py`), read from the
+  PDI 11.0.0.3 install: 176 steps and 50 job entries, sentence case.
+- **Style notes** on proposals, for what needs a reader: quotes left around
+  a word, a value in double quotes, an ordinary word in code (`customer`
+  data), a contraction such as "it's", answers that mix sentences and
+  phrases, bold outside the explanation, code in the correct answer alone.
+  "Accept all ready" leaves these for the author. Notes now draw their
+  `code` as code, and name the answers (*Answers:*).
+
+Live trial on a copy of the bank (gemma4:12b, the 12 questions of 2hr-m3):
+single-quoted spans 89 to 0, no ordinary word or number in code after the
+rule was sharpened, answers' words unchanged; the one answer marked by code
+was caught.
+
+### Fixed
+
+- **A reworded answer keeps its place.** The display order names answers by
+  their text, so rewording them left it stale, and the fallback filled each
+  hole with the next answer left - right for one edit, but with every
+  answer reworded the correct one, first in line, was shown first. In the
+  live bank 27 orders were stale and 23 of them showed the correct answer
+  first (the course shuffles, so candidates there never saw it; Word, QTI
+  and Moodle exports did). A hole now takes the answer most like the text
+  it held: 11 remain first, 7 of them where the author put it. The AI
+  rewrite (one or all) carries each answer's position to its new wording,
+  and leaves a question with no recorded order with none, so the exports
+  still scatter it.
+
+### Changed
+
+- The generation prompt's own example no longer reads "e.g customer" or
+  "repository the entire data estate".
+
 ## [1.14.0] - 2026-10-10
 
 ### Added

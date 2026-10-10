@@ -63,12 +63,50 @@ panel and the model can never disagree. New questions are generated to it,
 and **AI rewrite** (one question or the whole Bank) brings older questions to
 it.
 
+## Quotes, names and punctuation
+
+One rule for each job quotation marks used to do (from 1.15.0):
+
+| What | How | Not |
+|---|---|---|
+| A field, column, key, file, path, variable, expression or typed value | `region_code`, `kettle.properties`, `${INPUT_DIR}`, `Y` | 'region_code' |
+| A PDI step, job entry or menu item | Its PDI name, plain: Stream lookup, Filter rows | 'Stream Lookup' |
+| An ordinary word or a number | Plain: sales records, a price of 49.99 | 'sales' records, `49.99` |
+| Words quoted exactly as written, such as an error message | Double quotes | Single quotes |
+
+And:
+
+- Straight quotes and apostrophes, never curly ones; no contractions
+  (does not, cannot).
+- American spelling (normalize, behavior), except in a product's own names
+  (Row normaliser).
+- The answers to one question share one form: all sentences ending in a
+  period, or all short phrases without one. Formatting never singles out an
+  answer: if the correct answer has `code`, the wrong ones use it too, or
+  none does.
+- A serial comma (fields, rows, and steps). Numbers one to nine in words,
+  10 and above in digits, and digits for any value or anything with a unit
+  (5 GB).
+
+PDI's step names are its own, read from a PDI 11 install: sentence case,
+"Stream lookup" not "Stream Lookup".
+
+The AI is given these rules, and the app applies the mechanical ones to
+whatever the AI proposes, before you see it: curly quotes straightened,
+contractions written out, a Title Case step name put back to PDI's, quotes
+taken off a step name, a quoted name or path put in code, a bare number taken
+out of code, and code taken off a correct answer when no wrong answer has any.
+What needs a reader - quotes left around a word that may be a key or an
+ordinary word, an ordinary word put in code, a contraction such as "it's" -
+appears as a note on the proposal.
+
 ## Formatting
 
-Three kinds, and only these: **bold**, *italic* and `code`. Use code for
-things the learner types or sees on screen - a file (`kettle.properties`),
-a variable (`${INPUT_DIR}`), a step or a menu path - and bold or italic
-sparingly, for the one word a question turns on (*not*, *first*, *only*).
+Three kinds, and only these: **bold**, *italic* and `code`. Use code for an
+exact name or value - a file (`kettle.properties`), a variable
+(`${INPUT_DIR}`), a field or a path - as set out above. Bold is for an
+explanation's key terms; italic, sparingly, for the one word a question
+turns on (*not*, *first*, *only*).
 
 They are stored as markers in the text, the way they are typed: `**bold**`,
 `*italic*`, `` `code` ``. The editor's buttons and Ctrl+B / Ctrl+I write them

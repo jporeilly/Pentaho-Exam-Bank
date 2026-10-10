@@ -29,7 +29,9 @@ from .generation_prompts import (
     GENERATION_SYSTEM_PROMPT,
     PROOFREAD_RULES,
     SCENARIO_AND_STEM_RULES,
+    WRITING_RULES,
 )
+from .writing_style import tidy, tidy_question
 
 # The rewrite's default ask. The bulk rewrite sends the same one, so a
 # question rewritten on its own and one rewritten with its exam come back alike.
@@ -78,6 +80,9 @@ IMPORTANT:
 
 Proofread as you go:
 {PROOFREAD_RULES}
+
+The writing standard - quotes, names and punctuation, in every field:
+{WRITING_RULES}
 
 The scenario and the stem do different jobs - keep them apart. If the current
 scenario asks a question, or the current stem opens with statements, move the
@@ -136,7 +141,31 @@ Return ONLY a JSON object with these keys:
     proposed.key_source_text = data.get("key_source_text", proposed.key_source_text)
     proposed.distractors = data.get("distractors", proposed.distractors)
     proposed.explanation = data.get("explanation", proposed.explanation)
-    return proposed
+    proposed.option_order = _carry_order(question, proposed)
+    # What the model missed of the writing standard's mechanical rules.
+    return tidy_question(proposed)
+
+
+def _carry_order(question: Question, proposed: Question) -> list[str]:
+    """The order the learner sees now, in the proposal's words.
+
+    The model rewords answers in place - the key stays the key, the second
+    distractor the second - so each answer keeps its position under its new
+    wording. Without this the stored order named the old wording, and once
+    every answer was reworded the correct one was shown first (1.15.0).
+    """
+    if not question.option_order:
+        # No recorded order: the exports scatter the answers by the id
+        # (exporter.stable_option_order). Recording the key-first list here
+        # would put the correct answer first.
+        return []
+    old = question.correct_answers + list(question.distractors)
+    new = proposed.correct_answers + list(proposed.distractors)
+    if len(old) != len(new) or len(set(new)) != len(new):
+        return []        # options added or merged: no position to keep
+    reworded = dict(zip(old, new))
+    order = [reworded.get(text, text) for text in question.all_choices]
+    return order if sorted(order) == sorted(new) else []
 
 
 def qa_check_question(
@@ -266,6 +295,7 @@ Rules:
 {EXPLANATION_RULES}
 - Correct spelling and grammar, and sentences that read smoothly.
 - Do not mention a course, a workshop, a lab or "the material": state the facts.
+{WRITING_RULES}
 
 Return only the explanation text, with a blank line between paragraphs."""
     try:
@@ -285,7 +315,7 @@ Return only the explanation text, with a blank line between paragraphs."""
         text = fence.group(1).strip()
     if len(text) > 1 and text[0] == text[-1] == '"':
         text = text[1:-1].strip()
-    return text
+    return tidy(text)
 
 
 _COUNT_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5}

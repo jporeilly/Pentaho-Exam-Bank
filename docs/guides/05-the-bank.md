@@ -56,6 +56,9 @@ filters show - pick a certification, a topic or an ID first to rewrite fewer.
 Each question is proofread, and its explanation rewritten to the
 [house style](../writing/01-how-a-question-is-written.md#the-house-style):
 why the correct answer is right, in paragraphs, with the key terms in bold.
+Quotes, names and punctuation are brought to the
+[writing standard](../writing/01-how-a-question-is-written.md#quotes-names-and-punctuation),
+the mechanical parts by the app itself after the AI.
 
 1. Press **AI rewrite all**. A card says how many questions it will rewrite
    and shows the house style; press **Rewrite N questions** to start, or
@@ -69,7 +72,8 @@ why the correct answer is right, in paragraphs, with the key terms in bold.
    ask something different. **Show original** puts the old one beside it.
 4. Press **Accept** on one, **Skip** to pass it over, or **Accept all ready**
    to take every proposal with no notes. A proposal with notes - an
-   explanation that still labels options "Incorrect", say - is left for you.
+   explanation that still labels options "Incorrect", say, or a word left in
+   quotes - is left for you.
 
 **Nothing is saved until you accept.** Accepting is the editor's own save:
 each changed field goes into the question's version history, under the editor

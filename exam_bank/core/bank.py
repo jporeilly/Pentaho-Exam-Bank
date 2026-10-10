@@ -5,6 +5,7 @@ import sqlite3
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import List, Optional
 
@@ -183,26 +184,48 @@ class Question:
         text fills in its place, so a corrected answer stays where the author
         put it; anything left over goes on the end. A stale order can cost
         position, never correctness.
+
+        A hole takes the edited text MOST LIKE the text it held (1.15.0), not
+        simply the next one left. Filling in stored order is right for one
+        edit, but when several answers are reworded at once - an AI rewrite
+        - every slot is a hole and the next one left is always the correct
+        answer: 23 of the bank's 27 stale orders showed it first.
         """
         live = self.correct_answers + self.distractors
         if not self.option_order:
             return live
 
         remaining = list(live)
-        slots = []
+        slots: List[Optional[str]] = []
+        holes: dict[int, str] = {}
         for text in self.option_order:
             if text in remaining:
                 remaining.remove(text)
                 slots.append(text)
             else:
-                slots.append(None)          # edited away, or no longer an option
+                holes[len(slots)] = text    # edited away, or no longer an option
+                slots.append(None)
+
+        # Each hole, best match first, takes the remaining text most like
+        # the one it held - if any is close enough to be its edit.
+        pairs = sorted(
+            ((SequenceMatcher(None, old.lower(), new.lower()).ratio(), i, new)
+             for i, old in holes.items() for new in remaining),
+            key=lambda p: -p[0],
+        )
+        for ratio, i, new in pairs:
+            if ratio < 0.5:
+                break
+            if slots[i] is None and new in remaining:
+                slots[i] = new
+                remaining.remove(new)
 
         out: List[str] = []
         for slot in slots:
             if slot is not None:
                 out.append(slot)
             elif remaining:
-                out.append(remaining.pop(0))   # the edit, back in its own slot
+                out.append(remaining.pop(0))   # an edit too different to match
         out.extend(remaining)                  # genuinely new options
         return out
 
