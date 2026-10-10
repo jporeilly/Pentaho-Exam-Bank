@@ -2,13 +2,37 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import cases from "./inlineFormat.cases.json";
-import { Formatted, hasFormat, parseInline, plainText, toggleWrap, type InlineNode } from "./inlineFormat";
+import {
+  Formatted, hasFormat, paragraphs, parseInline, plainText, toggleWrap, type InlineNode,
+} from "./inlineFormat";
 
 describe("the inline formatting contract", () => {
   // The same file the Python exporters and the Content Manager's quiz are
   // tested against: one meaning for "**" across the three.
   it.each(cases.cases.map((c) => [JSON.stringify(c.in), c] as const))("%s", (_, c) => {
     expect(parseInline(c.in)).toEqual(c.nodes as InlineNode[]);
+  });
+});
+
+describe("the paragraph contract", () => {
+  it.each(cases.paragraphs.map((c) => [JSON.stringify(c.in), c] as const))("%s", (_, c) => {
+    expect(paragraphs(c.in)).toEqual(c.paragraphs);
+  });
+});
+
+describe("paragraphs on screen", () => {
+  it("draws each paragraph as its own block, formatted on its own", () => {
+    const html = renderToStaticMarkup(<Formatted text={"the **key** idea\n\nwhy it *matters*"} />);
+    expect(html).toBe(
+      '<span class="fmt-p">the <strong>key</strong> idea</span>' +
+        '<span class="fmt-p">why it <em>matters</em></span>',
+    );
+  });
+
+  it("leaves text with no blank line exactly as it was", () => {
+    expect(renderToStaticMarkup(<Formatted text={"line one\n**line two**"} />)).toBe(
+      "line one\n<strong>line two</strong>",
+    );
   });
 });
 

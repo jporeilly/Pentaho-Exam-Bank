@@ -22,6 +22,53 @@ SCENARIO_AND_STEM_RULES = """\
   "Which two ...?". Avoid negatives ("Which is NOT")."""
 
 
+# What an explanation is, read by every prompt that writes one: generation,
+# the AI rewrite, the AI fix and the AI explanation. Until 1.14.0 the house
+# rule was to address every option ("'X' - Correct: ... 'Y' - Incorrect:
+# ..."); the owner asked for the correct answer only, set out so it reads
+# well after the exam. core/explanation_style.py checks the result, since a
+# model can still slip back into the old labels.
+EXPLANATION_RULES = """\
+- **explanation** - why the correct answer is correct, and nothing else. Do NOT
+  discuss the wrong options and do NOT label options "Correct:" or "Incorrect:".
+  For a multi-select, explain each correct answer.
+- Teach the concept: what it is or does, and why that answers this question.
+  State facts plainly, as a subject matter expert.
+- One to three short paragraphs. Separate paragraphs with a blank line ("\\n\\n"
+  inside the JSON string). No headings, no lists.
+- Put the one to three key terms in **bold** with double asterisks - the
+  feature, setting or idea the answer turns on. Bold phrases, never whole
+  sentences. No other formatting.
+- Refer to an answer by what it says, never by a letter or position: the
+  options are shuffled."""
+
+# Spelling, grammar and flow, for the prompts that rewrite existing text.
+# Conservative on purpose: a live trial (2026-10-10, gemma4:12b, seven
+# reviewed questions) turned "...a file larger than available RAM?" into
+# "How does PDI handle the data volume in this transformation?" - fluent,
+# and no longer the question. These questions have been reviewed; a rewrite
+# polishes them, it does not re-author them.
+PROOFREAD_RULES = """\
+- Scenario, question and answers: fix spelling, grammar, punctuation and
+  clumsy wording ONLY. Where a sentence is already correct, keep it word for
+  word. Never change what the question asks, the details it gives (sizes,
+  names, conditions), or what an answer says.
+- Do not change which answers are correct, do not make the correct answers
+  stand out from the others, and do not add bold to the scenario, the
+  question or the answers - only the explanation uses bold."""
+
+# For a rewrite of an explanation that already exists. The same trial had the
+# model replace a verified fact (a canvas preview starts every step, so a
+# connected output step DOES write) with an invented opposite ("without ...
+# writing to a destination"). The facts are the reviewed part; keep them.
+EXPLANATION_REWRITE_RULES = """\
+- Rewrite the CURRENT explanation; do not write a new one. Keep every fact it
+  gives about why the correct answer is right - including caveats and
+  numbers - and drop only what it says about the wrong options.
+- Add no fact the current explanation does not state. If it says little,
+  the new one says little."""
+
+
 GENERATION_SYSTEM_PROMPT = """\
 You are an expert certification exam item writer.
 
@@ -61,8 +108,7 @@ FORMAT - real certification exam style:
 - **distractors** - plausible but wrong. A common misconception, a confusion with a
   neighbouring feature, or a partial truth. Similar in length to the key,
   grammatically consistent with the stem. Never "All/None of the above".
-- **explanation** - address EVERY choice: why each key is right and each distractor
-  wrong. Refer to choices by their text, never by letter, since they get shuffled.
+""" + EXPLANATION_RULES + """
 - **key_source_text** - a short quote from the section showing this TOPIC is part of
   the course. It anchors the question to the syllabus and need NOT contain the
   answer. Internal only; never shown to a candidate.
@@ -79,13 +125,10 @@ those data silos?"
 or patient.", "PDI creates a central, searchable data repository the entire data estate."]
   Distractors: ["PDI automatically classifies disparate data for easier search and \
 retrieval.", "PDI helps businesses comply with key regulations like HIPAA and EHR."]
-  Explanation: "'PDI can provide a comprehensive 360 view' — Correct: PDI integrates \
-disparate sources to provide a unified master data view. 'PDI creates a central, \
-searchable data repository' — Correct: this is a core capability for breaking down \
-data silos. 'PDI automatically classifies disparate data' — Incorrect: PDI does not \
-automatically classify data; classification requires separate tooling. 'PDI helps \
-businesses comply with key regulations' — Incorrect: while compliance may be a \
-benefit, it is not a primary reason for breaking down data silos."
+  Explanation: "PDI **integrates disparate sources** into one unified view of the \
+master data, so every team works from the same customer record instead of its own \
+copy.\\n\\nBecause the integrated data lands in one place, it also becomes a \
+**central, searchable repository** for the whole data estate."
 
 Follow Bloom's Taxonomy levels for cognitive rigor:
 - Remember: Recall facts
@@ -209,7 +252,9 @@ def build_prompt(
     parts.append(f"- If no Source Material exists, use the Content text instead")
     parts.append(f"- Distractors can be anything plausible but must NOT be in the source content")
     parts.append(f"- Format choices like a real certification exam (A:, B:, C:, D:)")
-    parts.append(f"- CRITICAL: Explanation must address EACH choice by its text content (not by letter A/B/C/D, since choices are shuffled)")
+    parts.append("- CRITICAL: The explanation says why the correct answer(s) are right - never "
+                 "discuss the wrong options or label options Correct/Incorrect. One to three "
+                 "short paragraphs, the key terms in **bold**.")
     parts.append(f"- NEVER mention 'speaker notes', 'slides', 'source material', or 'training material' "
                  f"in the scenario, stem, choices, or explanation. Write as a subject matter expert.")
 
@@ -228,7 +273,7 @@ For SINGLE-SELECT questions:
   "key": "the single correct answer",
   "key_source_text": "exact quote from source material",
   "distractors": ["wrong1", "wrong2", "wrong3"],
-  "explanation": "'the single correct answer' — Correct: <reason>. 'wrong1' — Incorrect: <reason>. 'wrong2' — Incorrect: <reason>. 'wrong3' — Incorrect: <reason>."
+  "explanation": "Why the correct answer is right, with the **key term** in bold.\\n\\nA second short paragraph if it helps."
 }}
 ```
 
@@ -241,11 +286,12 @@ For MULTI-SELECT questions — the question names how many it wants ("Which two 
   "keys": ["correct answer 1", "correct answer 2"],
   "key_source_text": "exact quotes from source material supporting both answers",
   "distractors": ["wrong1", "wrong2"],
-  "explanation": "'correct answer 1' — Correct: <reason>. 'correct answer 2' — Correct: <reason>. 'wrong1' — Incorrect: <reason>. 'wrong2' — Incorrect: <reason>."
+  "explanation": "Why **correct answer 1** is right.\\n\\nWhy **correct answer 2** is right."
 }}
 ```
 
-IMPORTANT: The explanation MUST reference each choice by its actual text content, NOT by letter (A/B/C/D). Choices will be shuffled so letters are meaningless.
+IMPORTANT: The explanation covers the correct answer(s) only, never the wrong options:
+{EXPLANATION_RULES}
 ```""")
 
     return "\n\n".join(parts)

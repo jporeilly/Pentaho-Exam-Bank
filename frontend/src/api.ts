@@ -752,12 +752,50 @@ export interface Vocabulary {
   bloomLevels: string[];
 }
 
-/** A proposed explanation. `unnamed` are options it never names. */
+/** A proposed explanation. `notes` are where it breaks the house rule
+ *  (the correct answer only, in paragraphs): a model can slip back. */
 export interface AiExplanation {
   explanation: string;
   /** The course page it was grounded on, or "" when there was none. */
   groundedOn: string;
-  unnamed: string[];
+  notes: string[];
+}
+
+/** One part of the house style, as the prompts carry it. */
+export interface HouseStyleSection {
+  title: string;
+  /** "- " bullets, each wrapped over indented lines; **bold** allowed. */
+  rules: string;
+}
+
+/** One question of a bulk rewrite, as the review list shows it. */
+export interface RewriteEntry {
+  id: string;
+  /** The question as the rewrite found it. */
+  original: Question;
+  /** null when the model gave nothing usable (see `error`). */
+  proposed: Question | null;
+  problems: { field: string; message: string }[];
+  notes: { field: string; message: string }[];
+  unchanged: boolean;
+  error: string;
+  accepted: boolean;
+}
+
+/** A bulk rewrite job: a Job whose results are review entries. */
+export type RewriteJob = Omit<Job, "result"> & { result: RewriteEntry[] };
+
+/** The Bank's filters, as the bulk rewrite takes them. */
+export interface RewriteScope {
+  text?: string;
+  topic?: string;
+  difficulty?: string;
+  bloom_level?: string;
+  status?: string;
+  certification_id?: string;
+  id?: string;
+  exact_topic?: string;
+  sort?: string;
 }
 
 /** A proposed answer key: which options are correct, by their text. */
@@ -1191,6 +1229,22 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ instruction }),
     }),
+  /** The template every question is written to. */
+  houseStyle: () => request<{ sections: HouseStyleSection[] }>("/api/house-style"),
+  /** Start rewriting every question the filters match. Writes nothing:
+   *  poll `rewriteJob`, then `acceptRewrites` the ones to keep. */
+  aiRewriteAll: (scope: RewriteScope) =>
+    request<{ jobId: string; total: number; status: string }>("/api/questions/ai/rewrite-all", {
+      method: "POST",
+      body: JSON.stringify(scope),
+    }),
+  rewriteJob: (id: string) => request<RewriteJob>(`/api/jobs/${encodeURIComponent(id)}`),
+  /** Save the named proposals, as the editor's own save would. */
+  acceptRewrites: (jobId: string, questionIds: string[]) =>
+    request<{ saved: string[]; skipped: { id: string; reason: string }[] }>(
+      `/api/questions/ai/rewrite-jobs/${encodeURIComponent(jobId)}/accept`,
+      { method: "POST", body: JSON.stringify({ question_ids: questionIds }) },
+    ),
   /** Check the answers, and proofread. Writes nothing. */
   aiReview: (id: string) =>
     request<AiReview>(`/api/questions/${encodeURIComponent(id)}/ai/review`, {

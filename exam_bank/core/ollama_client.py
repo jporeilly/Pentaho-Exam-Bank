@@ -23,6 +23,13 @@ class OllamaModel:
 
 DEFAULT_URL = "http://localhost:11434"
 
+# NO_THINKING_WHY: every request sends "think": false. gemma4:12b, the
+# default model, reasons at length before it answers when thinking is on -
+# minutes per question rewrite, so a bulk rewrite of an exam ran for hours -
+# and its answer is a structured JSON object that needs no reasoning trace.
+# Media Studio made the same call for the same model (16 s -> 1.4 s). Models
+# that cannot think ignore it. tests/test_ollama_no_thinking.py pins it.
+
 
 def _resolve_num_ctx(num_ctx: int) -> int:
     """Resolve num_ctx: if 0, read from config; if still 0, return 0 (Ollama default)."""
@@ -160,6 +167,7 @@ def generate(
         "prompt": prompt,
         "system": system,
         "stream": False,
+        "think": False,  # see NO_THINKING_WHY
     }
     options = {}
     if resolved_ctx > 0:
@@ -216,6 +224,7 @@ def generate_stream(
         "prompt": prompt,
         "system": system,
         "stream": True,
+        "think": False,  # see NO_THINKING_WHY
     }
     if resolved_ctx > 0:
         body["options"] = {"num_ctx": resolved_ctx}
@@ -250,6 +259,7 @@ def chat(
         "model": model,
         "messages": [{"role": "system", "content": system}] + messages,
         "stream": False,
+        "think": False,  # see NO_THINKING_WHY
     }
     if resolved_ctx > 0:
         body["options"] = {"num_ctx": resolved_ctx}
@@ -278,6 +288,7 @@ def chat_stream(
         "model": model,
         "messages": [{"role": "system", "content": system}] + messages,
         "stream": True,
+        "think": False,  # see NO_THINKING_WHY
     }
     if resolved_ctx > 0:
         body["options"] = {"num_ctx": resolved_ctx}
@@ -355,6 +366,7 @@ async def async_generate(
         "prompt": prompt,
         "system": system,
         "stream": False,
+        "think": False,  # see NO_THINKING_WHY
     }
     if images:
         encoded = [b64 for path in images if (b64 := _encode_image(path))]
@@ -380,6 +392,7 @@ async def async_generate_stream(
         "prompt": prompt,
         "system": system,
         "stream": True,
+        "think": False,  # see NO_THINKING_WHY
     }
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream("POST", f"{base_url}/api/generate", json=payload) as resp:
@@ -406,6 +419,7 @@ async def async_chat(
         "model": model,
         "messages": [{"role": "system", "content": system}] + messages,
         "stream": False,
+        "think": False,  # see NO_THINKING_WHY
     }
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(f"{base_url}/api/chat", json=payload)
@@ -426,6 +440,7 @@ async def async_chat_stream(
         "model": model,
         "messages": [{"role": "system", "content": system}] + messages,
         "stream": True,
+        "think": False,  # see NO_THINKING_WHY
     }
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream("POST", f"{base_url}/api/chat", json=payload) as resp:

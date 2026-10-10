@@ -7,6 +7,45 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **AI rewrite all, in the Bank.** Rewrites every question the filters show
+  (up to 1,000), one model call each, as a background job; the review list
+  grows as each finishes. Nothing is saved until accepted: **Accept** one,
+  **Skip**, or **Accept all ready** (only proposals with no notes). Accepting
+  is the editor's own save, recorded in the version history under *AI
+  rewrite (bulk)*; a question edited since the run started is skipped, not
+  overwritten (seen failing with the check disabled). Each proposal names
+  what it changed (*Changed: Explanation*) and can show the original. A
+  model reply that is not usable JSON is retried once.
+- **The house style.** The rules every question is written to - scenario,
+  question, explanation, and what a rewrite may change - are now shared
+  constants that generation, AI rewrite (one or all), AI fix and AI
+  explanation all carry, and `GET /api/house-style` returns them. A
+  collapsible **The house style** panel shows them on the Generate screen
+  and the bulk rewrite's confirmation, so what the author reads is what the
+  model is told.
+- **Explanations in paragraphs.** A blank line in any text starts a new
+  paragraph (a single newline stays a line break; CRLF is normalised). The
+  editor previews the explanation as a card, *How candidates see it*, and
+  the Moodle export writes `<p>` paragraphs. The formatting contract
+  (`inlineFormat.cases.json`) gains the paragraph cases. The course already
+  keeps line breaks in explanations, so it shows them unchanged.
+
+### Changed
+
+- **An explanation says why the correct answer is right, and nothing
+  else.** The house rule was to address every option ("'X' - Correct: ...
+  'Y' - Incorrect: ..."); now it is one to three short paragraphs, the one to
+  three key terms in bold, an answer named by its text. AI rewrite proofreads
+  the scenario, question and answers (spelling, grammar and wording only;
+  what they say is kept) and rewrites the explanation from the current one,
+  keeping its facts and adding none. Proposals note an explanation that still
+  labels options or names one by its letter (`core/explanation_style.py`).
+- **Ollama calls send `"think": false`.** gemma4:12b thinks by default,
+  which took minutes per question; a rewrite now takes about 15 seconds.
+- The single AI rewrite's proposal now shows the explanation too.
+
 ## [1.13.2] - 2026-10-09
 
 ### Fixed

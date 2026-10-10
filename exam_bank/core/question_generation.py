@@ -10,7 +10,7 @@ from ..utils.config import config
 from .bank import Question
 from .source import SlideInfo
 from .generation_prompts import (
-    GENERATION_SYSTEM_PROMPT, _build_question_specs, build_prompt,
+    EXPLANATION_RULES, GENERATION_SYSTEM_PROMPT, _build_question_specs, build_prompt,
 )
 from .generation_parsing import _extract_json_array, _extract_json_object, validate_key_against_notes
 from .stem_text import question_only
@@ -75,16 +75,14 @@ RULES:
 if needed for length balance.
 - Replace any distractor that duplicates a key with a different plausible wrong answer.
 - Replace "All/None of the above" with a specific, plausible wrong answer.
-- The explanation must say why each correct answer is right and each distractor wrong,
-  naming every option by its text. Never refer to an option by a letter or position:
-  the options are shuffled.
+{EXPLANATION_RULES}
 
 Return ONLY a JSON object with these keys (nothing else):
 ```json
 {{
   {"\"keys\": [\"...\", \"...\"]," if is_multi else "\"key\": \"...\","}
   "distractors": ["...", "..."],
-  "explanation": "<one paragraph naming each option by its text>"
+  "explanation": "Why the correct answer is right, with the **key term** in bold."
 }}
 ```"""
 

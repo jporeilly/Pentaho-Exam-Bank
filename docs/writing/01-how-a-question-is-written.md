@@ -31,9 +31,37 @@ away. Never "All of the above" or "None of the above".
 
 ## The explanation
 
-Shown after the exam. It says why each correct answer is right and each
-distractor is wrong, naming each option by its text, never by a letter,
-because options are shuffled.
+Shown after the exam. It says why the correct answer is right, and nothing
+else: it teaches the idea the question turns on, and it does not go through
+the wrong options or label them "Correct" and "Incorrect". A multi-select
+question explains each of its correct answers.
+
+- One to three short paragraphs. A blank line starts a new paragraph.
+- The one to three key terms in **bold**: the feature, setting or idea the
+  answer turns on. Bold phrases, never whole sentences.
+- An answer is named by what it says, never by a letter, because the options
+  are shuffled.
+
+> A **header row** is the first line of a delimited file, and the CSV file
+> input step reads it as the column names by default.
+>
+> Turning **Header row present?** off makes the step read that first line as
+> data, which is what a file without one needs.
+
+The editor shows the explanation under its field the way candidates will see
+it. An AI proposal (rewrite or explanation) says so when its explanation
+still labels options or names one by its letter. The course shows the
+paragraphs and the bold as written.
+
+## The house style
+
+Everything on this page is the house style: the template every question is
+written to. The rules the AI is given are the same rules, word for word.
+**The house style** panel shows them, on the Generate screen and on the
+Bank's **AI rewrite all**, read live from the prompts the model gets, so the
+panel and the model can never disagree. New questions are generated to it,
+and **AI rewrite** (one question or the whole Bank) brings older questions to
+it.
 
 ## Formatting
 

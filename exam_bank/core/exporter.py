@@ -19,7 +19,7 @@ except ImportError:
     HAS_DOCX = False
 
 from .bank import Question
-from .inline_format import fill_element, runs, to_html, to_plain
+from .inline_format import fill_element, runs, to_html, to_html_paragraphs, to_plain
 from .stem_text import question_only
 
 
@@ -359,7 +359,8 @@ def export_moodle_xml(questions: List[Question], path: Path):
         # General feedback (explanation)
         if q.explanation:
             fb = SubElement(question_el, "generalfeedback", {"format": "html"})
-            SubElement(fb, "text").text = f"<p>{to_html(q.explanation)}</p>"
+            # One <p> per paragraph: explanations are written as paragraphs.
+            SubElement(fb, "text").text = to_html_paragraphs(q.explanation)
 
         SubElement(question_el, "defaultgrade").text = "1"
         SubElement(question_el, "penalty").text = "0.3333333"

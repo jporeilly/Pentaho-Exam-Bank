@@ -6,13 +6,21 @@ import copy
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ...core import providers, question_refinement
 from ...core.bank import BLOOM_LEVELS, DIFFICULTIES, STATUS_LABELS, STATUS_TRANSITIONS, STATUSES, ExamBankDB
 from ...core.course_filing import refile_id
+from ...core.explanation_style import explanation_notes
+from ...core.generation_prompts import (
+    EXPLANATION_REWRITE_RULES,
+    EXPLANATION_RULES,
+    PROOFREAD_RULES,
+    SCENARIO_AND_STEM_RULES,
+)
 from ...core.grounding import Grounding, grounding_for
 from ...core.stem_text import form_notes
+from .. import jobs
 from ...core.validation import problems_with
 from ...utils.config import config
 from ..deps import courses_dir_if_any, get_db, question_json
@@ -42,6 +50,26 @@ def vocabulary() -> dict[str, Any]:
         "statusLabels": dict(STATUS_LABELS),
         "difficulties": list(DIFFICULTIES),
         "bloomLevels": list(BLOOM_LEVELS),
+    }
+
+
+@router.get("/api/house-style")
+def house_style() -> dict[str, Any]:
+    """The template every question is written to, as the prompts carry it.
+
+    Generation, the AI rewrite (single and bulk), the AI fix and the AI
+    explanation all read these same constants (core/generation_prompts.py),
+    so a new question and a rewritten one come out alike. The app shows them
+    from here rather than keeping a copy that could drift from what the
+    model is actually told.
+    """
+    return {
+        "sections": [
+            {"title": "Scenario and question", "rules": SCENARIO_AND_STEM_RULES},
+            {"title": "Explanation", "rules": EXPLANATION_RULES},
+            {"title": "When a question is rewritten",
+             "rules": PROOFREAD_RULES + "\n" + EXPLANATION_REWRITE_RULES},
+        ]
     }
 
 
@@ -122,12 +150,24 @@ def update_question(
         raise HTTPException(404, f"No question '{question_id}'")
 
     editor = str(body.get("editor") or "").strip()
+    _apply_edits(db, question, body, editor)
+    return question_json(question)
+
+
+def _apply_edits(db: ExamBankDB, question, changes: dict[str, Any], editor: str) -> None:
+    """Apply the editable fields in `changes` to `question` and save it,
+    recording each change in its version history. Raises HTTPException(400)
+    for a question that could not be graded, saving nothing.
+
+    Shared by the editor's save and the bulk rewrite's accept, so an accepted
+    rewrite is recorded, validated and saved exactly as a hand edit is.
+    """
     topic_before = question.topic
     for field in _EDITABLE:
-        if field not in body:
+        if field not in changes:
             continue
         old = getattr(question, field)
-        new = body[field]
+        new = changes[field]
         if old == new:
             continue
         question.record_edit(field, old, new, editor=editor)
@@ -150,7 +190,6 @@ def update_question(
         refile_id(db, question, db.get_certification(question.certification_id),
                   courses_dir=courses_dir_if_any(), editor=editor)
     db.save(question)
-    return question_json(question)
 
 
 class StatusChange(BaseModel):
@@ -243,25 +282,185 @@ def ai_rewrite_question(
             "The model did not return a usable question. Try again, or a "
             "larger model.",
         )
+    return _proposal_json(question, proposed)
 
-    # The problems are reported against the PROPOSAL, because the author is
-    # about to decide whether to take it and an improvement that cannot be
-    # graded is not an improvement.
+
+def _proposal_json(question, proposed) -> dict[str, Any]:
+    """A rewrite as the editor and the bulk review show it.
+
+    The problems are reported against the PROPOSAL, because the author is
+    about to decide whether to take it and an improvement that cannot be
+    graded is not an improvement.
+    """
     return {
         "proposed": question_json(proposed),
         "problems": [
             {"field": p.field, "message": p.message} for p in problems_with(proposed)
         ],
         # Where the proposal breaks the house form - a question in the
-        # scenario, statements in the stem. Advice, not a block: a model can
-        # ignore the rule it was given, and the author should see that
-        # before taking the rewrite rather than after.
+        # scenario, statements in the stem, an explanation that still judges
+        # every option. Advice, not a block: a model can ignore the rule it
+        # was given, and the author should see that before taking it.
         "notes": [
             {"field": f, "message": m}
             for f, m in form_notes(proposed.scenario, proposed.stem)
+        ] + [
+            {"field": "explanation", "message": m}
+            for m in explanation_notes(proposed.explanation)
         ],
         "unchanged": question_json(proposed) == question_json(question),
     }
+
+
+# --- The bulk rewrite ------------------------------------------------------
+#
+# The AI rewrite, over every question the Bank is showing. Still a proposal:
+# it runs as a job (minutes, one model call per question), the review list
+# grows as it goes, and nothing reaches the bank until the author accepts a
+# question - one at a time or all at once. Accepting is the editor's own save
+# (_apply_edits), recorded in each question's history as the bulk rewrite's.
+
+# A ceiling, not a target: the bank holds under 500 today.
+BULK_REWRITE_LIMIT = 1000
+BULK_EDITOR = "AI rewrite (bulk)"
+
+
+class AiRewriteAllRequest(BaseModel):
+    """The Bank's filters, so the rewrite covers exactly the list on screen."""
+
+    text: str = ""
+    topic: str = ""
+    difficulty: str = ""
+    bloom_level: str = ""
+    status: str = ""
+    certification_id: str = ""
+    id: str = ""
+    exact_topic: str = ""
+    sort: str = "course"
+    instruction: str = ""
+
+
+@router.post("/api/questions/ai/rewrite-all", status_code=202)
+def ai_rewrite_all(body: AiRewriteAllRequest, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """Start rewriting every question the filters match. Writes nothing."""
+    model = _ai_model()
+    filters = dict(
+        text=body.text, topic=body.topic, difficulty=body.difficulty,
+        bloom_level=body.bloom_level, status=body.status,
+        certification_id=body.certification_id, id=body.id,
+        exact_topic=body.exact_topic,
+    )
+    total = db.search_count(**filters)
+    if total == 0:
+        raise HTTPException(409, "No questions match those filters, so there is nothing to rewrite.")
+    if total > BULK_REWRITE_LIMIT:
+        raise HTTPException(409, f"{total} questions match. Narrow the filters to "
+                                 f"{BULK_REWRITE_LIMIT} or fewer - one certification at a time, say.")
+    questions = db.search(limit=BULK_REWRITE_LIMIT, offset=0, sort=body.sort, **filters)
+    instruction = body.instruction.strip() or question_refinement.REWRITE_INSTRUCTION
+    base_url = config.ollama_url
+
+    def work(job: jobs.Job) -> list[dict[str, Any]]:
+        # Appended to the job's own list as each one finishes, so a client
+        # polling the job sees the review list grow and can start accepting.
+        out = job.result
+        for i, question in enumerate(questions):
+            job.progress(i, len(questions), f"Rewriting {question.id} ({i + 1} of {len(questions)})")
+            entry: dict[str, Any] = {
+                "id": question.id,
+                # What the rewrite started from. Accepting refuses a question
+                # that no longer matches it: someone edited it meanwhile.
+                "original": question_json(question),
+                "proposed": None, "problems": [], "notes": [],
+                "unchanged": False, "error": "", "accepted": False,
+            }
+            try:
+                proposed = question_refinement.improve_question(
+                    question=question, model=model, base_url=base_url, instruction=instruction)
+                if proposed is None:
+                    # One more go. A local model now and then returns JSON it
+                    # cannot close (one in seven in the 2026-10-10 trial), and
+                    # a second call usually comes back clean.
+                    job.progress(i, len(questions), f"Rewriting {question.id} again")
+                    proposed = question_refinement.improve_question(
+                        question=question, model=model, base_url=base_url, instruction=instruction)
+            except jobs.JobCancelled:
+                raise
+            except Exception as e:  # one failed call must not end the run
+                entry["error"] = f"The model call failed: {e}"
+            else:
+                if proposed is None:
+                    entry["error"] = "The model did not return a usable question."
+                else:
+                    entry.update(_proposal_json(question, proposed))
+            out.append(entry)
+        job.progress(len(questions), len(questions), f"Rewrote {len(questions)}")
+        return out
+
+    job = jobs.start("rewrite", work, requested=len(questions))
+    return {"jobId": job.id, "total": len(questions), "status": job.status}
+
+
+class AcceptRewritesRequest(BaseModel):
+    question_ids: list[str] = Field(default_factory=list)
+
+
+@router.post("/api/questions/ai/rewrite-jobs/{job_id}/accept")
+def accept_rewrites(
+    job_id: str, body: AcceptRewritesRequest, db: ExamBankDB = Depends(get_db)
+) -> dict[str, Any]:
+    """Save the named proposals of a bulk rewrite. Allowed while the job is
+    still running: a finished entry is final, and the author may be reading
+    the first while the last are being written."""
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, f"No job '{job_id}'")
+    if job.kind != "rewrite":
+        raise HTTPException(409, "That job is not a rewrite.")
+    if not body.question_ids:
+        raise HTTPException(400, "Name the questions to accept.")
+
+    entries = {e["id"]: e for e in list(job.result)}
+    saved: list[str] = []
+    skipped: list[dict[str, str]] = []
+
+    def skip(qid: str, reason: str) -> None:
+        skipped.append({"id": qid, "reason": reason})
+
+    for qid in dict.fromkeys(body.question_ids):
+        entry = entries.get(qid)
+        if entry is None:
+            skip(qid, "It has not been rewritten (yet).")
+            continue
+        if entry.get("accepted"):
+            skip(qid, "It was already accepted.")
+            continue
+        if entry.get("error") or not entry.get("proposed"):
+            skip(qid, entry.get("error") or "There is no proposal for it.")
+            continue
+        if entry.get("unchanged"):
+            skip(qid, "The rewrite changed nothing.")
+            continue
+        if entry.get("problems"):
+            skip(qid, "The rewrite could not be graded: "
+                      + "; ".join(p["message"] for p in entry["problems"]))
+            continue
+        current = db.get(qid)
+        if current is None:
+            skip(qid, "It has been deleted.")
+            continue
+        if question_json(current) != entry["original"]:
+            skip(qid, "It has changed since it was rewritten. Open it and rewrite it again.")
+            continue
+        changes = {f: entry["proposed"][f] for f in _EDITABLE if f in entry["proposed"]}
+        try:
+            _apply_edits(db, current, changes, BULK_EDITOR)
+        except HTTPException as e:
+            skip(qid, str(e.detail))
+            continue
+        entry["accepted"] = True
+        saved.append(qid)
+    return {"saved": saved, "skipped": skipped}
 
 
 @router.post("/api/questions/{question_id}/ai/review")
@@ -323,14 +522,14 @@ def ai_write_explanation(question_id: str, db: ExamBankDB = Depends(get_db)) -> 
         question, _ai_model(), base_url=config.ollama_url, source_text=grounding.text)
     if not text:
         raise HTTPException(502, "The model did not return an explanation. Try again, or a larger model.")
-    lowered = text.lower()
     return {
         "explanation": text,
         # What it was grounded on, so the author knows how far to trust it.
         "groundedOn": grounding.label,
-        # Options the text never names. The rule is to name every one; a
-        # model can skip one, and the author should see that before taking it.
-        "unnamed": [o for o in _options_of(question) if o.strip().lower() not in lowered],
+        # Where it breaks the house rule (correct answer only, paragraphs).
+        # Until 1.14.0 this listed the options the text never named, when
+        # the rule was to name every one.
+        "notes": explanation_notes(text),
     }
 
 

@@ -15,6 +15,7 @@ a backslash keeps a marker literal. Nothing is ever passed through as markup.
 from __future__ import annotations
 
 import html
+import re
 from typing import Iterator, List, Tuple, Union
 
 Node = Union[Tuple[str, str], Tuple[str, list]]
@@ -154,6 +155,30 @@ def to_html(s: str | None) -> str:
                 parts.append(f"<{n[0]}>{walk(n[1])}</{n[0]}>")
         return "".join(parts)
     return walk(parse(s))
+
+
+_PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n\s*")
+
+
+def paragraphs(s: str | None) -> List[str]:
+    """The text split into paragraphs at blank lines, each trimmed; [] when
+    empty. A single newline stays inside its paragraph as a line break.
+
+    Above the inline rules, not part of them: markers never span a paragraph
+    break, because each paragraph is parsed on its own. The contract's
+    ``paragraphs`` cases pin this for all three parsers.
+    """
+    text = (s or "").replace("\r\n", "\n").strip()
+    if not text:
+        return []
+    return [p.strip() for p in _PARAGRAPH_BREAK.split(text) if p.strip()]
+
+
+def to_html_paragraphs(s: str | None) -> str:
+    """One <p> per paragraph, each as to_html; a single newline is a <br/>."""
+    return "".join(
+        "<p>" + to_html(p).replace("\n", "<br/>") + "</p>" for p in paragraphs(s)
+    )
 
 
 def runs(s: str | None) -> Iterator[Tuple[str, bool, bool, bool]]:

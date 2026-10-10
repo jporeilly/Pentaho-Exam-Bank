@@ -12,6 +12,7 @@ import {
   type QuestionFormat,
 } from "./api";
 import { OptionList } from "./answers";
+import { HouseStyle } from "./HouseStyle";
 import { Formatted, plainText } from "./inlineFormat";
 import { useVocabulary } from "./vocabulary";
 
@@ -373,6 +374,8 @@ export function GeneratePane({
             </button>
           )}
         </div>
+
+        <HouseStyle intro="Every question is generated to these rules; the Bank's AI rewrite brings older questions to them too. Extra instructions add to them, not replace them." />
       </div>
 
       {error && <div className="banner">{error}</div>}

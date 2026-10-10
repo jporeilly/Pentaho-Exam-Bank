@@ -27,6 +27,7 @@ import {
 } from "./api";
 import { AnswerMark, OptionList } from "./answers";
 import { Formatted, hasFormat, toggleWrap, type Marker } from "./inlineFormat";
+import { ExplanationCard, ProposedQuestion } from "./ProposalView";
 import { useVocabulary } from "./vocabulary";
 
 /** How a field's formatting will look, shown only once it has some. */
@@ -697,14 +698,18 @@ export function QuestionEditor({
         </div>
       ))}
 
-      <Field label="Explanation" hint="Shown after the exam, never before.">
+      <Field
+        label="Explanation"
+        hint="Shown after the exam, never before. Say why the correct answer is right - not why the others are wrong. A blank line starts a new paragraph; **bold** the key terms."
+      >
         <textarea
-          rows={3}
+          rows={7}
+          className="explanation-input"
           value={draft.explanation}
           onChange={(e) => set("explanation", e.target.value)}
           {...formattable(setText("explanation"))}
         />
-        <FormatPreview text={draft.explanation} />
+        <ExplanationCard text={draft.explanation} label="How candidates see it" />
       </Field>
 
       <div className="field-row">
@@ -816,15 +821,12 @@ export function QuestionEditor({
               ? `Written from ${explained.groundedOn}.`
               : "No course page was found for this question, so the model wrote it without one. Check every fact."}
           </p>
-          <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-            <Formatted text={explained.explanation} />
-          </p>
-          {explained.unnamed.length > 0 && (
-            <div className="advice">
-              It never names: {explained.unnamed.join("; ")}. The explanation should
-              address every option by its text.
+          <ExplanationCard text={explained.explanation} />
+          {(explained.notes ?? []).map((note) => (
+            <div key={note} className="advice">
+              {note}
             </div>
-          )}
+          ))}
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
             <button
               className="add"
@@ -880,36 +882,11 @@ export function QuestionEditor({
           {proposal.unchanged && (
             <p className="muted">The model returned this unchanged.</p>
           )}
-          {proposal.proposed.scenario && (
-            <p className="muted" style={{ marginTop: 8 }}>
-              <Formatted text={proposal.proposed.scenario} />
-            </p>
-          )}
-          <p style={{ marginTop: 8 }}>
-            <Formatted text={proposal.proposed.stem} />
-          </p>
-          <OptionList
-            label="Proposed options"
-            options={[
-              ...(proposal.proposed.question_type === "multi"
-                ? proposal.proposed.keys
-                : [proposal.proposed.key]
-              ).map((k) => ({ text: k, correct: true })),
-              ...proposal.proposed.distractors.map((d) => ({ text: d, correct: false })),
-            ]}
+          <ProposedQuestion
+            proposed={proposal.proposed}
+            notes={proposal.notes ?? []}
+            problems={proposal.problems}
           />
-          {(proposal.notes ?? []).map((n) => (
-            <div key={n.message} className="advice">
-              {n.field === "scenario" ? "Scenario: " : "Question: "}
-              {n.message}
-            </div>
-          ))}
-          {proposal.problems.length > 0 && (
-            <div className="banner" style={{ marginTop: 8 }}>
-              This rewrite could not be graded:{" "}
-              {proposal.problems.map((p) => p.message).join("; ")}
-            </div>
-          )}
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
             <button className="add" onClick={acceptProposal} disabled={proposal.problems.length > 0}>
               Use this

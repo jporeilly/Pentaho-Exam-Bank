@@ -59,9 +59,9 @@ function fakeServer(start: Question, renameTo = "") {
     }
     if (method === "POST" && u.endsWith("/ai/explanation")) {
       return json({
-        explanation: "CSV input reads the file. Table output writes rows. Sort rows orders them.",
+        explanation: "**Table output** writes rows to a database table.\n\nThat makes it the step that loads them.",
         groundedOn: "Text File Input",
-        unnamed: [],
+        notes: ["It refers to an answer by its letter. The options are shuffled, so name it by what it says."],
       });
     }
     if (method === "POST" && u.endsWith("/ai/answer")) {
@@ -262,10 +262,26 @@ describe("AI explanation and AI answer key", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "AI explanation" }));
     expect(await screen.findByText(/Written from Text File Input/)).toBeInTheDocument();
+    // Shown as the candidate reads it: two paragraphs, the key term in bold,
+    // and the server's note on the house rule beneath it.
+    const card = document.querySelector(".card .explanation-card")!;
+    expect(card.querySelectorAll(".fmt-p")).toHaveLength(2);
+    expect(card.querySelector("strong")).toHaveTextContent("Table output");
+    expect(screen.getByText(/refers to an answer by its letter/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Use this explanation" }));
 
-    expect(screen.getByDisplayValue(/CSV input reads the file/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/writes rows to a database table/)).toBeInTheDocument();
     expect(server.puts).toHaveLength(0);
+  });
+
+  it("shows the explanation as candidates will see it, paragraphs and bold", async () => {
+    fakeServer(question({ explanation: "**Sort rows** orders them.\n\nThen the next step reads them in order." }));
+    await openEditor();
+
+    const card = await screen.findByText("How candidates see it");
+    const body = card.parentElement!.querySelector(".explanation-card__body")!;
+    expect(body.querySelectorAll(".fmt-p")).toHaveLength(2);
+    expect(body.querySelector("strong")).toHaveTextContent("Sort rows");
   });
 
   it("flags a guessed answer, and taking the AI answer key clears the flag", async () => {

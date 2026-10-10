@@ -46,5 +46,18 @@
     { "in": "C:\\Pentaho\\server", "nodes": [["text", "C:\\Pentaho\\server"]] },
     { "in": "line one\n**line two**", "nodes": [["text", "line one\n"], ["strong", [["text", "line two"]]]] },
     { "in": "**Ünïcödé** wörds", "nodes": [["strong", [["text", "Ünïcödé"]]], ["text", " wörds"]] }
+  ],
+  "aboutParagraphs": "Paragraphs sit above the inline rules: text splits at blank lines (a line holding only spaces or tabs counts), each paragraph is trimmed and parsed on its own, so a marker never spans a break. A single newline stays inside its paragraph as a line break. CRLF counts as a newline.",
+  "paragraphs": [
+    { "in": "", "paragraphs": [] },
+    { "in": "   \n  ", "paragraphs": [] },
+    { "in": "one paragraph", "paragraphs": ["one paragraph"] },
+    { "in": "first\n\nsecond", "paragraphs": ["first", "second"] },
+    { "in": "first\n \t \nsecond", "paragraphs": ["first", "second"] },
+    { "in": "\n\nfirst\n\n\n\nsecond\n\n", "paragraphs": ["first", "second"] },
+    { "in": "line one\nline two", "paragraphs": ["line one\nline two"] },
+    { "in": "first\r\n\r\nsecond", "paragraphs": ["first", "second"] },
+    { "in": "the **key** idea\n\nwhy it **matters**", "paragraphs": ["the **key** idea", "why it **matters**"] },
+    { "in": "**not\n\nbold**", "paragraphs": ["**not", "bold**"] }
   ]
 }

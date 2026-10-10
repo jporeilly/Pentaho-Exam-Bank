@@ -165,8 +165,39 @@ function render(nodes: InlineNode[], key = ""): ReactNode[] {
 }
 
 /** Question text with its formatting drawn. Text only - never HTML. */
+// A blank line (one holding only spaces or tabs counts) ends a paragraph.
+const PARAGRAPH_BREAK = /\n[ \t]*\n\s*/;
+
+/**
+ * The text's paragraphs, split at blank lines and trimmed; [] when empty.
+ * Above the inline rules, not part of them: each paragraph is parsed on its
+ * own, so a marker never spans a break. The contract's `paragraphs` cases
+ * pin this for the Python exporters and the Content Manager's quiz too.
+ * CRLF is normalised first: a regex newline does not match "\r".
+ */
+export function paragraphs(s: string | null | undefined): string[] {
+  const text = (s ?? "").replace(/\r\n/g, "\n").trim();
+  if (!text) return [];
+  return text.split(PARAGRAPH_BREAK).map((p) => p.trim()).filter(Boolean);
+}
+
+/**
+ * Formatted text. With no blank line in it, exactly the inline rendering it
+ * always was (a stem, an option). With paragraphs - an explanation - each one
+ * is a block (`.fmt-p`) in which a single newline is a line break.
+ */
 export function Formatted({ text }: { text: string | null | undefined }) {
-  return <>{render(parseInline(text ?? ""))}</>;
+  const parts = paragraphs(text);
+  if (parts.length < 2) return <>{render(parseInline(text ?? ""))}</>;
+  return (
+    <>
+      {parts.map((p, i) => (
+        <span key={i} className="fmt-p">
+          {render(parseInline(p))}
+        </span>
+      ))}
+    </>
+  );
 }
 
 /** The words without their markers: for titles, dialogs and lengths. */

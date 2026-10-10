@@ -23,7 +23,26 @@ from typing import List, Optional
 
 from . import providers
 from .bank import Question
-from .generation_prompts import GENERATION_SYSTEM_PROMPT, SCENARIO_AND_STEM_RULES
+from .generation_prompts import (
+    EXPLANATION_REWRITE_RULES,
+    EXPLANATION_RULES,
+    GENERATION_SYSTEM_PROMPT,
+    PROOFREAD_RULES,
+    SCENARIO_AND_STEM_RULES,
+)
+
+# The rewrite's default ask. The bulk rewrite sends the same one, so a
+# question rewritten on its own and one rewritten with its exam come back alike.
+#
+# A polish, not a re-author (1.14.0): the bank's questions have been through
+# review, so the rewrite proofreads them and brings the explanation to the
+# house rule, and leaves the rest as it found it. It used to say "Improve this
+# question", and a model told to improve rewrites.
+REWRITE_INSTRUCTION = (
+    "Polish this reviewed certification exam question. Proofread every field, and "
+    "rewrite the explanation so it explains only why the correct answer is right. "
+    "Change nothing else."
+)
 from .generation_parsing import _extract_json_array, _extract_json_object
 from .stem_text import question_only
 
@@ -32,10 +51,12 @@ def improve_question(
     question: Question,
     model: str,
     base_url: str = "http://localhost:11434",
-    instruction: str = "Improve this question following certification exam best practices.",
+    instruction: str = REWRITE_INSTRUCTION,
     system_prompt: str = "",
 ) -> Optional[Question]:
-    """Use AI to improve an existing question."""
+    """Use AI to improve an existing question: proofread it, and rewrite the
+    explanation to the house rule (the correct answer only, in paragraphs,
+    key terms in bold)."""
     is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
     keys_str = json.dumps(question.keys) if is_multi else json.dumps(question.key)
 
@@ -53,13 +74,19 @@ Current question:
 IMPORTANT:
 - Keep the key answer(s) grounded in the original slide content.
 - The key_source_text must still reference the original source material.
-- ALL choices (keys + distractors) must be similar in length and detail.
-- The explanation MUST address each choice by its text content (NOT by letter A/B/C/D, since choices are shuffled).
+- Return key_source_text unchanged.
+
+Proofread as you go:
+{PROOFREAD_RULES}
 
 The scenario and the stem do different jobs - keep them apart. If the current
 scenario asks a question, or the current stem opens with statements, move the
 statements into the scenario and leave only the question in the stem:
 {SCENARIO_AND_STEM_RULES}
+
+The explanation:
+{EXPLANATION_RULES}
+{EXPLANATION_REWRITE_RULES if (question.explanation or "").strip() else ""}
 
 Return ONLY a JSON object with these keys:
 ```json
@@ -69,7 +96,7 @@ Return ONLY a JSON object with these keys:
   {"'keys': ['...', '...']," if is_multi else "'key': '...',"}
   "key_source_text": "...",
   "distractors": ["...", "..."],
-  "explanation": "'choice text' — Correct/Incorrect: <reason>. 'next choice' — ..."
+  "explanation": "Why the correct answer is right, with the **key term** in bold.\\n\\nA second short paragraph if it helps."
 }}
 ```"""
 
@@ -213,17 +240,19 @@ def generate_explanation(
     base_url: str = "http://localhost:11434",
     source_text: str = "",
 ) -> str:
-    """Propose the explanation: why each correct answer is right and each
-    distractor wrong, naming every option by its text (the options are
-    shuffled, so a letter means nothing). Returns "" on failure. Writes
-    nothing: the caller shows it, and the author decides.
+    """Propose the explanation: why the correct answer(s) are right, and
+    nothing about the wrong options (EXPLANATION_RULES: paragraphs, the key
+    terms in bold). Returns "" on failure. Writes nothing: the caller shows
+    it, and the author decides.
     """
     keys = question.keys if question.question_type == "multi" and question.keys else [question.key]
     keys = [k for k in keys if k]
     if not keys:
         return ""
+    # The wrong options are listed so the model knows what the candidate was
+    # choosing between, not to be discussed.
     lines = [f"- {k} (correct)" for k in keys] + \
-            [f"- {d} (incorrect)" for d in question.distractors if d and d not in keys]
+            [f"- {d} (incorrect - do not discuss)" for d in question.distractors if d and d not in keys]
     prompt = f"""Write the explanation for this certification exam question. Candidates read it after the exam.
 
 {_grounding_block(source_text)}
@@ -234,18 +263,17 @@ Options:
 {chr(10).join(lines)}
 
 Rules:
-- Say why each correct option is right and why each incorrect option is wrong.
-- Name every option by its text. Never refer to an option by a letter or a position: the options are shuffled.
-- Plain prose: one short paragraph of three to six sentences. No list, no headings.
+{EXPLANATION_RULES}
+- Correct spelling and grammar, and sentences that read smoothly.
 - Do not mention a course, a workshop, a lab or "the material": state the facts.
 
-Return only the explanation text."""
+Return only the explanation text, with a blank line between paragraphs."""
     try:
         response = providers.generate(
             prompt=prompt,
             model=model,
             system=("You write explanations for Pentaho certification exam questions: "
-                    "accurate, concise, and addressing every option by its text."),
+                    "accurate, concise, and about the correct answer only."),
             base_url=base_url,
             timeout=90.0,
         )

@@ -10,15 +10,29 @@ import pytest
 
 from exam_bank.core import inline_format as fmt
 
-CASES = json.loads(
+CONTRACT = json.loads(
     (Path(__file__).resolve().parents[1] / "frontend" / "src" / "inlineFormat.cases.json")
     .read_text(encoding="utf-8")
-)["cases"]
+)
+CASES = CONTRACT["cases"]
+PARAGRAPHS = CONTRACT["paragraphs"]
 
 
 @pytest.mark.parametrize("case", CASES, ids=[json.dumps(c["in"]) for c in CASES])
 def test_contract(case):
     assert fmt.parse(case["in"]) == case["nodes"]
+
+
+@pytest.mark.parametrize("case", PARAGRAPHS, ids=[json.dumps(c["in"]) for c in PARAGRAPHS])
+def test_paragraph_contract(case):
+    assert fmt.paragraphs(case["in"]) == case["paragraphs"]
+
+
+def test_paragraphs_become_p_elements_with_line_breaks():
+    assert fmt.to_html_paragraphs("the **key** idea\nstill one\n\nsecond <b>") == (
+        "<p>the <strong>key</strong> idea<br/>still one</p><p>second &lt;b&gt;</p>"
+    )
+    assert fmt.to_html_paragraphs("   ") == ""
 
 
 def test_html_escapes_everything_but_the_three():
