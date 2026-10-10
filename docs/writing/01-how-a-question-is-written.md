@@ -41,6 +41,11 @@ question explains each of its correct answers.
   answer turns on. Bold phrases, never whole sentences.
 - An answer is named by what it says, never by a letter, because the options
   are shuffled.
+- Only when the question is about the order or routing of steps, a flow line
+  as a paragraph of its own: PDI's step names joined by arrows,
+  Table input → Filter rows → Table output. Most explanations have none. An
+  AI proposal says so when its flow names something that is not a PDI step,
+  or draws more than one. The printed exam paper prints the arrow as `->`.
 
 > A **header row** is the first line of a delimited file, and the CSV file
 > input step reads it as the column names by default.

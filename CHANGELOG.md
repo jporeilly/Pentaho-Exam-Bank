@@ -39,6 +39,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   "Accept all ready" leaves these for the author. Notes now draw their
   `code` as code, and name the answers (*Answers:*).
 
+- **Flow lines in explanations.** Where a question is about the order or
+  routing of steps, the explanation may show the path as a line of its own:
+  Table input → Filter rows → Table output. A typed `->` becomes an arrow,
+  and the printed paper, whose font has no arrow, prints `->`. A first
+  trial drew a flow in six of seven explanations, naming "Preview" and
+  "Input step"; the rule now says most explanations need none, and a note
+  flags a flow naming anything that is not a PDI step, or more than one
+  flow. Re-run: flows in the two routing questions only, both flagged for
+  the author.
+
 Live trial on a copy of the bank (gemma4:12b, the 12 questions of 2hr-m3):
 single-quoted spans 89 to 0, no ordinary word or number in code after the
 rule was sharpened, answers' words unchanged; the one answer marked by code

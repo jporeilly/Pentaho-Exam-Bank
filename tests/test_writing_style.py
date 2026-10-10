@@ -179,3 +179,49 @@ def test_code_that_marks_the_correct_answer_comes_off_it_in_every_copy():
 def test_code_shared_by_right_and_wrong_answers_stays():
     q = _q(key="`$.customers[*].region_code`", distractors=["`$.region_code[*]`", "`$.customers.region_code`"])
     assert tidy_question(q).key == "`$.customers[*].region_code`"
+
+
+# --- A flow of steps (1.15.0) ---------------------------------------------------------
+
+
+def test_a_typed_flow_gets_real_arrows_and_pdis_names():
+    assert tidy("Table Input -> Filter Rows -> Table Output") == "Table input \u2192 Filter rows \u2192 Table output"
+
+
+def test_an_arrow_in_code_or_an_unspaced_one_is_left_alone():
+    assert tidy("Run `a -> b` here.") == "Run `a -> b` here."
+    assert tidy("The pointer x->y is set.") == "The pointer x->y is set."
+
+
+def test_the_printed_paper_draws_the_arrow_it_cannot_print():
+    from exam_bank.core.exam_builder import _latin1_safe
+
+    assert _latin1_safe("Table input \u2192 Filter rows") == "Table input -> Filter rows"
+
+
+def test_the_flow_rule_is_in_the_explanation_rules():
+    from exam_bank.core.generation_prompts import EXPLANATION_RULES
+
+    assert "Table input \u2192 Filter rows \u2192 Table output" in EXPLANATION_RULES
+
+
+def test_a_flow_that_names_no_step_is_noted():
+    # From the trial: "Preview" is a feature, "Input step" no step's name.
+    from exam_bank.core.writing_style import flow_notes
+
+    assert flow_notes("Why.\n\nTable input \u2192 Filter rows \u2192 Table output") == []
+    assert flow_notes("Why.\n\nThe Filter rows step \u2192 Dummy (do nothing)") == []
+    notes = flow_notes("Why.\n\nInput step \u2192 Filter rows \u2192 Preview")
+    assert notes and '"Input step", "Preview"' in notes[0]
+
+
+def test_more_than_one_flow_line_is_noted():
+    from exam_bank.core.writing_style import flow_notes
+
+    notes = flow_notes("Filter rows \u2192 Table output\nFilter rows \u2192 Text file output")
+    assert any("More than one flow line" in n for n in notes)
+
+
+def test_style_notes_include_the_flow():
+    notes = style_notes(_q(explanation="Rows go on.\n\nFilter rows \u2192 Preview"))
+    assert any(f == "explanation" and '"Preview"' in m for f, m in notes)

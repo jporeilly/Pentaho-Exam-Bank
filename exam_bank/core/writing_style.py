@@ -149,6 +149,10 @@ def _outside_double_quotes(s: str, fix: Callable[[str], str]) -> str:
 
 def _tidy_prose(s: str) -> str:
     s = re.sub(r"(?<=\S) {2,}(?=\S)", " ", s)
+    # A flow of steps (EXPLANATION_RULES) is drawn with a real arrow; a
+    # model typing ASCII writes "->". Spaced only, so an expression such as
+    # x->y is left alone (and code never reaches here).
+    s = s.replace(" -> ", " → ")
     s = _outside_double_quotes(s, lambda part: _NOT_RE.sub(_expand, part))
     s = _SINGLE.sub(_unquote, s)
     s = _NAME.sub(_pdi_case, s)
@@ -245,11 +249,44 @@ _CODE_WORD = re.compile(
 )
 
 
+# Every name a flow line may hold, any case: PDI's own.
+_ANY_NAME = {n.lower() for n in (*STEPS, *JOB_ENTRIES)}
+
+
+def flow_notes(text: str) -> List[str]:
+    """Notes on an explanation's flow lines (Table input → Filter rows).
+
+    The first live trial (2026-10-10) drew a flow in six of seven
+    explanations, and named "Preview" and "Input step" in them - neither is
+    a step. A flow that names what PDI has no step for teaches the wrong
+    thing, so each name is checked against PDI's own.
+    """
+    lines = [line for line in (text or "").split("\n") if "→" in line]
+    notes: List[str] = []
+    if len(lines) > 1:
+        notes.append("More than one flow line. Keep the one the answer is about, or none.")
+    unknown = []
+    for line in lines:
+        for part in line.split("→"):
+            written = part.strip().strip("`*").strip()
+            name = re.sub(r"^(?:the|a|an)\s+|\s+step$", "", written, flags=re.I)
+            if name and name.lower() not in _ANY_NAME and written not in unknown:
+                unknown.append(written)
+    if unknown:
+        shown = ", ".join(f'"{u}"' for u in unknown[:3])
+        notes.append(
+            f"The flow line names {shown}, which PDI has no step called. Use "
+            "PDI's step names, or drop the line."
+        )
+    return notes
+
+
 def style_notes(question) -> List[Tuple[str, str]]:
     """(field, message) for what the writing standard leaves to the author."""
     notes: List[Tuple[str, str]] = []
     for field in ("scenario", "stem", "explanation"):
         notes += [(field, m) for m in text_notes(getattr(question, field, "") or "")]
+    notes += [("explanation", m) for m in flow_notes(question.explanation)]
     options = _options(question)
     seen = set()
     for o in options:

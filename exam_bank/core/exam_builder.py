@@ -277,6 +277,7 @@ def _latin1_safe(text: str) -> str:
         '\u200b': '',    # zero-width space
         '\u2003': ' ',   # em space
         '\u2002': ' ',   # en space
+        '\u2192': '->',  # arrow: a flow of steps (1.15.0)
     }
     for ch, repl in replacements.items():
         text = text.replace(ch, repl)

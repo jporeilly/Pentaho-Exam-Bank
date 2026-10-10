@@ -38,7 +38,13 @@ EXPLANATION_RULES = """\
   inside the JSON string). No headings, no lists.
 - Put the one to three key terms in **bold** with double asterisks - the
   feature, setting or idea the answer turns on. Bold phrases, never whole
-  sentences. No other formatting.
+  sentences. Beyond that, only `code` for exact names and values.
+- Most explanations need no flow line. Add one only when the question is
+  about the order or routing of steps: a paragraph of its own after the
+  first, one line of PDI's exact step names joined by arrows, showing the
+  path the answer is about - Table input → Filter rows → Table output.
+  Never a generic name ("Input step") or something that is not a step
+  ("Preview").
 - Refer to an answer by what it says, never by a letter or position: the
   options are shuffled."""
 
@@ -104,7 +110,8 @@ EXPLANATION_REWRITE_RULES = """\
   gives about why the correct answer is right - including caveats and
   numbers - and drop only what it says about the wrong options.
 - Add no fact the current explanation does not state. If it says little,
-  the new one says little."""
+  the new one says little. A flow line of steps the question names is not a
+  new fact."""
 
 
 GENERATION_SYSTEM_PROMPT = """\

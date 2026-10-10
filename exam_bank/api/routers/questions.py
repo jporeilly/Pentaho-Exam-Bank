@@ -20,7 +20,7 @@ from ...core.generation_prompts import (
     WRITING_RULES,
 )
 from ...core.grounding import Grounding, grounding_for
-from ...core.writing_style import style_notes, text_notes
+from ...core.writing_style import flow_notes, style_notes, text_notes
 from ...core.stem_text import form_notes
 from .. import jobs
 from ...core.validation import problems_with
@@ -535,7 +535,7 @@ def ai_write_explanation(question_id: str, db: ExamBankDB = Depends(get_db)) -> 
         # Where it breaks the house rule (correct answer only, paragraphs).
         # Until 1.14.0 this listed the options the text never named, when
         # the rule was to name every one.
-        "notes": explanation_notes(text) + text_notes(text),
+        "notes": explanation_notes(text) + text_notes(text) + flow_notes(text),
     }
 
 
