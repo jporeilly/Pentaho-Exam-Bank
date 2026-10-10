@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-10
+
 ### Added
 
 - **A writing standard for quotes, names and punctuation.** Reviewing the
