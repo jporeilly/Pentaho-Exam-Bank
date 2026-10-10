@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-10
+
 ### Added
 
 - **Code blocks in explanations.** About 64 of the bank's questions are
