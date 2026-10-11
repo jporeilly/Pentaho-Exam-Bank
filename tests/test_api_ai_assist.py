@@ -426,7 +426,8 @@ def test_the_rewrite_asks_for_a_proofread_and_a_correct_only_explanation(questio
 
     question_refinement.improve_question(question, "a-model")
 
-    prompt = calls[0]["prompt"]
+    # Read with its line breaks folded: the rules are wrapped for the model.
+    prompt = " ".join(calls[0]["prompt"].split())
     # A polish: the reviewed wording stays unless it is wrong...
     assert "Fix every error; change nothing that is not one" in prompt
     assert "keep it word for word" in prompt
@@ -434,12 +435,33 @@ def test_the_rewrite_asks_for_a_proofread_and_a_correct_only_explanation(questio
     # ...every detail of the scenario and every answer kept (1.17.0)...
     assert "Never shorten, summarize or drop a detail" in prompt
     assert "Never add a reason, a cause or a hint" in prompt
-    assert "copy each one exactly unless it holds an error" in prompt
+    assert "copy it exactly unless it holds an error" in prompt
+    # ...but an answer cut short is an error to fix (1.18.0), where 1.17.0's
+    # "copy exactly" kept "URLs and codes split into several" as it was.
+    assert "complete any answer that is cut short" in prompt
+    assert "is cut short, is missing a word it needs, or is hard to read IS an error" in prompt
+    assert "Every answer is complete: a whole phrase or sentence" in prompt
     # ...and the explanation keeps its facts, about the correct answer only.
     assert "why the correct answer is correct, and nothing else" in prompt
     assert "Rewrite the CURRENT explanation" in prompt and "Add no claim" in prompt
     # The old house rule is gone: no "'X' - Correct/Incorrect" template.
     assert "Correct/Incorrect:" not in prompt
+
+
+def test_the_rewrite_gives_its_rules_in_the_template_order(question, monkeypatch):
+    calls = _capture(monkeypatch, REWRITE)
+
+    question_refinement.improve_question(question, "a-model")
+
+    prompt, system = calls[0]["prompt"], calls[0]["system"]
+    order = ["1. What to keep, and what to fix:", "2. The scenario and the question",
+             "3. The answers:", "4. The explanation:", "5. The writing standard"]
+    at = [prompt.index(h) for h in order]
+    assert at == sorted(at)
+    # Its own system prompt: a copy editor polishing, not the generator's
+    # "write questions from this course section" (1.18.0).
+    assert "exacting copy editor" in system and "never re-author" in system
+    assert "write exam questions" not in system.lower()
 
 
 def test_an_empty_explanation_is_written_fresh_not_rewritten(monkeypatch):
@@ -552,8 +574,12 @@ def test_a_bulk_rewrite_proposes_and_saves_nothing_until_accepted(client, questi
     accepted = client.post(f"/api/questions/ai/rewrite-jobs/{job['id']}/accept",
                            json={"question_ids": ["q-ai"]}).json()
 
-    assert accepted == {"saved": ["q-ai"], "skipped": []}
+    # Clean on every check, so the gate takes it to approved (1.18.0).
+    assert accepted == {"saved": ["q-ai"], "approved": ["q-ai"], "review": [], "skipped": []}
     saved = _bank(db_path, "q-ai")
+    assert saved.status == "approved"
+    assert [(h["to_status"], h["sme_name"]) for h in saved.review_history] == [
+        ("sme_review", "AI checks"), ("approved", "AI checks")]
     assert saved.stem == "What is a transformation responsible for?"
     assert saved.explanation == CLEAN
     changed = [h for h in saved.version_history if h["field"] in ("stem", "explanation")]
@@ -593,8 +619,9 @@ def test_accepting_skips_what_cannot_be_taken(client, question, db_path, monkeyp
                        json={"question_ids": ["q-ai", "q-same", "q-bad", "q-junk", "q-ai"]}).json()
 
     assert body["saved"] == ["q-ai"]
+    # Unchanged saves nothing, but still goes through the gate (1.18.0).
+    assert "q-same" in body["approved"] and "q-same" not in body["saved"]
     reasons = {s["id"]: s["reason"] for s in body["skipped"]}
-    assert "changed nothing" in reasons["q-same"]
     assert "could not be graded" in reasons["q-bad"]
     assert "usable question" in reasons["q-junk"]
     again = client.post(f"/api/questions/ai/rewrite-jobs/{job['id']}/accept",
@@ -631,15 +658,136 @@ def test_a_bulk_rewrite_tries_a_question_twice_before_giving_up(client, question
     assert entry["error"] == "" and entry["proposed"]["stem"] == "What is a transformation responsible for?"
 
 
+# --- the gate (1.18.0) ------------------------------------------------------------
+
+
+def test_a_rewrite_the_check_flags_is_saved_and_held_for_review(client, question, db_path, monkeypatch):
+    flagged = json.loads(CLEAN_CHECK)
+    flagged["incomplete_answers"] = ["Moves and shapes rows"]
+    _by_stem(monkeypatch, {"What does a transformation do": TRANSFORMATION}, check=json.dumps(flagged))
+    job = _finish(client, client.post("/api/questions/ai/rewrite-all",
+                                      json={"id": "q-ai"}).json()["jobId"])
+
+    body = client.post(f"/api/questions/ai/rewrite-jobs/{job['id']}/accept",
+                       json={"question_ids": ["q-ai"]}).json()
+
+    assert body["saved"] == ["q-ai"] and body["approved"] == []
+    held = body["review"][0]
+    assert held["id"] == "q-ai" and held["status"] == "sme_review"
+    assert any("cut short or unclear: Moves and shapes rows" in r for r in held["reasons"])
+    saved = _bank(db_path, "q-ai")
+    assert saved.status == "sme_review" and "cut short" in saved.review_history[-1]["comment"]
+
+
+def _standalone(monkeypatch, check):
+    """The model's check of a question as it stands (check_rewrite, no original)."""
+    seen = []
+
+    def fake(**kw):
+        seen.append(kw["prompt"])
+        assert kw["prompt"].startswith("You review a certification exam question before it is approved")
+        return check
+    monkeypatch.setattr(providers, "generate", fake)
+    return seen
+
+
+def test_the_check_approves_a_question_that_passes_everything(client, db_path, monkeypatch):
+    _add(db_path, id="q-clean", scenario="A team loads orders every night.",
+         stem="What does a transformation do?", key="Moves and shapes rows",
+         distractors=["Prints a report", "Installs the server", "Backs up a database"],
+         explanation=CLEAN)
+    seen = _standalone(monkeypatch, CLEAN_CHECK)
+
+    body = client.post("/api/questions/q-clean/ai/check").json()
+
+    assert body["outcome"] == "approved" and body["status"] == "approved" and body["findings"] == []
+    assert _bank(db_path, "q-clean").status == "approved"
+    # Nothing to compare with, so no "lost or added" in the rules it is given.
+    assert "The rewrite lost" not in seen[0] and "Every answer is complete" in seen[0]
+
+
+def test_the_check_holds_a_question_that_fails_a_house_rule(client, question, db_path, monkeypatch):
+    _standalone(monkeypatch, CLEAN_CHECK)
+
+    body = client.post("/api/questions/q-ai/ai/check").json()
+
+    # "(Choose one.)" in the stem, and an explanation that judges every option.
+    assert body["outcome"] == "review" and body["status"] == "sme_review"
+    messages = " ".join(f["message"] for f in body["findings"])
+    assert "Correct/Incorrect" in messages
+    assert _bank(db_path, "q-ai").status == "sme_review"
+
+
+def test_the_check_reports_what_the_model_finds(client, db_path, monkeypatch):
+    _add(db_path, id="q-clean", scenario="A team loads orders every night.",
+         stem="What does a transformation do?", key="Moves and shapes rows",
+         distractors=["Prints a report", "Installs the server", "Backs up a database"],
+         explanation=CLEAN)
+    found = json.loads(CLEAN_CHECK)
+    found["answer_stands_out"] = "it is the only answer about rows"
+    _standalone(monkeypatch, json.dumps(found))
+
+    body = client.post("/api/questions/q-clean/ai/check").json()
+
+    assert body["outcome"] == "review"
+    assert any("correct answer stands out: it is the only answer about rows" in f["message"]
+               for f in body["findings"])
+
+
 def test_the_house_style_is_the_rules_the_prompts_carry(client):
     from exam_bank.core import generation_prompts as gp
 
     sections = client.get("/api/house-style").json()["sections"]
 
     rules = "\n".join(s["rules"] for s in sections)
-    for constant in (gp.SCENARIO_AND_STEM_RULES, gp.EXPLANATION_RULES,
-                     gp.PROOFREAD_RULES, gp.EXPLANATION_REWRITE_RULES):
+    for constant in (gp.SCENARIO_AND_STEM_RULES, gp.ANSWER_RULES, gp.EXPLANATION_RULES,
+                     gp.WRITING_RULES, gp.PROOFREAD_RULES, gp.EXPLANATION_REWRITE_RULES,
+                     gp.REWRITE_CHECK_RULES):
         assert constant in rules
+    # In the template's order: the question, its answers, its explanation,
+    # then the writing every field shares (1.18.0).
+    titles = [s["title"] for s in sections]
+    assert titles[:4] == ["Scenario and question", "Answers", "Explanation",
+                          "Quotes, names and punctuation"]
+
+
+def test_generation_carries_the_answer_rules():
+    from exam_bank.core import generation_prompts as gp
+
+    assert gp.ANSWER_RULES in gp.GENERATION_SYSTEM_PROMPT
+    at = [gp.GENERATION_SYSTEM_PROMPT.index(r) for r in
+          (gp.SCENARIO_AND_STEM_RULES, gp.ANSWER_RULES, gp.EXPLANATION_RULES, gp.WRITING_RULES)]
+    assert at == sorted(at)
+
+
+def test_every_check_has_a_rule_the_model_is_given():
+    """A question written to the rules passes the gate: each check the gate
+    runs is named in a rule the prompts carry (the owner, 2026-10-11)."""
+    from exam_bank.core import generation_prompts as gp
+
+    told = " ".join((gp.SCENARIO_AND_STEM_RULES + gp.ANSWER_RULES + gp.EXPLANATION_RULES
+                     + gp.WRITING_RULES + gp.PROOFREAD_RULES).split())
+    for rule in [
+        "never a question",                      # form_notes: a question in the scenario
+        'ending in "?"',                         # form_notes: the stem is a question
+        "(Choose ...)",                          # form_notes: no count directive
+        "Every answer is complete",              # answer_notes: cut short
+        "never ends on a word such as",          # answer_notes: the dangling word
+        "about as long as the wrong ones",       # answer_notes: the key's length
+        "all short phrases with none",           # style_notes: full stops alike
+        "the wrong answers name things in `code` too",  # style_notes: code singles out
+        "Bold (double asterisks) only for the explanation",  # style_notes: bold
+        "Every answer differs from the others and none is empty",  # problems_with
+        'do NOT label options "Correct:" or "Incorrect:"',  # explanation_notes
+        "never by a letter or position",         # explanation_notes
+        "under 700 characters",                  # explanation_notes: long paragraph
+        "At most 10 lines",                      # code_notes
+        "valid as written (JSON that parses)",   # code_notes
+        "Arrows are for PDI steps only",         # flow_notes
+        "Never in quotation marks",              # text_notes: quotes
+        "No contractions",                       # text_notes
+    ]:
+        assert rule in told, rule
 
 
 # --- the writing standard (1.15.0) -------------------------------------------

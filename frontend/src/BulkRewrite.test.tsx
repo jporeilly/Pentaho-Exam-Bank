@@ -25,7 +25,9 @@ function entry(id: string, over: Partial<RewriteEntry> = {}): RewriteEntry {
 }
 
 /** A server whose job reports `entries`, finishing on the poll after `runningPolls`. */
-function fakeServer(entries: RewriteEntry[], runningPolls = 1) {
+/** `held` names the accepted ids the gate holds for review, with its reasons;
+ *  the rest it approves (1.18.0). */
+function fakeServer(entries: RewriteEntry[], runningPolls = 1, held: Record<string, string[]> = {}) {
   const accepted = new Set<string>();
   const calls: Array<{ path: string; body: unknown }> = [];
   let polls = 0;
@@ -43,7 +45,12 @@ function fakeServer(entries: RewriteEntry[], runningPolls = 1) {
     if (path.includes("/accept")) {
       const ids = (body as { question_ids: string[] }).question_ids;
       ids.forEach((id) => accepted.add(id));
-      return json({ saved: ids, skipped: [] });
+      return json({
+        saved: ids,
+        approved: ids.filter((id) => !(id in held)),
+        review: ids.filter((id) => id in held).map((id) => ({ id, status: "sme_review", reasons: held[id] })),
+        skipped: [],
+      });
     }
     if (path.endsWith("/api/jobs/j1")) {
       polls += 1;
@@ -118,17 +125,34 @@ describe("the bulk AI rewrite", () => {
 
     const q1 = screen.getByText("q1").closest("li")!;
     await userEvent.click(within(q1).getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(within(q1).getByText("Accepted")).toBeInTheDocument());
+    await waitFor(() => expect(within(q1).getByText("Approved")).toBeInTheDocument());
     expect(onSaved).toHaveBeenCalledTimes(1);
 
-    // q2 is the only clean one left: q3 has notes, q4 changed nothing, q5 failed.
-    const all = screen.getByRole("button", { name: "Accept all ready (1)" });
+    // q2 and q4 are the clean ones left: q3 has notes, q5 failed. q4 changed
+    // nothing, but accepting it still passes it through the gate (1.18.0).
+    const all = screen.getByRole("button", { name: "Accept all ready (2)" });
     await userEvent.click(all);
     const accepts = calls.filter((c) => c.path.includes("/accept")).map((c) => c.body);
-    expect(accepts).toEqual([{ question_ids: ["q1"] }, { question_ids: ["q2"] }]);
+    expect(accepts).toEqual([{ question_ids: ["q1"] }, { question_ids: ["q2", "q4"] }]);
     expect(screen.getByText(/1 with notes is left for you to look at/)).toBeInTheDocument();
     expect(within(screen.getByText("q4").closest("li")!).getByText("Unchanged")).toBeInTheDocument();
     expect(within(screen.getByText("q5").closest("li")!).getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByText(/3 approved, 0 held for review/)).toBeInTheDocument();
+  });
+
+  it("shows which accepted questions the gate held for review, and why", async () => {
+    fakeServer([entry("q1"), entry("q2")], 0, { q2: ["An answer is cut short."] });
+    mount(2);
+    await userEvent.click(screen.getByRole("button", { name: "Rewrite 2 questions" }));
+    await screen.findByText("q2");
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept all ready (2)" }));
+
+    const q2 = screen.getByText("q2").closest("li")!;
+    await waitFor(() => expect(within(q2).getByText("Held for review")).toBeInTheDocument());
+    expect(within(q2).getByText("An answer is cut short.")).toBeInTheDocument();
+    expect(within(screen.getByText("q1").closest("li")!).getByText("Approved")).toBeInTheDocument();
+    expect(screen.getByText(/1 approved, 1 held for review/)).toBeInTheDocument();
   });
 
   it("shows the original beside the proposal on request", async () => {

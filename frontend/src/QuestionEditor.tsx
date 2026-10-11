@@ -19,6 +19,7 @@ import {
   ApiError,
   type AiAnswer,
   type AiExplanation,
+  type AiCheck,
   type AiReview,
   type AiRewrite,
   type Lifecycle,
@@ -254,7 +255,9 @@ export function QuestionEditor({
   // "Use this" only fills the form - the question is still saved by the
   // same button as any other edit. A model that wrote to the bank directly
   // would be the one contributor whose work nobody reviewed.
-  const [aiBusy, setAiBusy] = useState<"" | "rewrite" | "review" | "explanation" | "answer">("");
+  const [aiBusy, setAiBusy] = useState<"" | "rewrite" | "review" | "explanation" | "answer" | "check">("");
+  /** What "Check and approve" found (1.18.0). */
+  const [checked, setChecked] = useState<AiCheck | null>(null);
   const [aiError, setAiError] = useState("");
   const [proposal, setProposal] = useState<AiRewrite | null>(null);
   const [review, setReview] = useState<AiReview | null>(null);
@@ -461,6 +464,28 @@ export function QuestionEditor({
     setReview(null);
     setExplained(null);
     setAnswered(null);
+    setChecked(null);
+  };
+
+  /** Every check on the question as saved, then the gate (1.18.0): approved
+   *  if it passes them all, held for review with the findings if not. */
+  const runCheck = async () => {
+    setAiBusy("check");
+    setAiError("");
+    clearAi();
+    try {
+      const result = await api.aiCheck(draft.id);
+      setChecked(result);
+      const updated = await api.question(draft.id);
+      savedId.current = updated.id;
+      setDraft(updated);
+      setNotice(result.outcome === "approved" ? "Passed every check: approved" : "Held for review");
+      onSaved(updated);
+    } catch (e: unknown) {
+      setAiError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setAiBusy("");
+    }
   };
 
   const runExplanation = async () => {
@@ -802,6 +827,15 @@ export function QuestionEditor({
         </button>
         <button
           className="secondary ai"
+          onClick={runCheck}
+          disabled={busy || dirty || aiBusy !== ""}
+          title={dirty ? "Save first: the checks run on the question as saved."
+            : "Run every check on this question. It is approved if it passes them all, and held for review with the findings if not."}
+        >
+          {aiBusy === "check" ? "Checking…" : "Check and approve"}
+        </button>
+        <button
+          className="secondary ai"
           onClick={runExplanation}
           disabled={busy || aiBusy !== ""}
           title="Ask the model to write the explanation from the course's pages. Nothing is saved until you do."
@@ -923,6 +957,28 @@ export function QuestionEditor({
               Nothing is saved until you press Save.
             </span>
           </div>
+        </div>
+      )}
+
+      {checked && (
+        <div className="card" style={{ marginTop: 12 }} data-testid="check-result">
+          <strong>Every check</strong>
+          {checked.findings.length === 0 ? (
+            <p className="muted">Passed every check, so it is now approved.</p>
+          ) : (
+            <>
+              <p className="muted">
+                Held for review. Fix what is listed, save, and check it again.
+              </p>
+              <ul>
+                {checked.findings.map((f, i) => (
+                  <li key={`c${i}`} className="warn">
+                    <strong>{f.field}:</strong> {f.message}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
 

@@ -13,6 +13,7 @@ from ...core.bank import BLOOM_LEVELS, DIFFICULTIES, STATUS_LABELS, STATUS_TRANS
 from ...core.course_filing import refile_id
 from ...core.explanation_style import explanation_notes
 from ...core.generation_prompts import (
+    ANSWER_RULES,
     EXPLANATION_REWRITE_RULES,
     EXPLANATION_RULES,
     PROOFREAD_RULES,
@@ -21,6 +22,7 @@ from ...core.generation_prompts import (
     WRITING_RULES,
 )
 from ...core.grounding import Grounding, grounding_for
+from ...core.question_gate import house_findings, pass_gate, unique
 from ...core.rewrite_checks import preservation_notes
 from ...core.writing_style import flow_notes, style_notes, text_notes
 from ...core.stem_text import form_notes
@@ -67,14 +69,19 @@ def house_style() -> dict[str, Any]:
     from here rather than keeping a copy that could drift from what the
     model is actually told.
     """
+    # In the template's order (1.18.0): the question, its answers, its
+    # explanation, then the writing every field shares; then what a rewrite
+    # keeps, and what every question passes before it is approved.
     return {
         "sections": [
             {"title": "Scenario and question", "rules": SCENARIO_AND_STEM_RULES},
+            {"title": "Answers", "rules": ANSWER_RULES},
             {"title": "Explanation", "rules": EXPLANATION_RULES},
             {"title": "Quotes, names and punctuation", "rules": WRITING_RULES},
             {"title": "When a question is rewritten",
              "rules": PROOFREAD_RULES + "\n" + EXPLANATION_REWRITE_RULES},
-            {"title": "What every rewrite is checked for", "rules": REWRITE_CHECK_RULES},
+            {"title": "What every question is checked for before it is approved",
+             "rules": REWRITE_CHECK_RULES},
         ]
     }
 
@@ -449,6 +456,8 @@ def accept_rewrites(
 
     entries = {e["id"]: e for e in list(job.result)}
     saved: list[str] = []
+    approved: list[str] = []
+    review: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
 
     def skip(qid: str, reason: str) -> None:
@@ -465,9 +474,6 @@ def accept_rewrites(
         if entry.get("error") or not entry.get("proposed"):
             skip(qid, entry.get("error") or "There is no proposal for it.")
             continue
-        if entry.get("unchanged"):
-            skip(qid, "The rewrite changed nothing.")
-            continue
         if entry.get("problems"):
             skip(qid, "The rewrite could not be graded: "
                       + "; ".join(p["message"] for p in entry["problems"]))
@@ -479,15 +485,32 @@ def accept_rewrites(
         if question_json(current) != entry["original"]:
             skip(qid, "It has changed since it was rewritten. Open it and rewrite it again.")
             continue
-        changes = {f: entry["proposed"][f] for f in _EDITABLE if f in entry["proposed"]}
-        try:
-            _apply_edits(db, current, changes, BULK_EDITOR)
-        except HTTPException as e:
-            skip(qid, str(e.detail))
-            continue
+        # An unchanged proposal saves nothing, but still goes through the gate:
+        # a question the rewrite found nothing to fix in is approved like any
+        # other that passes (1.18.0).
+        if not entry.get("unchanged"):
+            changes = {f: entry["proposed"][f] for f in _EDITABLE if f in entry["proposed"]}
+            try:
+                _apply_edits(db, current, changes, BULK_EDITOR)
+            except HTTPException as e:
+                skip(qid, str(e.detail))
+                continue
+            saved.append(qid)
         entry["accepted"] = True
-        saved.append(qid)
-    return {"saved": saved, "skipped": skipped}
+        # The gate (1.18.0): the proposal's notes - house checks, what the
+        # rewrite lost or added, the model's check - and the house checks again
+        # on what was saved. Clean -> approved; anything -> held for review.
+        question = db.get(qid)
+        found = [(n["field"], n["message"]) for n in entry.get("notes") or []]
+        found += house_findings(question)
+        outcome = pass_gate(question, found)
+        db.save(question)
+        if outcome == "approved":
+            approved.append(qid)
+        else:
+            review.append({"id": qid, "status": question.status,
+                           "reasons": [m for _f, m in unique(found)]})
+    return {"saved": saved, "approved": approved, "review": review, "skipped": skipped}
 
 
 @router.post("/api/questions/{question_id}/ai/review")
@@ -528,6 +551,31 @@ def _grounding(db: ExamBankDB, question) -> Grounding:
     """The course pages the question was written from, if it is a course's."""
     cert = db.get_certification(question.certification_id) if question.certification_id else None
     return grounding_for(question, cert, courses_dir_if_any())
+
+
+@router.post("/api/questions/{question_id}/ai/check")
+def ai_check_question(question_id: str, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """Run every check on the question as it stands, and pass it through the
+    gate (1.18.0): approved if it passes them all, held for review if not.
+
+    The way a question edited by hand reaches approved by the same road as a
+    rewritten one. Writes the status and the review history, nothing else."""
+    question = db.get(question_id)
+    if question is None:
+        raise HTTPException(404, f"No question '{question_id}'.")
+    model = _ai_model()
+    found = house_findings(question)
+    found += question_refinement.check_rewrite(
+        None, question, model=model, base_url=config.ollama_url,
+        source_text=_grounding(db, question).text)
+    outcome = pass_gate(question, found)
+    db.save(question)
+    return {
+        "id": question.id,
+        "status": question.status,
+        "outcome": outcome,
+        "findings": [{"field": f, "message": m} for f, m in unique(found)],
+    }
 
 
 def _options_of(question) -> list[str]:

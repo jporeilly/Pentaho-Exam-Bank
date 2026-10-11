@@ -34,24 +34,32 @@ EXPLANATION_RULES = """\
   For a multi-select, explain each correct answer.
 - Teach the concept: what it is or does, and why that answers this question.
   State facts plainly, as a subject matter expert.
-- One to three short paragraphs. Separate paragraphs with a blank line ("\\n\\n"
-  inside the JSON string). No headings, no lists.
+- One to three short paragraphs of a few sentences each, every paragraph
+  under 700 characters. Separate paragraphs with a blank line ("\\n\\n"
+  inside the JSON string). No headings, no lists. Every sentence is
+  complete, with a subject and a verb - never a fragment that starts with
+  "Because" or "Which".
 - Put the one to three key terms in **bold** with double asterisks - the
   feature, setting or idea the answer turns on. Bold phrases, never whole
   sentences. Beyond that, only `code` for exact names and values.
-- Most explanations need no flow line. Add one only when the question is
-  about the order or routing of steps: a paragraph of its own after the
-  first, one line of PDI's exact step names joined by arrows, showing the
-  path the answer is about - Table input → Filter rows → Table output.
-  Never a generic name ("Input step") or something that is not a step
-  ("Preview").
-- Where the question is about code - a JSONPath or regular expression, SQL,
-  a properties or JSON file - a code block may show the piece the answer
-  turns on: a line of ``` with the language (json, sql, properties, regex),
-  the code, and a line of ```, as a paragraph of its own. Inside the JSON
-  string that is "\\n\\n```json\\n{...}\\n```\\n\\n". At most one, at most
-  eight lines, and only code the question gives or a minimal sample of the
-  structure it describes. Most explanations need none.
+- A visual makes the answer easier to see. Add one whenever the question
+  turns on an order, a structure or a piece of code - one visual at most, as
+  a paragraph of its own after the first:
+  - Order: a flow line of PDI's exact step or job entry names joined by
+    arrows - Table input → Filter rows → Table output. Never a generic name
+    ("Input step") or something that is not a step ("Preview"). Arrows are
+    for PDI steps only.
+  - Code: a code block of the piece the answer turns on - a JSONPath or
+    regular expression, SQL, MDX, XML, a properties or JSON file: a line of
+    ``` with the language (json, sql, xml, properties, regex), the code, and
+    a line of ```. Inside the JSON string that is
+    "\\n\\n```json\\n{...}\\n```\\n\\n". Only code the question gives, or a
+    minimal sample of the structure it describes, valid as written (JSON
+    that parses).
+  - Structure: a small diagram in a code block marked text - a hierarchy's
+    levels, a report's bands, nested grants, a folder tree - drawn with
+    indentation, one item per line.
+  At most 10 lines. A question about a plain fact needs no visual.
 - Refer to an answer by what it says, never by a letter or position: the
   options are shuffled."""
 
@@ -69,6 +77,11 @@ EXPLANATION_RULES = """\
 # for synonyms ("driver job" -> "master job"), changed a word in a wrong
 # answer ("decoded" -> "deployed"), lowercased every answer, and gave the
 # correct answer alone a full stop. Each rule below names one of those.
+#
+# 1.18.0: the owner found answers cut short ("URLs and codes split into
+# several") that a rewrite told to "copy each answer exactly" had kept. A cut
+# answer is now named as an error to fix, and what makes an answer right
+# moved to ANSWER_RULES, which generation shares.
 PROOFREAD_RULES = """\
 - Proofread as an exacting copy editor: spelling, grammar, punctuation,
   capitalization, agreement, and sentences a reader takes in at the first
@@ -78,12 +91,45 @@ PROOFREAD_RULES = """\
   condition. Never shorten, summarize or drop a detail - the question may
   turn on it. Never add a reason, a cause or a hint. Keep the author's terms
   (a driver job stays a driver job); do not swap them for synonyms.
-- Answers: copy each one exactly unless it holds an error. Never change a
-  word that is not wrong or what an answer claims. Every answer starts with
-  a capital letter, and all answers are punctuated alike.
-- Do not change which answers are correct, and make no answer stand out by
-  its length, wording, punctuation or formatting. Only the explanation uses
-  bold."""
+- Answers: keep what each one claims, and copy it exactly unless it holds an
+  error. An answer that is cut short, is missing a word it needs, or is hard
+  to read IS an error: complete it with the fewest words that make it read
+  whole, without changing what it claims.
+- Do not change which answers are correct."""
+
+# What makes the answers right, for every prompt that writes them: generation,
+# the rewrite and the fix (1.18.0). Each rule has a check behind it -
+# writing_style.answer_notes and style_notes, validation.problems_with, and
+# the model's own check (REWRITE_CHECK_RULES) - so a question that follows
+# them passes.
+ANSWER_RULES = """\
+- Every answer is complete: a whole phrase or sentence that reads on its own
+  and says exactly what it means, with every word it needs. Never cut an
+  answer short to fit a length - "URLs and codes split into several" is cut
+  short; "URLs and codes split into several tokens" is complete. An answer
+  never ends on a word such as "the", "of", "and" or "several".
+- The answers to one question share one form: all full sentences ending in a
+  period, or all short phrases with none, each starting with a capital
+  letter.
+- No answer stands out - not by its length, its detail, its wording, its
+  punctuation or its formatting. The correct answer is about as long as the
+  wrong ones. If it has `code` in it, the wrong answers name things in
+  `code` too, or no answer uses it.
+- Every answer differs from the others and none is empty. A rewrite keeps the
+  number of correct and wrong answers as it is."""
+
+# The rewrite's own system prompt (1.18.0). Until 1.17.0 the rewrite ran under
+# GENERATION_SYSTEM_PROMPT - "write exam questions about the concept this
+# course section teaches" - while its instruction said "polish this reviewed
+# question": two jobs at odds, and a 12B model resolved them by re-authoring.
+REWRITE_SYSTEM_PROMPT = """\
+You are an exacting copy editor and a Pentaho subject matter expert. You
+polish certification exam questions that have already been reviewed, to one
+template, so that every question in an exam looks and reads the same. You fix
+what is wrong - spelling, grammar, punctuation, an answer cut short, an
+explanation that discusses the wrong options - and keep everything that is
+right exactly as it is. You never re-author a question, change what it tests,
+or change which answer is correct. Return ONLY valid JSON."""
 
 # Quotes, names and punctuation (1.15.0). The owner, reviewing the first bulk
 # rewrite: single quotes everywhere, used no standard way. A survey of the
@@ -112,10 +158,8 @@ WRITING_RULES = """\
   not, cannot, it is.
 - American spelling (normalize, behavior, color), except in a product's own
   names (Row normaliser).
-- The answers to one question share one form: all full sentences ending in a
-  period, or all short phrases with none. Formatting must never single out
-  an answer: if the correct answer has `code` in it, the wrong answers name
-  things in `code` too - or no answer uses it.
+- Bold (double asterisks) only for the explanation's key terms - never in the
+  scenario, the question or an answer, where it would make words stand out.
 - A serial comma before "and" or "or" in a list of three or more: fields,
   rows, and steps.
 - Numbers: one to nine in words, 10 and above in digits, and digits for every
@@ -134,9 +178,7 @@ EXPLANATION_REWRITE_RULES = """\
 - Add no claim the current explanation does not make: no benefits, no "best
   practice", no features it does not name. If it says little, the new one
   says little. A flow line of steps the question names, or a code block of
-  code or structure the question gives, is not a new claim.
-- Every sentence is complete, with a subject and a verb - never a fragment
-  that starts with "Because" or "Which"."""
+  code or structure the question gives, is not a new claim."""
 
 # What the second pass checks in every rewrite (1.17.0): the answer and the
 # explanation are CORRECT, nothing was lost or added, and the language is
@@ -151,8 +193,12 @@ REWRITE_CHECK_RULES = """\
   answer is right. (Dropping what it said about the wrong answers is
   intended - that is not a loss.) It added no claim the original does not
   make.
+- Every answer is complete and reads clearly on its own: none is cut short or
+  missing a word it needs - a noun, an article, a verb or an object. The
+  correct answer does not stand out from the wrong ones by its length,
+  detail, wording or form.
 - No spelling, grammar, punctuation or capitalization error is left, and
-  every sentence reads clearly."""
+  every sentence reads clearly at the first reading."""
 
 
 GENERATION_SYSTEM_PROMPT = """\
@@ -194,6 +240,7 @@ FORMAT - real certification exam style:
 - **distractors** - plausible but wrong. A common misconception, a confusion with a
   neighboring feature, or a partial truth. Similar in length to the key,
   grammatically consistent with the stem. Never "All/None of the above".
+""" + ANSWER_RULES + """
 """ + EXPLANATION_RULES + """
 - **key_source_text** - a short quote from the section showing this TOPIC is part of
   the course. It anchors the question to the syllabus and need NOT contain the

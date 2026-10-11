@@ -719,6 +719,25 @@ export interface AiFinding {
 /** What `/ai/review` reports. Answer faults are kept apart from
  *  proofreading: "the key is also true of option C" and "a comma is
  *  missing" are not the same kind of news. */
+/** What `/ai/check` did (1.18.0): every check run on the question as it
+ *  stands, and the gate - approved when nothing is found, held for review
+ *  with the findings when anything is. */
+export interface AiCheck {
+  id: string;
+  status: string;
+  outcome: string;
+  findings: { field: string; message: string }[];
+}
+
+/** What accepting bulk rewrites did: saved the changed ones, then passed
+ *  each through the gate (1.18.0). */
+export interface AcceptResult {
+  saved: string[];
+  approved: string[];
+  review: { id: string; status: string; reasons: string[] }[];
+  skipped: { id: string; reason: string }[];
+}
+
 export interface AiReview {
   answers: AiFinding[];
   prose: AiFinding[];
@@ -1239,12 +1258,20 @@ export const api = {
       body: JSON.stringify(scope),
     }),
   rewriteJob: (id: string) => request<RewriteJob>(`/api/jobs/${encodeURIComponent(id)}`),
-  /** Save the named proposals, as the editor's own save would. */
+  /** Save the named proposals, as the editor's own save would, then pass
+   *  each through the gate: approved if every check is clean, held for
+   *  review if not. */
   acceptRewrites: (jobId: string, questionIds: string[]) =>
-    request<{ saved: string[]; skipped: { id: string; reason: string }[] }>(
+    request<AcceptResult>(
       `/api/questions/ai/rewrite-jobs/${encodeURIComponent(jobId)}/accept`,
       { method: "POST", body: JSON.stringify({ question_ids: questionIds }) },
     ),
+  /** Run every check on the question as it stands, and approve it if it
+   *  passes them all; hold it for review if not. Writes the status only. */
+  aiCheck: (id: string) =>
+    request<AiCheck>(`/api/questions/${encodeURIComponent(id)}/ai/check`, {
+      method: "POST",
+    }),
   /** Check the answers, and proofread. Writes nothing. */
   aiReview: (id: string) =>
     request<AiReview>(`/api/questions/${encodeURIComponent(id)}/ai/review`, {

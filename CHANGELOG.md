@@ -7,6 +7,61 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+
+- **A gate between a question and approval.** The owner: "Each AI rewrite
+  should have all the checks that pass the question through the process to
+  approved, passing all the checks." Accepting a bulk rewrite now saves it
+  and then runs every check: the bank's own validator, the house form of
+  the scenario and the question, the explanation rule, the writing standard
+  (now including the answers), and the model's checking pass. A question
+  that passes them all moves to approved (draft -> SME review -> approved,
+  recorded as "AI checks"); one with any finding is held for review, with
+  the reasons on its review history. An unchanged proposal can be accepted
+  too: it saves nothing, but still goes through the gate.
+  `core/question_gate.py`; the accept response adds `approved` and
+  `review`, and the bulk rewrite shows each outcome.
+- **Check and approve**, in the editor (`POST /api/questions/{id}/ai/check`):
+  the same checks and gate on a question as it stands, so one edited by hand
+  reaches approved by the same road. The model's check runs without an
+  original (`check_rewrite(None, ...)`), less "nothing lost or added".
+- **Answers cut short are caught.** The owner found keys such as "Text
+  becomes tokens, and URLs and codes split into several": answers written
+  toward a length had lost the word that makes them mean something, and a
+  readability check that only proofread let them through. Three layers now:
+  the rule (ANSWER_RULES: every answer complete, reading on its own), the
+  model's check (it lists `incomplete_answers`, and says if the correct
+  answer stands out), and a deterministic note (`answer_notes`) on an answer
+  that ends on a word no phrase ends on, or a key much longer than every
+  wrong answer.
+
+### Changed
+
+- **One template, the rules in a logical order.** The owner: "check all the
+  rules make sense and are applied in a logical order", "add any rules that
+  ensure the question passes the checks", and "this forms the question
+  template, so each exam question should have the same look and feel".
+  - ANSWER_RULES (new) gathers what makes the answers right - complete, one
+    form, none standing out, all distinct - from PROOFREAD_RULES and
+    WRITING_RULES, and generation and the answer fix now carry it too.
+  - Every check the gate runs now has a rule the model is given (a test
+    pins the pairing): bold only in the explanation, paragraphs under 700
+    characters, code blocks that parse, arrows for PDI steps only.
+  - The rewrite gives its rules in the template's order - what to keep,
+    the scenario and question, the answers, the explanation, the writing
+    standard - and the check mirrors it. The House Style page shows the
+    same order.
+  - The rewrite has its own system prompt, a copy editor polishing to one
+    template. It ran under the generator's ("write exam questions from this
+    course section") while told to polish: two jobs at odds.
+  - "Keep every detail of the answers" kept answers cut short; a cut
+    answer is now named as an error to fix.
+  - Explanations use visuals more readily: a flow line for the order of
+    PDI steps, a code block for code, and (new) a small text diagram for a
+    structure such as a hierarchy, report bands or nested grants. One at
+    most, up to 10 lines - the same 10 the check now enforces (the rule
+    said eight and the check 12).
+
 ## [1.17.0] - 2026-10-11
 
 ### Changed

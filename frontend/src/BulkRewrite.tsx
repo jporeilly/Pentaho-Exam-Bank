@@ -46,14 +46,17 @@ export function changedParts(e: RewriteEntry): string[] {
   return parts;
 }
 
-/** Why an entry cannot be accepted, or "" when it can. */
+/** Why an entry cannot be accepted, or "" when it can. An unchanged one can:
+ *  accepting it saves nothing but still passes it through the gate (1.18.0). */
 function blocked(e: RewriteEntry): string {
   if (e.accepted) return "Accepted";
   if (e.error || !e.proposed) return "Failed";
-  if (e.unchanged) return "Unchanged";
   if (e.problems.length) return "Cannot be graded";
   return "";
 }
+
+/** What the gate did with an accepted question. */
+type Outcome = { approved: boolean; reasons: string[] };
 
 export function BulkRewrite({ scope, total, onClose, onSaved, pollMs = 1500 }: Props) {
   const [jobId, setJobId] = useState("");
@@ -62,6 +65,7 @@ export function BulkRewrite({ scope, total, onClose, onSaved, pollMs = 1500 }: P
   const [busy, setBusy] = useState(false);
   /** Questions the author passed over, and server refusals, by id. */
   const [skipped, setSkipped] = useState<Record<string, string>>({});
+  const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [showOriginal, setShowOriginal] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(async (id: string) => {
@@ -124,8 +128,13 @@ export function BulkRewrite({ scope, total, onClose, onSaved, pollMs = 1500 }: P
           ...Object.fromEntries(result.skipped.map((x) => [x.id, x.reason])),
         }));
       }
+      setOutcomes((o) => ({
+        ...o,
+        ...Object.fromEntries((result.approved ?? []).map((id) => [id, { approved: true, reasons: [] }])),
+        ...Object.fromEntries((result.review ?? []).map((r) => [r.id, { approved: false, reasons: r.reasons }])),
+      }));
       await refresh(jobId);
-      if (result.saved.length) onSaved();
+      if (result.saved.length || (result.approved ?? []).length || (result.review ?? []).length) onSaved();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
     } finally {
@@ -137,6 +146,8 @@ export function BulkRewrite({ scope, total, onClose, onSaved, pollMs = 1500 }: P
   const open = entries.filter((e) => !blocked(e) && !(e.id in skipped));
   const ready = open.filter((e) => e.notes.length === 0);
   const accepted = entries.filter((e) => e.accepted).length;
+  const approvedCount = Object.values(outcomes).filter((o) => o.approved).length;
+  const heldCount = Object.values(outcomes).filter((o) => !o.approved).length;
   const running = job?.status === "running";
 
   if (!jobId) {
@@ -148,6 +159,10 @@ export function BulkRewrite({ scope, total, onClose, onSaved, pollMs = 1500 }: P
           rewritten to say why the correct answer is right, in paragraphs with the key terms
           in bold. It takes one model call per question, so this runs for a while; you can
           review and accept them as they arrive. <strong>Nothing is saved until you accept.</strong>
+        </p>
+        <p className="muted">
+          Every question you accept then goes through every check. One that passes them all
+          is approved; one with any finding is held for review, with the reasons on it.
         </p>
         <HouseStyle intro="What the rewrite brings each question to. New questions are generated to the same rules." />
         {error && <div className="banner">{error}</div>}
@@ -178,13 +193,15 @@ export function BulkRewrite({ scope, total, onClose, onSaved, pollMs = 1500 }: P
                 ? `Stopped: ${job.error}`
                 : `Rewrote ${entries.length} of ${of}.`}
           {accepted > 0 && ` ${accepted} accepted.`}
+          {approvedCount + heldCount > 0 &&
+            ` ${approvedCount} approved, ${heldCount} held for review.`}
         </span>
         <span className="spacer" />
         <button
           className="add"
           onClick={() => accept(ready.map((e) => e.id))}
           disabled={busy || ready.length === 0}
-          title="Accepts every rewrite with no notes and no problems. Look at the ones with notes first."
+          title="Accepts every rewrite with no notes and no problems; each is then approved if it passes every check. Look at the ones with notes first."
         >
           Accept all ready ({ready.length})
         </button>
@@ -214,14 +231,18 @@ export function BulkRewrite({ scope, total, onClose, onSaved, pollMs = 1500 }: P
 
       <ol className="rewrite-list">
         {entries.map((e) => {
-          const state = blocked(e) || (e.id in skipped ? "Skipped" : "");
-          const reason = skipped[e.id];
+          const outcome = outcomes[e.id];
+          const state = outcome
+            ? outcome.approved ? "Approved" : "Held for review"
+            : blocked(e) || (e.id in skipped ? "Skipped" : "");
+          const reason = skipped[e.id] || (outcome && !outcome.approved ? outcome.reasons.join(" ") : "");
           return (
             <li key={e.id} className={`rewrite-entry${state ? " is-settled" : ""}`}>
               <div className="rewrite-entry__head">
                 <code className="mono">{e.id}</code>
                 {state && <span className={`rewrite-chip rewrite-chip-${state.split(" ")[0].toLowerCase()}`}>{state}</span>}
                 {!state && e.notes.length > 0 && <span className="rewrite-chip rewrite-chip-notes">Has notes</span>}
+                {e.proposed && e.unchanged && <span className="muted rewrite-entry__changed">Unchanged</span>}
                 {e.proposed && !e.unchanged && (
                   <span className="muted rewrite-entry__changed">
                     Changed: {changedParts(e).join(" · ")}

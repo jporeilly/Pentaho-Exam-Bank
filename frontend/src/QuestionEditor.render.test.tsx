@@ -39,7 +39,8 @@ const TRANSITIONS = {
  *  status moves to it, and answers the lists the pane asks for. With
  *  `renameTo`, a PUT that changes the topic renames the question, as the
  *  bank does when a course question moves to another module. */
-function fakeServer(start: Question, renameTo = "") {
+function fakeServer(start: Question, renameTo = "",
+                    checkFindings: { field: string; message: string }[] = []) {
   let current = start;
   const puts: string[] = [];
   const bodies: Record<string, unknown>[] = [];
@@ -98,6 +99,15 @@ function fakeServer(start: Question, renameTo = "") {
     }
     if (method === "POST" && u.endsWith("/status")) {
       current = { ...current, status: JSON.parse(String(init?.body)).status };
+      return json(current);
+    }
+    if (method === "POST" && u.endsWith("/ai/check")) {
+      // The gate (1.18.0): approved when nothing is found, held when anything is.
+      const outcome = checkFindings.length ? "review" : "approved";
+      current = { ...current, status: checkFindings.length ? "sme_review" : "approved" };
+      return json({ id: current.id, status: current.status, outcome, findings: checkFindings });
+    }
+    if (method === "GET" && /\/api\/questions\/[^/?]+$/.test(u)) {
       return json(current);
     }
     return json({ items: [current], total: 1, limit: 25, offset: 0 });
@@ -404,5 +414,33 @@ describe("formatting the text", () => {
     expect(bold.tagName).toBe("STRONG");
     expect(screen.getByText(".csv").tagName).toBe("CODE");
     expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument();
+  });
+});
+
+describe("check and approve (1.18.0)", () => {
+  it("approves a question that passes every check, and says so", async () => {
+    fakeServer(question({ status: "draft" }));
+    await openEditor();
+
+    await userEvent.click(screen.getByRole("button", { name: "Check and approve" }));
+
+    const result = await screen.findByTestId("check-result");
+    expect(result).toHaveTextContent("Passed every check, so it is now approved.");
+    expect(await screen.findByText(/Passed every check: approved/)).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector(".pill.approved")).not.toBeNull());
+  });
+
+  it("holds a question with findings for review, and lists them", async () => {
+    fakeServer(question({ status: "draft" }), "", [
+      { field: "options", message: "\"Moves and shapes the\" ends on \"the\", so it reads as cut short." },
+    ]);
+    await openEditor();
+
+    await userEvent.click(screen.getByRole("button", { name: "Check and approve" }));
+
+    const result = await screen.findByTestId("check-result");
+    expect(result).toHaveTextContent("Held for review");
+    expect(result).toHaveTextContent("reads as cut short");
+    await waitFor(() => expect(document.querySelector(".pill.sme_review")).not.toBeNull());
   });
 });

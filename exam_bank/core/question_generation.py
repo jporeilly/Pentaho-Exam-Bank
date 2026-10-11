@@ -10,7 +10,8 @@ from ..utils.config import config
 from .bank import Question
 from .source import SlideInfo
 from .generation_prompts import (
-    EXPLANATION_RULES, GENERATION_SYSTEM_PROMPT, WRITING_RULES, _build_question_specs, build_prompt,
+    ANSWER_RULES, EXPLANATION_RULES, GENERATION_SYSTEM_PROMPT, WRITING_RULES, _build_question_specs,
+    build_prompt,
 )
 from .generation_parsing import _extract_json_array, _extract_json_object, validate_key_against_notes
 from .stem_text import question_only
@@ -76,6 +77,7 @@ RULES:
 if needed for length balance.
 - Replace any distractor that duplicates a key with a different plausible wrong answer.
 - Replace "All/None of the above" with a specific, plausible wrong answer.
+{ANSWER_RULES}
 {EXPLANATION_RULES}
 {WRITING_RULES}
 

@@ -303,7 +303,9 @@ def flow_notes(text: str) -> List[str]:
 
 
 # Past this a block stops illustrating and starts being a listing to study.
-_LONG_BLOCK = 12
+# The same 10 lines EXPLANATION_RULES gives the model (1.18.0; it said eight
+# and this checked 12, so a block of nine to twelve broke the rule and passed).
+_LONG_BLOCK = 10
 
 
 def code_notes(question) -> List[Tuple[str, str]]:
@@ -327,6 +329,45 @@ def code_notes(question) -> List[Tuple[str, str]]:
                 json.loads(code)
             except ValueError as e:
                 notes.append(("explanation", f"The JSON block does not parse ({e.msg}, line {e.lineno}). Fix it or drop it."))
+    return notes
+
+
+# Answers cut short (1.18.0). The owner found keys like "Text becomes tokens,
+# and URLs and codes split into several": answers written toward a length had
+# lost the word that makes them mean something, and a rewrite told to copy
+# answers exactly kept them that way. The model is now told the rule and
+# checks for it (WRITING_RULES, REWRITE_CHECK_RULES); this catches the plain
+# case, an answer that ends on a word no phrase can end on. Lower case only:
+# "CA and OR" ends on a state, not on a conjunction. Forms of "be" are left
+# out: "runs as is" is an idiom, not a cut.
+_CANNOT_END = frozenset("""
+a an the and or nor but of than several such very whose its their our your my
+his her
+""".split())
+
+
+def _last_word(text: str) -> str:
+    words = re.findall(r"\S+", re.sub(r"[\s.,;:!?*`)\]]+$", "", text or ""))
+    return re.sub(r"^[^\w]+|[^\w]+$", "", words[-1]) if words else ""
+
+
+def answer_notes(question) -> List[Tuple[str, str]]:
+    """(field, message) for answers that are cut short or give the key away."""
+    notes: List[Tuple[str, str]] = []
+    options = _options(question)
+    for o in options:
+        last = _last_word(o)
+        if last in _CANNOT_END:
+            notes.append(("options", f'"{o}" ends on "{last}", so it reads as cut short. '
+                                     "Complete it with the word it needs."))
+    keys = [k for k in (question.keys if question.question_type == "multi" and question.keys
+                        else [question.key]) if k]
+    wrong = [d for d in question.distractors if d]
+    if keys and wrong:
+        k, d = max(map(len, keys)), max(map(len, wrong))
+        if k > d + 12 and k > d * 1.2:
+            notes.append(("options", "The correct answer is much longer than every wrong one, "
+                                     "which gives it away. Bring the answers to a similar length."))
     return notes
 
 
@@ -360,6 +401,7 @@ def style_notes(question) -> List[Tuple[str, str]]:
             "Some answers end with a full stop and some do not. Make them all "
             "sentences with one, or all short phrases without.",
         ))
+    notes += answer_notes(question)
     bold = re.compile(r"\*\*[^*\n]+\*\*")
     for field, texts in (("scenario", [question.scenario]), ("stem", [question.stem]),
                          ("options", options)):

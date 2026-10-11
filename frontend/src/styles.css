@@ -1218,6 +1218,9 @@ td.empty { text-align: center; color: var(--text-faint); padding: 18px 10px; }
 .rewrite-chip-accepted { background: var(--c-add-soft); color: var(--c-add-ink); }
 .rewrite-chip-failed, .rewrite-chip-cannot { background: var(--c-bad-soft); color: var(--c-bad-ink); }
 .rewrite-chip-notes { background: #fdf1dc; color: #7c3a0a; }
+/* What the gate did with an accepted question (1.18.0). */
+.rewrite-chip-approved { background: var(--c-add-soft); color: var(--c-add-ink); }
+.rewrite-chip-held { background: #fdf1dc; color: #7c3a0a; }
 .rewrite-entry__changed { font-size: 12.5px; }
 
 /* The house style: the rules every question is written to, read from the

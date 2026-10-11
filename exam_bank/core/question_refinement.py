@@ -24,11 +24,13 @@ from typing import List, Optional
 from . import providers
 from .bank import Question
 from .generation_prompts import (
+    ANSWER_RULES,
     EXPLANATION_REWRITE_RULES,
     EXPLANATION_RULES,
     GENERATION_SYSTEM_PROMPT,
     PROOFREAD_RULES,
     REWRITE_CHECK_RULES,
+    REWRITE_SYSTEM_PROMPT,
     SCENARIO_AND_STEM_RULES,
     WRITING_RULES,
 )
@@ -42,11 +44,15 @@ from .writing_style import tidy, tidy_question
 # review, so the rewrite proofreads them and brings the explanation to the
 # house rule, and leaves the rest as it found it. It used to say "Improve this
 # question", and a model told to improve rewrites.
+#
+# 1.18.0: "keep every detail of ... the answers" kept answers that had been cut
+# short, so a cut answer is now named as something to fix.
 REWRITE_INSTRUCTION = (
     "Polish this reviewed certification exam question. Proofread every field as an "
-    "exacting copy editor, and rewrite the explanation so it explains only why the "
-    "correct answer is right. Keep every detail of the scenario, the question and the "
-    "answers. Change nothing else."
+    "exacting copy editor, complete any answer that is cut short, and rewrite the "
+    "explanation so it explains only why the correct answer is right. Keep every "
+    "detail of the scenario and the question, and what every answer claims. Change "
+    "nothing else."
 )
 from .generation_parsing import _extract_json_array, _extract_json_object
 from .stem_text import question_only
@@ -81,20 +87,26 @@ IMPORTANT:
 - The key_source_text must still reference the original source material.
 - Return key_source_text unchanged.
 
-Proofread as you go:
+Apply these rules in this order. Every one of them is checked before the
+question can be approved.
+
+1. What to keep, and what to fix:
 {PROOFREAD_RULES}
 
-The writing standard - quotes, names and punctuation, in every field:
-{WRITING_RULES}
-
-The scenario and the stem do different jobs - keep them apart. If the current
-scenario asks a question, or the current stem opens with statements, move the
-statements into the scenario and leave only the question in the stem:
+2. The scenario and the question do different jobs - keep them apart. If the
+current scenario asks a question, or the current stem opens with statements,
+move the statements into the scenario and leave only the question in the stem:
 {SCENARIO_AND_STEM_RULES}
 
-The explanation:
+3. The answers:
+{ANSWER_RULES}
+
+4. The explanation:
 {EXPLANATION_RULES}
 {EXPLANATION_REWRITE_RULES if (question.explanation or "").strip() else ""}
+
+5. The writing standard - quotes, names and punctuation, in every field:
+{WRITING_RULES}
 
 Return ONLY a JSON object with these keys:
 ```json
@@ -111,7 +123,7 @@ Return ONLY a JSON object with these keys:
     response = providers.generate(
         prompt=prompt,
         model=model,
-        system=system_prompt or GENERATION_SYSTEM_PROMPT,
+        system=system_prompt or REWRITE_SYSTEM_PROMPT,
         base_url=base_url,
         timeout=120.0,
     )
@@ -338,25 +350,36 @@ CHECK_FAILED = "The answer and language check did not run, so read this one clos
 
 
 def check_rewrite(
-    original: Question,
+    original: Optional[Question],
     proposed: Question,
     model: str,
     base_url: str = "http://localhost:11434",
     source_text: str = "",
 ) -> List[tuple]:
-    """(field, message) findings on a proposed rewrite; [] when it is clean."""
-    prompt = f"""You review a rewritten certification exam question before it is accepted.
+    """(field, message) findings on a question; [] when it is clean.
+
+    With an ``original`` it checks a rewrite against it (the bulk rewrite,
+    1.17.0). Without one it checks the question as it stands (1.18.0): the
+    gate a hand-edited question passes before it is approved, the same rules
+    less "nothing lost or added", which needs something to compare with."""
+    rules = REWRITE_CHECK_RULES
+    if original is None:
+        rules = _drop_rule(REWRITE_CHECK_RULES, "The rewrite lost")
+        what = "a certification exam question before it is approved"
+        body = f"QUESTION (to check):\n{_question_block(proposed)}\n\nCheck the QUESTION:"
+        compare = ""
+    else:
+        what = "a rewritten certification exam question before it is accepted"
+        body = (f"ORIGINAL (reviewed and approved):\n{_question_block(original)}\n\n"
+                f"REWRITE (to check):\n{_question_block(proposed)}\n\nCheck the REWRITE:")
+        compare = (
+            '\n  "lost": [],\n  "added": [],')
+    prompt = f"""You review {what}.
 
 {_grounding_block(source_text)}
 
-ORIGINAL (reviewed and approved):
-{_question_block(original)}
-
-REWRITE (to check):
-{_question_block(proposed)}
-
-Check the REWRITE:
-{REWRITE_CHECK_RULES}
+{body}
+{rules}
 
 Report only real problems, each with the exact words concerned. Do not report
 style preferences. Do not rewrite anything.
@@ -367,16 +390,19 @@ Return ONLY a JSON object:
   "answer_problem": "",
   "also_correct": [],
   "explanation_correct": true,
-  "explanation_problem": "",
-  "lost": [],
-  "added": [],
+  "explanation_problem": "",{compare}
+  "incomplete_answers": [],
+  "answer_stands_out": "",
   "language": [{{"field": "scenario|question|answers|explanation", "text": "...", "fix": "..."}}]
 }}
-"also_correct" lists answers marked wrong that are also correct. "lost" lists facts,
-conditions or caveats of the ORIGINAL missing from the REWRITE - but NOT what the
-original explanation said about the wrong answers: the rewrite drops that on
-purpose. "added" lists claims in the REWRITE that the ORIGINAL does not make.
-Empty lists when there is nothing."""
+"also_correct" lists answers marked wrong that are also correct. "incomplete_answers"
+lists, word for word, any answer that is cut short, missing a word it needs, or hard to
+read on its own. "answer_stands_out" says how the correct answer stands out from the
+wrong ones - by length, detail, wording or form - or is empty.""" + ("" if original is None else """
+"lost" lists facts, conditions or caveats of the ORIGINAL missing from the REWRITE - but
+NOT what the original explanation said about the wrong answers: the rewrite drops that
+on purpose. "added" lists claims in the REWRITE that the ORIGINAL does not make.""") + """
+Empty lists and strings when there is nothing."""
     try:
         reply = providers.generate(
             prompt=prompt,
@@ -405,12 +431,19 @@ Empty lists when there is nothing."""
     if data.get("explanation_correct") is False:
         found.append(("explanation", "The check doubts the explanation: "
                       + (words(data.get("explanation_problem")) or "no reason given") + "."))
-    for x in data.get("lost") or []:
-        if words(x):
-            found.append(("explanation", f"The rewrite may have lost: {words(x)}"))
-    for x in data.get("added") or []:
-        if words(x):
-            found.append(("explanation", f"The rewrite may have added: {words(x)}"))
+    if original is not None:
+        for x in data.get("lost") or []:
+            if words(x):
+                found.append(("explanation", f"The rewrite may have lost: {words(x)}"))
+        for x in data.get("added") or []:
+            if words(x):
+                found.append(("explanation", f"The rewrite may have added: {words(x)}"))
+    for a in data.get("incomplete_answers") or []:
+        if words(a):
+            found.append(("options", f"The check says this answer is cut short or unclear: {words(a)}"))
+    if words(data.get("answer_stands_out") or ""):
+        found.append(("options", "The check says the correct answer stands out: "
+                      + words(data.get("answer_stands_out")) + "."))
     fields = {"scenario": "scenario", "question": "stem", "answers": "options", "explanation": "explanation"}
     for item in data.get("language") or []:
         if isinstance(item, dict) and words(item.get("text", "")):
@@ -418,6 +451,13 @@ Empty lists when there is nothing."""
             found.append((fields.get(str(item.get("field", "")).lower(), "explanation"),
                           f"Language: \"{words(item['text'])}\"" + (f" -> \"{fix}\"" if fix else "")))
     return found
+
+
+def _drop_rule(rules: str, opening: str) -> str:
+    """A bullet list of rules, less the bullet that starts with `opening`."""
+    bullets = [b for b in rules.split("\n- ")]
+    bullets[0] = bullets[0][2:] if bullets[0].startswith("- ") else bullets[0]
+    return "\n".join("- " + b for b in bullets if not b.startswith(opening))
 
 
 def expected_key_count(question: Question) -> int:
