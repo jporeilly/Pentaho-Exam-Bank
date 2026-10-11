@@ -7,6 +7,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.18.2] - 2026-10-11
+
+### Fixed
+
+- **The padding check missed "This structure ensures".** It knew a list of
+  openers ("This ensures", "This approach", "This allows" and the like), and
+  the gated re-run approved explanations opening "This structure ensures",
+  "This caching allows", "This metric allows". Now any single word between
+  "This" and ensures, allows, enables, guarantees, helps or lets counts as
+  padding; "This is why" and "This step reads" still do not. Swept over the
+  whole bank it found 14 approved explanations, each corrected and gated
+  again.
+
 ## [1.18.1] - 2026-10-11
 
 ### Fixed
