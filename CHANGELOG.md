@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-11
+
 ### Added
 
 - **A gate between a question and approval.** The owner: "Each AI rewrite
