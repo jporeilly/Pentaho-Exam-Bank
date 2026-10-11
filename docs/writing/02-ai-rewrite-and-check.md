@@ -18,6 +18,26 @@ scenario, or left an option labelled "Incorrect" - the proposal says so under
 it. Press **Use this** to copy the proposal into the editor (still unsaved;
 press Save if you agree), or **Discard**.
 
+Every rewrite is then **checked** (from 1.17.0), and what the checks find
+appears as notes under the proposal:
+
+- **A second AI pass** reads the original and the rewrite side by side, with
+  the course pages the question was written from: is the answer marked
+  correct really correct, is any answer marked wrong also correct, is the
+  explanation accurate, did the rewrite lose a fact or caveat or add a claim,
+  and is any spelling, grammar or punctuation error left. It reports; it never
+  edits. If it cannot give a readable answer, that is a note too, so an
+  unchecked rewrite never looks like a clean one.
+- **Exact checks**, made without a model, because a model does not reliably
+  report its own cuts: the content words the rewrite took out of the scenario
+  or the question, or put in (a dropped detail can make a question
+  unanswerable; an added reason can give the answer away), and any answer
+  whose words changed. A capital letter the model took off an answer is put
+  back on its own.
+
+The model gets two calls per question instead of one, so a rewrite takes about
+twice as long.
+
 To rewrite many questions at once, use **AI rewrite all** in the Bank; see
 [Rewriting every question at once](../guides/05-the-bank.md#rewriting-every-question-at-once).
 

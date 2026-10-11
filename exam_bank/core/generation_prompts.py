@@ -61,15 +61,29 @@ EXPLANATION_RULES = """\
 # "How does PDI handle the data volume in this transformation?" - fluent,
 # and no longer the question. These questions have been reviewed; a rewrite
 # polishes them, it does not re-author them.
+#
+# Tightened 2026-10-11 from the first 100 reviewed rewrites (1.17.0). What a
+# 12B model did when told only "proofread": cut the scenario detail the
+# question turns on ("processed in the order they are written", the very
+# clue), added the answer's reason to the scenario, swapped the author's terms
+# for synonyms ("driver job" -> "master job"), changed a word in a wrong
+# answer ("decoded" -> "deployed"), lowercased every answer, and gave the
+# correct answer alone a full stop. Each rule below names one of those.
 PROOFREAD_RULES = """\
-- Scenario, question and answers: fix spelling, grammar, punctuation and
-  clumsy wording ONLY, and bring quotes, names and punctuation to the writing
-  standard. Where a sentence is already correct, keep it word for word. Never
-  change what the question asks, the details it gives (sizes, names,
-  conditions), or what an answer says.
-- Do not change which answers are correct, do not make the correct answers
-  stand out from the others, and do not add bold to the scenario, the
-  question or the answers - only the explanation uses bold."""
+- Proofread as an exacting copy editor: spelling, grammar, punctuation,
+  capitalization, agreement, and sentences a reader takes in at the first
+  reading. Fix every error; change nothing that is not one. Where a sentence
+  is already correct, keep it word for word.
+- Scenario and question: keep every sentence, fact, name, number and
+  condition. Never shorten, summarize or drop a detail - the question may
+  turn on it. Never add a reason, a cause or a hint. Keep the author's terms
+  (a driver job stays a driver job); do not swap them for synonyms.
+- Answers: copy each one exactly unless it holds an error. Never change a
+  word that is not wrong or what an answer claims. Every answer starts with
+  a capital letter, and all answers are punctuated alike.
+- Do not change which answers are correct, and make no answer stand out by
+  its length, wording, punctuation or formatting. Only the explanation uses
+  bold."""
 
 # Quotes, names and punctuation (1.15.0). The owner, reviewing the first bulk
 # rewrite: single quotes everywhere, used no standard way. A survey of the
@@ -114,11 +128,31 @@ WRITING_RULES = """\
 # writing to a destination"). The facts are the reviewed part; keep them.
 EXPLANATION_REWRITE_RULES = """\
 - Rewrite the CURRENT explanation; do not write a new one. Keep every fact it
-  gives about why the correct answer is right - including caveats and
-  numbers - and drop only what it says about the wrong options.
-- Add no fact the current explanation does not state. If it says little,
-  the new one says little. A flow line of steps the question names, or a
-  code block of code or structure the question gives, is not a new fact."""
+  gives about why the correct answer is right - every caveat, condition,
+  number, setting name and example (a formula, an expression, a path) - and
+  drop only what it says about the wrong options.
+- Add no claim the current explanation does not make: no benefits, no "best
+  practice", no features it does not name. If it says little, the new one
+  says little. A flow line of steps the question names, or a code block of
+  code or structure the question gives, is not a new claim.
+- Every sentence is complete, with a subject and a verb - never a fragment
+  that starts with "Because" or "Which"."""
+
+# What the second pass checks in every rewrite (1.17.0): the answer and the
+# explanation are CORRECT, nothing was lost or added, and the language is
+# clean. Its findings are notes on the proposal, so a rewrite with any of
+# them waits for the author instead of being accepted with the rest.
+REWRITE_CHECK_RULES = """\
+- The answer marked correct is correct, and no answer marked wrong is also
+  correct.
+- The explanation is accurate and agrees with the correct answer.
+- The rewrite lost no fact, condition or caveat from the original scenario or
+  question, and nothing the original explanation says about why the correct
+  answer is right. (Dropping what it said about the wrong answers is
+  intended - that is not a loss.) It added no claim the original does not
+  make.
+- No spelling, grammar, punctuation or capitalization error is left, and
+  every sentence reads clearly."""
 
 
 GENERATION_SYSTEM_PROMPT = """\

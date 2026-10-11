@@ -63,9 +63,10 @@ the mechanical parts by the app itself after the AI.
 1. Press **AI rewrite all**. A card says how many questions it will rewrite
    and shows the house style; press **Rewrite N questions** to start, or
    **Cancel**. Up to 1,000 at a time.
-2. The questions are rewritten one model call at a time (about 15 seconds
-   each with gemma4:12b), and each appears in a review list as it finishes.
-   You can review while it runs; **Stop** ends the run, keeping what is done.
+2. The questions are rewritten one at a time, each with two model calls -
+   the rewrite and its [check](../writing/02-ai-rewrite-and-check.md) - and
+   each appears in a review list as it finishes. You can review while it
+   runs; **Stop** ends the run, keeping what is done.
 3. Each proposal shows the new question and its explanation, and **Changed:**
    names what moved - mostly *Explanation*. A *Scenario*, *Question* or
    *Answers* there is where to look first, because a reworded question can

@@ -28,9 +28,11 @@ from .generation_prompts import (
     EXPLANATION_RULES,
     GENERATION_SYSTEM_PROMPT,
     PROOFREAD_RULES,
+    REWRITE_CHECK_RULES,
     SCENARIO_AND_STEM_RULES,
     WRITING_RULES,
 )
+from .rewrite_checks import keep_capitals
 from .writing_style import tidy, tidy_question
 
 # The rewrite's default ask. The bulk rewrite sends the same one, so a
@@ -41,9 +43,10 @@ from .writing_style import tidy, tidy_question
 # house rule, and leaves the rest as it found it. It used to say "Improve this
 # question", and a model told to improve rewrites.
 REWRITE_INSTRUCTION = (
-    "Polish this reviewed certification exam question. Proofread every field, and "
-    "rewrite the explanation so it explains only why the correct answer is right. "
-    "Change nothing else."
+    "Polish this reviewed certification exam question. Proofread every field as an "
+    "exacting copy editor, and rewrite the explanation so it explains only why the "
+    "correct answer is right. Keep every detail of the scenario, the question and the "
+    "answers. Change nothing else."
 )
 from .generation_parsing import _extract_json_array, _extract_json_object
 from .stem_text import question_only
@@ -135,8 +138,9 @@ Return ONLY a JSON object with these keys:
     proposed.distractors = data.get("distractors", proposed.distractors)
     proposed.explanation = data.get("explanation", proposed.explanation)
     proposed.option_order = _carry_order(question, proposed)
-    # What the model missed of the writing standard's mechanical rules.
-    return tidy_question(proposed)
+    # What the model missed of the writing standard's mechanical rules, and
+    # any capital it took off an answer (rewrite_checks).
+    return keep_capitals(question, tidy_question(proposed))
 
 
 def _carry_order(question: Question, proposed: Question) -> list[str]:
@@ -312,6 +316,108 @@ Return only the explanation text, with a blank line between paragraphs."""
 
 
 _COUNT_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def _question_block(q: Question) -> str:
+    keys = q.correct_answers
+    lines = [f"Scenario: {q.scenario.strip() or '(none)'}", f"Question: {q.stem.strip()}", "Answers:"]
+    lines += [f"- {k} (marked correct)" for k in keys]
+    lines += [f"- {d} (marked wrong)" for d in q.distractors if d and d not in keys]
+    lines.append(f"Explanation: {q.explanation.strip() or '(none)'}")
+    return "\n".join(lines)
+
+
+# The second pass over a rewrite (1.17.0). The owner, after the first two
+# exams: "it must check at a deeper level the grammar, spelling, readability,
+# punctuation, and that the answer(s) and explanation are correct". One model
+# call, separate from the one that wrote the rewrite - a writer reviewing its
+# own text in the same breath finds little - grounded on the course pages when
+# there are any. It reports; it never edits. An unreadable reply is itself a
+# finding, so an unchecked rewrite can never pass as a clean one.
+CHECK_FAILED = "The answer and language check did not run, so read this one closely."
+
+
+def check_rewrite(
+    original: Question,
+    proposed: Question,
+    model: str,
+    base_url: str = "http://localhost:11434",
+    source_text: str = "",
+) -> List[tuple]:
+    """(field, message) findings on a proposed rewrite; [] when it is clean."""
+    prompt = f"""You review a rewritten certification exam question before it is accepted.
+
+{_grounding_block(source_text)}
+
+ORIGINAL (reviewed and approved):
+{_question_block(original)}
+
+REWRITE (to check):
+{_question_block(proposed)}
+
+Check the REWRITE:
+{REWRITE_CHECK_RULES}
+
+Report only real problems, each with the exact words concerned. Do not report
+style preferences. Do not rewrite anything.
+
+Return ONLY a JSON object:
+{{
+  "answer_correct": true,
+  "answer_problem": "",
+  "also_correct": [],
+  "explanation_correct": true,
+  "explanation_problem": "",
+  "lost": [],
+  "added": [],
+  "language": [{{"field": "scenario|question|answers|explanation", "text": "...", "fix": "..."}}]
+}}
+"also_correct" lists answers marked wrong that are also correct. "lost" lists facts,
+conditions or caveats of the ORIGINAL missing from the REWRITE - but NOT what the
+original explanation said about the wrong answers: the rewrite drops that on
+purpose. "added" lists claims in the REWRITE that the ORIGINAL does not make.
+Empty lists when there is nothing."""
+    try:
+        reply = providers.generate(
+            prompt=prompt,
+            model=model,
+            system=("You are a meticulous technical editor and Pentaho subject matter expert. "
+                    "Return ONLY valid JSON."),
+            base_url=base_url,
+            timeout=120.0,
+        )
+    except Exception:
+        return [("explanation", CHECK_FAILED)]
+    data = _extract_json_object(reply or "")
+    if not isinstance(data, dict) or "answer_correct" not in data:
+        return [("explanation", CHECK_FAILED)]
+
+    def words(x) -> str:
+        return str(x).strip()
+
+    found: List[tuple] = []
+    if data.get("answer_correct") is False:
+        found.append(("options", "The check doubts the answer marked correct: "
+                      + (words(data.get("answer_problem")) or "no reason given") + "."))
+    for a in data.get("also_correct") or []:
+        if words(a):
+            found.append(("options", f"The check says this wrong answer may also be correct: {words(a)}"))
+    if data.get("explanation_correct") is False:
+        found.append(("explanation", "The check doubts the explanation: "
+                      + (words(data.get("explanation_problem")) or "no reason given") + "."))
+    for x in data.get("lost") or []:
+        if words(x):
+            found.append(("explanation", f"The rewrite may have lost: {words(x)}"))
+    for x in data.get("added") or []:
+        if words(x):
+            found.append(("explanation", f"The rewrite may have added: {words(x)}"))
+    fields = {"scenario": "scenario", "question": "stem", "answers": "options", "explanation": "explanation"}
+    for item in data.get("language") or []:
+        if isinstance(item, dict) and words(item.get("text", "")):
+            fix = words(item.get("fix", ""))
+            found.append((fields.get(str(item.get("field", "")).lower(), "explanation"),
+                          f"Language: \"{words(item['text'])}\"" + (f" -> \"{fix}\"" if fix else "")))
+    return found
 
 
 def expected_key_count(question: Question) -> int:

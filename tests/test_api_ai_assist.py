@@ -428,12 +428,16 @@ def test_the_rewrite_asks_for_a_proofread_and_a_correct_only_explanation(questio
 
     prompt = calls[0]["prompt"]
     # A polish: the reviewed wording stays unless it is wrong...
-    assert "fix spelling, grammar, punctuation and" in prompt
-    assert "Where a sentence is already correct" in prompt
+    assert "Fix every error; change nothing that is not one" in prompt
+    assert "keep it word for word" in prompt
     assert "Change nothing else" in prompt and "Improve this question" not in prompt
+    # ...every detail of the scenario and every answer kept (1.17.0)...
+    assert "Never shorten, summarize or drop a detail" in prompt
+    assert "Never add a reason, a cause or a hint" in prompt
+    assert "copy each one exactly unless it holds an error" in prompt
     # ...and the explanation keeps its facts, about the correct answer only.
     assert "why the correct answer is correct, and nothing else" in prompt
-    assert "Rewrite the CURRENT explanation" in prompt and "Add no fact" in prompt
+    assert "Rewrite the CURRENT explanation" in prompt and "Add no claim" in prompt
     # The old house rule is gone: no "'X' - Correct/Incorrect" template.
     assert "Correct/Incorrect:" not in prompt
 
@@ -493,9 +497,17 @@ CLEAN = ("A transformation **moves and shapes rows**: each step works on the row
          "step before it produced.\n\nThat is why it sits between a source and a target.")
 
 
-def _by_stem(monkeypatch, replies):
-    """Answer each question's rewrite by a phrase in its stem."""
+CLEAN_CHECK = json.dumps({"answer_correct": True, "answer_problem": "", "also_correct": [],
+                          "explanation_correct": True, "explanation_problem": "",
+                          "lost": [], "added": [], "language": []})
+
+
+def _by_stem(monkeypatch, replies, check=CLEAN_CHECK):
+    """Answer each question's rewrite by a phrase in its stem, and the second
+    pass (check_rewrite, 1.17.0) with `check`."""
     def fake(**kw):
+        if kw["prompt"].startswith("You review a rewritten"):
+            return check
         for phrase, reply in replies.items():
             if phrase in kw["prompt"]:
                 return reply
@@ -508,9 +520,10 @@ def _rewrite_of(stem, key, distractors, explanation=CLEAN):
                        "explanation": explanation})
 
 
+# A clean polish keeps the answers word for word (PROOFREAD_RULES, 1.17.0).
 TRANSFORMATION = _rewrite_of(
-    "What is a transformation responsible for?", "Moving and shaping rows",
-    ["Printing a report", "Installing the server", "Backing up a database"])
+    "What is a transformation responsible for?", "Moves and shapes rows",
+    ["Prints a report", "Installs the server", "Backs up a database"])
 
 
 def test_a_bulk_rewrite_proposes_and_saves_nothing_until_accepted(client, question, db_path, monkeypatch):
@@ -669,3 +682,42 @@ def test_the_house_style_shows_the_writing_standard(client):
 
     sections = client.get("/api/house-style").json()["sections"]
     assert {"title": "Quotes, names and punctuation", "rules": gp.WRITING_RULES} in sections
+
+
+# --- the second pass and the exact checks (1.17.0) ----------------------------
+
+
+def test_every_rewrite_is_checked_and_the_findings_are_notes(client, question, monkeypatch):
+    finding = json.dumps({"answer_correct": False, "answer_problem": "a transformation does not schedule",
+                          "also_correct": ["Prints a report"], "explanation_correct": True,
+                          "explanation_problem": "", "lost": ["the caveat about hops"], "added": [],
+                          "language": [{"field": "question", "text": "responsable", "fix": "responsible"}]})
+    _by_stem(monkeypatch, {"What does a transformation do": TRANSFORMATION}, check=finding)
+
+    body = client.post("/api/questions/q-ai/ai/rewrite", json={}).json()
+
+    messages = " | ".join(n["message"] for n in body["notes"])
+    assert "doubts the answer marked correct: a transformation does not schedule" in messages
+    assert "may also be correct: Prints a report" in messages
+    assert "may have lost: the caveat about hops" in messages
+    assert '"responsable" -> "responsible"' in messages
+
+
+def test_an_unreadable_check_is_a_note_not_a_pass(client, question, monkeypatch):
+    _by_stem(monkeypatch, {"What does a transformation do": TRANSFORMATION}, check="I think it is fine.")
+
+    body = client.post("/api/questions/q-ai/ai/rewrite", json={}).json()
+
+    assert any("check did not run" in n["message"] for n in body["notes"])
+
+
+def test_the_check_is_given_the_original_and_the_rewrite(question, monkeypatch):
+    calls = _capture(monkeypatch, CLEAN_CHECK)
+    proposed = Question(id="q-ai", stem="What is a transformation for?", key="Moves and shapes rows",
+                        distractors=["Prints a report"], explanation="It **moves rows**.")
+
+    assert question_refinement.check_rewrite(question, proposed, "m", source_text="Course text.") == []
+    prompt = calls[0]["prompt"]
+    assert "ORIGINAL (reviewed and approved)" in prompt and question.stem in prompt
+    assert "REWRITE (to check)" in prompt and "What is a transformation for?" in prompt
+    assert "- Moves and shapes rows (marked correct)" in prompt and "Course text." in prompt

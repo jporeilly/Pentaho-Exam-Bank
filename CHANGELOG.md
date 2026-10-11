@@ -7,7 +7,45 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
-## [1.16.0] - 2026-10-10
+### Changed
+
+- **A tighter rewrite template.** The owner, after the first two exams were
+  rewritten and reviewed: "tighten up the exam template and improve the
+  instructions for the model. It must check at a deeper level the grammar,
+  spelling, readability, punctuation, and that the answer(s) and explanation
+  are correct." The review of 100 rewrites had found gemma4:12b, told to
+  proofread, cutting the scenario detail a question turns on, adding the
+  answer's reason to it, swapping the author's terms for synonyms, changing
+  a word in an answer ("decoded" to "deployed"), lowercasing answers,
+  punctuating only the correct one, dropping explanation caveats and
+  examples, inventing claims, and writing sentence fragments.
+  `PROOFREAD_RULES` and `EXPLANATION_REWRITE_RULES` now name each of those,
+  and the instruction asks for an exacting copy editor who keeps every
+  detail.
+
+### Added
+
+- **Every rewrite is checked** (`check_rewrite`): a second model call reads
+  the original and the rewrite side by side, grounded on the course pages,
+  and reports whether the answer marked correct is correct, whether a wrong
+  answer is also correct, whether the explanation is accurate, what was lost
+  or added, and any language error left. Its findings are notes; an
+  unreadable reply is a note too. The house style panel shows the rules as
+  *What every rewrite is checked for* (`REWRITE_CHECK_RULES`).
+- **Exact checks on what a rewrite changed** (`core/rewrite_checks.py`), no
+  model: content words dropped from or added to the scenario or the
+  question, and any answer whose words changed - US spelling, digits for
+  numbers and contractions are not counted as changes, and an answer holding
+  a topic filter, path or expression is compared character for character
+  (`+/sensor/#` came back as `+/sensor_#`). Tuned on the 60 reviewed
+  rewrites of the first two exams: it flags all 17 that had lost or gained
+  content. A capital the model took off an answer is put back, in every copy
+  of it.
+
+Measured on SD Specialty (40 questions), old template against new: rewrites
+that changed a scenario, question or answer's content fell from 28 to 8, and
+reworded answers from 23 to 3.
+
 
 ### Added
 

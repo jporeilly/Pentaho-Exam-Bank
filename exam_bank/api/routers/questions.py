@@ -16,10 +16,12 @@ from ...core.generation_prompts import (
     EXPLANATION_REWRITE_RULES,
     EXPLANATION_RULES,
     PROOFREAD_RULES,
+    REWRITE_CHECK_RULES,
     SCENARIO_AND_STEM_RULES,
     WRITING_RULES,
 )
 from ...core.grounding import Grounding, grounding_for
+from ...core.rewrite_checks import preservation_notes
 from ...core.writing_style import flow_notes, style_notes, text_notes
 from ...core.stem_text import form_notes
 from .. import jobs
@@ -72,6 +74,7 @@ def house_style() -> dict[str, Any]:
             {"title": "Quotes, names and punctuation", "rules": WRITING_RULES},
             {"title": "When a question is rewritten",
              "rules": PROOFREAD_RULES + "\n" + EXPLANATION_REWRITE_RULES},
+            {"title": "What every rewrite is checked for", "rules": REWRITE_CHECK_RULES},
         ]
     }
 
@@ -285,10 +288,13 @@ def ai_rewrite_question(
             "The model did not return a usable question. Try again, or a "
             "larger model.",
         )
-    return _proposal_json(question, proposed)
+    checks = question_refinement.check_rewrite(
+        question, proposed, model=kwargs["model"], base_url=kwargs["base_url"],
+        source_text=_grounding(db, question).text)
+    return _proposal_json(question, proposed, checks)
 
 
-def _proposal_json(question, proposed) -> dict[str, Any]:
+def _proposal_json(question, proposed, checks=()) -> dict[str, Any]:
     """A rewrite as the editor and the bulk review show it.
 
     The problems are reported against the PROPOSAL, because the author is
@@ -313,6 +319,13 @@ def _proposal_json(question, proposed) -> dict[str, Any]:
         ] + [
             # The writing standard: what tidy could not settle on its own.
             {"field": f, "message": m} for f, m in style_notes(proposed)
+        ] + [
+            # What the rewrite took out or put in, word for word (1.17.0).
+            {"field": f, "message": m} for f, m in preservation_notes(question, proposed)
+        ] + [
+            # The second pass: correct answer, correct explanation, nothing
+            # lost or added, clean language (check_rewrite, 1.17.0).
+            {"field": f, "message": m} for f, m in checks
         ],
         "unchanged": question_json(proposed) == question_json(question),
     }
@@ -365,6 +378,10 @@ def ai_rewrite_all(body: AiRewriteAllRequest, db: ExamBankDB = Depends(get_db)) 
     questions = db.search(limit=BULK_REWRITE_LIMIT, offset=0, sort=body.sort, **filters)
     instruction = body.instruction.strip() or question_refinement.REWRITE_INSTRUCTION
     base_url = config.ollama_url
+    # The check reads the course pages. The certifications are looked up now:
+    # the job runs after this request, and its database handle, have ended.
+    certs = {cid: db.get_certification(cid) for cid in {q.certification_id for q in questions} if cid}
+    courses_dir = courses_dir_if_any()
 
     def work(job: jobs.Job) -> list[dict[str, Any]]:
         # Appended to the job's own list as each one finishes, so a client
@@ -398,7 +415,11 @@ def ai_rewrite_all(body: AiRewriteAllRequest, db: ExamBankDB = Depends(get_db)) 
                 if proposed is None:
                     entry["error"] = "The model did not return a usable question."
                 else:
-                    entry.update(_proposal_json(question, proposed))
+                    job.progress(i, len(questions), f"Checking {question.id} ({i + 1} of {len(questions)})")
+                    source = grounding_for(question, certs.get(question.certification_id), courses_dir).text
+                    checks = question_refinement.check_rewrite(
+                        question, proposed, model=model, base_url=base_url, source_text=source)
+                    entry.update(_proposal_json(question, proposed, checks))
             out.append(entry)
         job.progress(len(questions), len(questions), f"Rewrote {len(questions)}")
         return out
