@@ -46,6 +46,7 @@ Measured on SD Specialty (40 questions), old template against new: rewrites
 that changed a scenario, question or answer's content fell from 28 to 8, and
 reworded answers from 23 to 3.
 
+## [1.16.0] - 2026-10-10
 
 ### Added
 
