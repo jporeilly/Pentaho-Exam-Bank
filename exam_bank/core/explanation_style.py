@@ -56,4 +56,23 @@ def explanation_notes(text: str | None) -> List[str]:
             "One paragraph runs past 700 characters. Split it with a blank line "
             "so it reads easily."
         )
+    padding = _PADDING.search(text)
+    if padding:
+        notes.append(
+            f"A sentence opens \"{padding.group(0)}\": padding. State the fact directly, "
+            "or drop the sentence if it only restates another."
+        )
     return notes
+
+
+# Padding (1.18.1). The gated re-run of 2026-10-11 approved rewrites that
+# swapped reviewed sentences for "This ensures that...", "This approach
+# allows...", "This design allows the process to continue..." - words that
+# restate the paragraph before them, or bury a fact behind a formula. One
+# opener per explanation is enough to send it back.
+_PADDING = re.compile(
+    r"(?:^|(?<=[.!?:]\s))This (?:ensures|approach|design|functionality|configuration|method|"
+    r"process|allows|enables|makes it|helps|guarantees|setup|practice|mechanism|"
+    r"centralization|modularity)\b",
+    re.M,
+)

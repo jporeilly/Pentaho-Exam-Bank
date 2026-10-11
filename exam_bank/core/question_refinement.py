@@ -47,12 +47,16 @@ from .writing_style import tidy, tidy_question
 #
 # 1.18.0: "keep every detail of ... the answers" kept answers that had been cut
 # short, so a cut answer is now named as something to fix.
+#
+# 1.18.1: "rewrite the explanation" re-authored explanations that were already
+# right - the gated re-run lost facts and added padding to them - so one that
+# meets the rule is now kept.
 REWRITE_INSTRUCTION = (
     "Polish this reviewed certification exam question. Proofread every field as an "
-    "exacting copy editor, complete any answer that is cut short, and rewrite the "
-    "explanation so it explains only why the correct answer is right. Keep every "
-    "detail of the scenario and the question, and what every answer claims. Change "
-    "nothing else."
+    "exacting copy editor, complete any answer that is cut short, and bring the "
+    "explanation to the house rule: keep one that already explains only why the "
+    "correct answer is right, and rewrite one that does not. Keep every detail of "
+    "the scenario and the question, and what every answer claims. Change nothing else."
 )
 from .generation_parsing import _extract_json_array, _extract_json_object
 from .stem_text import question_only

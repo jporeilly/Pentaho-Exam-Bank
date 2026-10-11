@@ -60,6 +60,9 @@ EXPLANATION_RULES = """\
     levels, a report's bands, nested grants, a folder tree - drawn with
     indentation, one item per line.
   At most 10 lines. A question about a plain fact needs no visual.
+- Say each point once, directly, and stop. No sentence that only restates
+  another, and no padding such as "This ensures that", "This approach
+  allows" or "This design": state the fact itself.
 - Refer to an answer by what it says, never by a letter or position: the
   options are shuffled."""
 
@@ -171,7 +174,13 @@ WRITING_RULES = """\
 # connected output step DOES write) with an invented opposite ("without ...
 # writing to a destination"). The facts are the reviewed part; keep them.
 EXPLANATION_REWRITE_RULES = """\
-- Rewrite the CURRENT explanation; do not write a new one. Keep every fact it
+- If the CURRENT explanation already explains only why the correct answer is
+  right, with no padding, it has been reviewed: keep its sentences word for
+  word, fixing only an error. Do not reword it, lengthen it or add to it -
+  except one visual (a flow line, a code block or a text diagram) as a
+  paragraph of its own, where the question turns on an order, a structure or
+  code and it has none.
+- Otherwise, rewrite the CURRENT explanation; do not write a new one. Keep every fact it
   gives about why the correct answer is right - every caveat, condition,
   number, setting name and example (a formula, an expression, a path) - and
   drop only what it says about the wrong options.
@@ -187,7 +196,8 @@ EXPLANATION_REWRITE_RULES = """\
 REWRITE_CHECK_RULES = """\
 - The answer marked correct is correct, and no answer marked wrong is also
   correct.
-- The explanation is accurate and agrees with the correct answer.
+- The explanation is accurate, agrees with the correct answer, and says each
+  point once, without padding.
 - The rewrite lost no fact, condition or caveat from the original scenario or
   question, and nothing the original explanation says about why the correct
   answer is right. (Dropping what it said about the wrong answers is

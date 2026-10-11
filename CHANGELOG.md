@@ -7,6 +7,27 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Fixed
+
+- **The gate let a rewrite re-author an explanation that was already right.**
+  The first exam of the gated re-run (the try-it lab, 2026-10-11) approved
+  21 rewrites, and reading them found explanations that had lost the fact
+  the question turns on ("which is why 20 customers make 21 rows") and
+  gained padding ("This design allows the process to continue..."). No
+  check looked at the explanation. Now:
+  - The rewrite keeps an explanation that already meets the rule word for
+    word, fixing only an error; it may add one visual. REWRITE_INSTRUCTION
+    and EXPLANATION_REWRITE_RULES said "rewrite the explanation", and a
+    model told to rewrite does.
+  - `preservation_notes` holds a rewrite that drops words or numbers from an
+    explanation that already met the rule, or lengthens its prose by more
+    than a third. One that still judged every option may lose that talk.
+  - `explanation_notes` notes padding: a sentence that opens "This ensures",
+    "This approach", "This allows" and the like. The rule (EXPLANATION_RULES:
+    say each point once, directly) and the model's check say the same.
+  Replayed on the 30 rewrites the gate had approved, these hold 17 of them,
+  every damaging one among them.
+
 ## [1.18.0] - 2026-10-11
 
 ### Added

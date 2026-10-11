@@ -22,6 +22,8 @@ import copy
 import re
 from typing import List, Tuple
 
+from .explanation_style import explanation_notes
+
 # Words that carry no fact of their own.
 _STOP = set("""
 a an the and or but if then than that this these those there their they them
@@ -102,7 +104,40 @@ def preservation_notes(original, proposed) -> List[Tuple[str, str]]:
         if _changed(before, after):
             notes.append(("options", f"An answer's words changed: \"{before}\" -> \"{after}\". "
                                      "Check it still claims the same thing."))
+    notes += _explanation_notes(original, proposed)
     return notes
+
+
+# An explanation that already met the rule has been reviewed (1.18.1). The
+# gated re-run of 2026-10-11 rewrote them anyway and lost facts the question
+# turns on ("which is why 20 customers make 21 rows") while adding padding.
+# One that still judged every option is expected to lose that talk, so only a
+# compliant original is held to keeping what it said.
+_EXPLANATION_LOST_AT = 3
+
+
+def _explanation_notes(original, proposed) -> List[Tuple[str, str]]:
+    before_text, after_text = original.explanation or "", proposed.explanation or ""
+    if not before_text.strip() or explanation_notes(before_text):
+        return []
+    notes: List[Tuple[str, str]] = []
+    before, after = _content(before_text), _content(after_text)
+    lost = [before[s] for s in before if s not in after]
+    numbers = [w for w in lost if any(c.isdigit() for c in w)]
+    if len(lost) >= _EXPLANATION_LOST_AT or numbers:
+        notes.append(("explanation", "The rewrite dropped words from an explanation that already met "
+                                     f"the rule: {', '.join(lost[:8])}. Keep its facts."))
+    # Measured on the prose: one visual added as its own paragraph - a flow
+    # line, a code block, a text diagram - is what the rule allows.
+    if len(_prose(after_text)) > len(_prose(before_text)) * 1.3 + 40:
+        notes.append(("explanation", "The rewrite lengthened an explanation that already met the "
+                                     "rule. Keep it as it was, fixing only errors."))
+    return notes
+
+
+def _prose(text: str) -> str:
+    from .inline_format import blocks
+    return "\n\n".join(b[1] for b in blocks(text) if b[0] == "p" and "→" not in b[1])
 
 
 # An answer that is a topic filter, a path or an expression is compared

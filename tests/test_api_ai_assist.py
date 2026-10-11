@@ -443,7 +443,10 @@ def test_the_rewrite_asks_for_a_proofread_and_a_correct_only_explanation(questio
     assert "Every answer is complete: a whole phrase or sentence" in prompt
     # ...and the explanation keeps its facts, about the correct answer only.
     assert "why the correct answer is correct, and nothing else" in prompt
-    assert "Rewrite the CURRENT explanation" in prompt and "Add no claim" in prompt
+    assert "rewrite the CURRENT explanation" in prompt and "Add no claim" in prompt
+    # ...and one already right is kept, not re-authored (1.18.1).
+    assert "keep its sentences word for word, fixing only an error" in prompt
+    assert "keep one that already explains only why the correct answer is right" in prompt
     # The old house rule is gone: no "'X' - Correct/Incorrect" template.
     assert "Correct/Incorrect:" not in prompt
 
@@ -471,7 +474,7 @@ def test_an_empty_explanation_is_written_fresh_not_rewritten(monkeypatch):
 
     question_refinement.improve_question(bare, "a-model")
 
-    assert "Rewrite the CURRENT explanation" not in calls[0]["prompt"]
+    assert "the CURRENT explanation" not in calls[0]["prompt"]
 
 
 def test_a_rewrite_that_still_judges_every_option_is_noted(client, question, monkeypatch):
@@ -784,6 +787,7 @@ def test_every_check_has_a_rule_the_model_is_given():
         "At most 10 lines",                      # code_notes
         "valid as written (JSON that parses)",   # code_notes
         "Arrows are for PDI steps only",         # flow_notes
+        "no padding such as",                    # explanation_notes: padding (1.18.1)
         "Never in quotation marks",              # text_notes: quotes
         "No contractions",                       # text_notes
     ]:

@@ -89,3 +89,57 @@ def test_rejected_and_retired_questions_are_left_where_they_are():
         q = _q(status=status)
         pass_gate(q, [])
         assert q.status == status and q.review_history == []
+
+
+# --- explanations: padding, and what a rewrite loses (1.18.1) -------------------
+
+from exam_bank.core.explanation_style import explanation_notes
+from exam_bank.core.rewrite_checks import preservation_notes
+
+REVIEWED = ("The Dimension lookup/update step inserts a technical **unknown member** with key 0. "
+            "Fact rows that match no known customer can point at it instead of being lost, which "
+            "is why 20 customers make 21 rows.")
+
+
+def test_a_padding_opener_is_noted():
+    notes = explanation_notes("A **hop** carries rows. This ensures that the data flows on.")
+
+    assert any('opens "This ensures"' in m for m in notes)
+    assert not [m for m in explanation_notes(REVIEWED) if "padding" in m]
+
+
+def test_a_rewrite_that_drops_facts_from_a_reviewed_explanation_is_noted():
+    # The gated re-run's 2hr-m3-q7: the fact the question turns on, gone.
+    before = _q(explanation=REVIEWED)
+    after = _q(explanation="The Dimension lookup/update step creates an **unknown member** with a "
+                           "key of 0. It is a placeholder for fact rows without a matching entry.")
+
+    notes = [m for f, m in preservation_notes(before, after) if f == "explanation"]
+
+    assert any("dropped words from an explanation that already met the rule" in m for m in notes)
+
+
+def test_a_rewrite_that_pads_a_reviewed_explanation_is_noted():
+    before = _q(explanation=REVIEWED)
+    after = _q(explanation=REVIEWED + "\n\nThis process ensures that every fact row keeps a "
+               "dimension key, so that the reports built on the warehouse stay complete and "
+               "accurate for every customer in every period.")
+
+    notes = [m for f, m in preservation_notes(before, after) if f == "explanation"]
+
+    assert any("lengthened" in m for m in notes)
+
+
+def test_a_visual_added_to_a_reviewed_explanation_is_allowed():
+    before = _q(explanation=REVIEWED)
+    after = _q(explanation=REVIEWED + "\n\n```text\nDIM_CUSTOMER\n  0  unknown member\n  1  Acme\n```")
+
+    assert [m for f, m in preservation_notes(before, after) if f == "explanation"] == []
+
+
+def test_an_old_style_explanation_may_lose_its_talk_of_wrong_answers():
+    before = _q(explanation="Moves and shapes rows - Correct. Prints a report - Incorrect: that is "
+                            "a report's job. Installs the server - Incorrect.")
+    after = _q(explanation=CLEAN)
+
+    assert [m for f, m in preservation_notes(before, after) if f == "explanation"] == []
