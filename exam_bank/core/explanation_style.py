@@ -71,8 +71,11 @@ def explanation_notes(text: str | None) -> List[str]:
 # restate the paragraph before them, or bury a fact behind a formula. One
 # opener per explanation is enough to send it back.
 _PADDING = re.compile(
-    r"(?:^|(?<=[.!?:]\s))This (?:ensures|approach|design|functionality|configuration|method|"
-    r"process|allows|enables|makes it|helps|guarantees|setup|practice|mechanism|"
-    r"centralization|modularity)\b",
+    r"(?:^|(?<=[.!?:]\s))This (?:"
+    r"(?:ensures|approach|design|functionality|configuration|method|process|allows|enables|"
+    r"makes it|helps|guarantees|setup|practice|mechanism|centralization|modularity)\b"
+    # Any "This <word> ensures/allows/..." - the re-run's "This structure ensures
+    # that the data from both lookups is combined" got past the list above.
+    r"|[a-z]+ (?:ensures|allows|enables|guarantees|helps|lets)\b)",
     re.M,
 )

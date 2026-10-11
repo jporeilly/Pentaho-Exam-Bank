@@ -106,6 +106,10 @@ def test_a_padding_opener_is_noted():
 
     assert any('opens "This ensures"' in m for m in notes)
     assert not [m for m in explanation_notes(REVIEWED) if "padding" in m]
+    # Any "This <word> ensures" - the re-run's "This structure ensures" (1.18.2).
+    assert any('opens "This structure ensures"' in m for m in explanation_notes(
+        "Chaining passes the row on. This structure ensures that both lookups land in one row."))
+    assert not explanation_notes("This is why one row carries both. This step reads the file.")
 
 
 def test_a_rewrite_that_drops_facts_from_a_reviewed_explanation_is_noted():
