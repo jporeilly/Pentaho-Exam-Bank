@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-11
+
 ### Changed
 
 - **A tighter rewrite template.** The owner, after the first two exams were
