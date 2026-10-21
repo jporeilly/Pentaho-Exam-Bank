@@ -10,11 +10,13 @@ from ..utils.config import config
 from .bank import Question
 from .source import SlideInfo
 from .generation_prompts import (
-    GENERATION_SYSTEM_PROMPT, _build_question_specs, build_prompt,
+    ANSWER_RULES, EXPLANATION_RULES, GENERATION_SYSTEM_PROMPT, WRITING_RULES, _build_question_specs,
+    build_prompt,
 )
 from .generation_parsing import _extract_json_array, _extract_json_object, validate_key_against_notes
 from .stem_text import question_only
 from .validation import problems_with
+from .writing_style import tidy_question
 
 
 # What the AI can fix by rewriting the options: a distractor that repeats a
@@ -75,16 +77,16 @@ RULES:
 if needed for length balance.
 - Replace any distractor that duplicates a key with a different plausible wrong answer.
 - Replace "All/None of the above" with a specific, plausible wrong answer.
-- The explanation must say why each correct answer is right and each distractor wrong,
-  naming every option by its text. Never refer to an option by a letter or position:
-  the options are shuffled.
+{ANSWER_RULES}
+{EXPLANATION_RULES}
+{WRITING_RULES}
 
 Return ONLY a JSON object with these keys (nothing else):
 ```json
 {{
   {"\"keys\": [\"...\", \"...\"]," if is_multi else "\"key\": \"...\","}
   "distractors": ["...", "..."],
-  "explanation": "<one paragraph naming each option by its text>"
+  "explanation": "Why the correct answer is right, with the **key term** in bold."
 }}
 ```"""
 
@@ -100,17 +102,10 @@ Return ONLY a JSON object with these keys (nothing else):
         print(f"[AUTO-FIX] AI call failed: {e}")
         return None
 
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response, re.DOTALL)
-    text = fence_match.group(1) if fence_match else response
-
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        return None
-
-    try:
-        data = json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
+    # The shared extractor: the explanation may hold a code block, whose
+    # fences sit inside the JSON (generation_parsing).
+    data = _extract_json_object(response)
+    if data is None:
         return None
 
     # Apply only choices + explanation — leave everything else untouched
@@ -272,7 +267,9 @@ def generate_questions(
             else:
                 print(f"[GENERATE] Auto-fix failed for question {i+1}, keeping original")
 
-        questions.append(q)
+        # The writing standard's mechanical half (quotes, PDI's step names,
+        # contractions), which a model told the rule still slips on.
+        questions.append(tidy_question(q))
 
     return questions
 

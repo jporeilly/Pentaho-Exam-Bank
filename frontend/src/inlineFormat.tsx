@@ -165,8 +165,90 @@ function render(nodes: InlineNode[], key = ""): ReactNode[] {
 }
 
 /** Question text with its formatting drawn. Text only - never HTML. */
+// A blank line (one holding only spaces or tabs counts) ends a paragraph.
+const PARAGRAPH_BREAK = /\n[ \t]*\n\s*/;
+
+/**
+ * The text's paragraphs, split at blank lines and trimmed; [] when empty.
+ * Above the inline rules, not part of them: each paragraph is parsed on its
+ * own, so a marker never spans a break. The contract's `paragraphs` cases
+ * pin this for the Python exporters and the Content Manager's quiz too.
+ * CRLF is normalised first: a regex newline does not match "\r".
+ */
+export function paragraphs(s: string | null | undefined): string[] {
+  const text = (s ?? "").replace(/\r\n/g, "\n").trim();
+  if (!text) return [];
+  return text.split(PARAGRAPH_BREAK).map((p) => p.trim()).filter(Boolean);
+}
+
+export type Block = ["p", string] | ["code", string, string];
+
+const FENCE_OPEN = /^\s*```([\w+.-]*)\s*$/;
+const FENCE_CLOSE = /^\s*```\s*$/;
+
+/**
+ * The text as blocks: ["p", paragraph] and ["code", code, language] (1.16.0).
+ * A fenced block - a line of ``` with an optional language, the code, a line
+ * of ``` - is kept whole, blank lines and all, and never parsed for markers.
+ * The prose between splits into paragraphs. A fence that never closes is not
+ * a block. Twin of core/inline_format.blocks; the contract's `blocks` cases
+ * pin both, and the Content Manager's copy.
+ */
+export function blocks(s: string | null | undefined): Block[] {
+  const lines = (s ?? "").replace(/\r\n/g, "\n").split("\n");
+  const out: Block[] = [];
+  let prose: string[] = [];
+  const flush = () => {
+    for (const p of paragraphs(prose.join("\n"))) out.push(["p", p]);
+    prose = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const opening = FENCE_OPEN.exec(lines[i]);
+    if (opening) {
+      let close = -1;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (FENCE_CLOSE.test(lines[j])) {
+          close = j;
+          break;
+        }
+      }
+      if (close > i) {
+        flush();
+        out.push(["code", lines.slice(i + 1, close).join("\n"), opening[1]]);
+        i = close;
+        continue;
+      }
+    }
+    prose.push(lines[i]);
+  }
+  flush();
+  return out;
+}
+
+/**
+ * Formatted text. With no blank line or code block in it, exactly the inline
+ * rendering it always was (a stem, an option). With paragraphs - an
+ * explanation - each one is a block (`.fmt-p`) in which a single newline is
+ * a line break, and a code block is a `<pre>` (`.fmt-code`) drawn as typed.
+ */
 export function Formatted({ text }: { text: string | null | undefined }) {
-  return <>{render(parseInline(text ?? ""))}</>;
+  const parts = blocks(text);
+  if (parts.length < 2 && parts[0]?.[0] !== "code") return <>{render(parseInline(text ?? ""))}</>;
+  return (
+    <>
+      {parts.map((b, i) =>
+        b[0] === "code" ? (
+          <pre key={i} className="fmt-code" data-lang={b[2] || undefined}>
+            <code>{b[1]}</code>
+          </pre>
+        ) : (
+          <span key={i} className="fmt-p">
+            {render(parseInline(b[1]))}
+          </span>
+        ),
+      )}
+    </>
+  );
 }
 
 /** The words without their markers: for titles, dialogs and lengths. */
@@ -179,6 +261,30 @@ export function plainText(s: string | null | undefined): string {
 /** Whether the text carries any formatting worth previewing. */
 export function hasFormat(s: string | null | undefined): boolean {
   return parseInline(s ?? "").some((n) => n[0] !== "text");
+}
+
+/**
+ * The selection as a code block (1.16.0): a fence line above, one below, each
+ * a paragraph of its own, so the block never runs into the prose around it.
+ * Returns the new value and the selection on the same code; with nothing
+ * selected, the caret sits on an empty line inside the fences.
+ */
+export function wrapFence(
+  value: string,
+  start: number,
+  end: number,
+): { value: string; start: number; end: number } {
+  const before = value.slice(0, start);
+  const sel = value.slice(start, end);
+  const after = value.slice(end);
+  const gapBefore = before === "" || before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
+  const gapAfter = after === "" || after.startsWith("\n\n") ? "" : after.startsWith("\n") ? "\n" : "\n\n";
+  const head = before + gapBefore + "```\n";
+  return {
+    value: head + sel + "\n```" + gapAfter + after,
+    start: head.length,
+    end: head.length + sel.length,
+  };
 }
 
 export type Marker = "**" | "*" | "`";

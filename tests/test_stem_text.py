@@ -143,7 +143,7 @@ def test_the_ai_rewrite_is_told_to_keep_scenario_and_question_apart(monkeypatch)
     improve_question(Question(stem="Which step?", key="A", distractors=["B", "C"]), model="m")
 
     assert SCENARIO_AND_STEM_RULES in seen["prompt"]
-    assert "The scenario and the stem do different jobs - keep them apart" in seen["prompt"]
+    assert "The scenario and the question do different jobs - keep them apart" in seen["prompt"]
 
 
 def test_generated_questions_are_stored_as_the_question_only(monkeypatch):

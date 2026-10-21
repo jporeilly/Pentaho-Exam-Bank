@@ -39,7 +39,8 @@ const TRANSITIONS = {
  *  status moves to it, and answers the lists the pane asks for. With
  *  `renameTo`, a PUT that changes the topic renames the question, as the
  *  bank does when a course question moves to another module. */
-function fakeServer(start: Question, renameTo = "") {
+function fakeServer(start: Question, renameTo = "",
+                    checkFindings: { field: string; message: string }[] = []) {
   let current = start;
   const puts: string[] = [];
   const bodies: Record<string, unknown>[] = [];
@@ -59,9 +60,9 @@ function fakeServer(start: Question, renameTo = "") {
     }
     if (method === "POST" && u.endsWith("/ai/explanation")) {
       return json({
-        explanation: "CSV input reads the file. Table output writes rows. Sort rows orders them.",
+        explanation: "**Table output** writes rows to a database table.\n\nThat makes it the step that loads them.",
         groundedOn: "Text File Input",
-        unnamed: [],
+        notes: ["It refers to an answer by its letter. The options are shuffled, so name it by what it says."],
       });
     }
     if (method === "POST" && u.endsWith("/ai/answer")) {
@@ -98,6 +99,15 @@ function fakeServer(start: Question, renameTo = "") {
     }
     if (method === "POST" && u.endsWith("/status")) {
       current = { ...current, status: JSON.parse(String(init?.body)).status };
+      return json(current);
+    }
+    if (method === "POST" && u.endsWith("/ai/check")) {
+      // The gate (1.18.0): approved when nothing is found, held when anything is.
+      const outcome = checkFindings.length ? "review" : "approved";
+      current = { ...current, status: checkFindings.length ? "sme_review" : "approved" };
+      return json({ id: current.id, status: current.status, outcome, findings: checkFindings });
+    }
+    if (method === "GET" && /\/api\/questions\/[^/?]+$/.test(u)) {
       return json(current);
     }
     return json({ items: [current], total: 1, limit: 25, offset: 0 });
@@ -262,10 +272,26 @@ describe("AI explanation and AI answer key", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "AI explanation" }));
     expect(await screen.findByText(/Written from Text File Input/)).toBeInTheDocument();
+    // Shown as the candidate reads it: two paragraphs, the key term in bold,
+    // and the server's note on the house rule beneath it.
+    const card = document.querySelector(".card .explanation-card")!;
+    expect(card.querySelectorAll(".fmt-p")).toHaveLength(2);
+    expect(card.querySelector("strong")).toHaveTextContent("Table output");
+    expect(screen.getByText(/refers to an answer by its letter/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Use this explanation" }));
 
-    expect(screen.getByDisplayValue(/CSV input reads the file/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/writes rows to a database table/)).toBeInTheDocument();
     expect(server.puts).toHaveLength(0);
+  });
+
+  it("shows the explanation as candidates will see it, paragraphs and bold", async () => {
+    fakeServer(question({ explanation: "**Sort rows** orders them.\n\nThen the next step reads them in order." }));
+    await openEditor();
+
+    const card = await screen.findByText("How candidates see it");
+    const body = card.parentElement!.querySelector(".explanation-card__body")!;
+    expect(body.querySelectorAll(".fmt-p")).toHaveLength(2);
+    expect(body.querySelector("strong")).toHaveTextContent("Sort rows");
   });
 
   it("flags a guessed answer, and taking the AI answer key clears the flag", async () => {
@@ -348,6 +374,26 @@ describe("formatting the text", () => {
     expect(italic).toBeDisabled();
   });
 
+  it("a code block is for the explanation only, and the card draws it as code", async () => {
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    fakeServer(question({ explanation: "It reads every item:\n$.items[*]" }));
+    await openEditor();
+    const block = screen.getByRole("button", { name: "Code block (explanation only)" });
+
+    select(screen.getByDisplayValue("Which step reads a file?") as HTMLTextAreaElement, "reads");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Bold (Ctrl+B)" })).toBeEnabled());
+    expect(block).toBeDisabled();
+
+    const explanation = screen.getByDisplayValue(/It reads every item/) as HTMLTextAreaElement;
+    select(explanation, "$.items[*]");
+    await waitFor(() => expect(block).toBeEnabled());
+    await userEvent.click(block);
+
+    expect(explanation).toHaveValue("It reads every item:\n\n```\n$.items[*]\n```");
+    const card = explanation.closest(".field")!.parentElement!.querySelector(".explanation-card")!;
+    expect(card.querySelector("pre.fmt-code")).toHaveTextContent("$.items[*]");
+  });
+
   it("code on one distractor touches only that distractor", async () => {
     fakeServer(question({ distractors: ["Table output", "Sort rows"] }));
     await openEditor();
@@ -368,5 +414,33 @@ describe("formatting the text", () => {
     expect(bold.tagName).toBe("STRONG");
     expect(screen.getByText(".csv").tagName).toBe("CODE");
     expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument();
+  });
+});
+
+describe("check and approve (1.18.0)", () => {
+  it("approves a question that passes every check, and says so", async () => {
+    fakeServer(question({ status: "draft" }));
+    await openEditor();
+
+    await userEvent.click(screen.getByRole("button", { name: "Check and approve" }));
+
+    const result = await screen.findByTestId("check-result");
+    expect(result).toHaveTextContent("Passed every check, so it is now approved.");
+    expect(await screen.findByText(/Passed every check: approved/)).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector(".pill.approved")).not.toBeNull());
+  });
+
+  it("holds a question with findings for review, and lists them", async () => {
+    fakeServer(question({ status: "draft" }), "", [
+      { field: "options", message: "\"Moves and shapes the\" ends on \"the\", so it reads as cut short." },
+    ]);
+    await openEditor();
+
+    await userEvent.click(screen.getByRole("button", { name: "Check and approve" }));
+
+    const result = await screen.findByTestId("check-result");
+    expect(result).toHaveTextContent("Held for review");
+    expect(result).toHaveTextContent("reads as cut short");
+    await waitFor(() => expect(document.querySelector(".pill.sme_review")).not.toBeNull());
   });
 });

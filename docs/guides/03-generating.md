@@ -14,6 +14,9 @@ from a course's own material.
    *shown as "(Choose two)"*.
 4. Tick the **Bloom's** levels to spread the questions across.
 5. Optionally add extra instructions for the model, and press **Generate**.
+   The instructions add to the
+   [house style](../writing/01-how-a-question-is-written.md#the-house-style)
+   rather than replace it; **The house style** under the box shows it.
    A whole course can take the better part of an hour; the run carries on if
    you leave the screen, and **Cancel** stops it.
 6. When it finishes, review the questions. Everything starts ticked; untick

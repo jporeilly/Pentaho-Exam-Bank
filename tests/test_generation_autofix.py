@@ -55,5 +55,7 @@ def test_the_fix_asks_for_options_by_their_text_never_by_letter(monkeypatch):
 
     qg._auto_fix_question(bad, qg._get_fixable_warnings(bad), "a-model")
 
-    assert "Never refer to an option by a letter" in prompts[0]
+    assert "never by a letter or position" in prompts[0]
     assert "by letter" not in prompts[0] and "(A, B, C, D)" not in prompts[0]
+    # 1.14.0: the explanation covers the correct answer only.
+    assert "why the correct answer is correct, and nothing else" in prompts[0]

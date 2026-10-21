@@ -19,6 +19,7 @@ import {
   ApiError,
   type AiAnswer,
   type AiExplanation,
+  type AiCheck,
   type AiReview,
   type AiRewrite,
   type Lifecycle,
@@ -26,7 +27,8 @@ import {
   type Question,
 } from "./api";
 import { AnswerMark, OptionList } from "./answers";
-import { Formatted, hasFormat, toggleWrap, type Marker } from "./inlineFormat";
+import { Formatted, hasFormat, toggleWrap, wrapFence, type Marker } from "./inlineFormat";
+import { ExplanationCard, ProposedQuestion } from "./ProposalView";
 import { useVocabulary } from "./vocabulary";
 
 /** How a field's formatting will look, shown only once it has some. */
@@ -253,7 +255,9 @@ export function QuestionEditor({
   // "Use this" only fills the form - the question is still saved by the
   // same button as any other edit. A model that wrote to the bank directly
   // would be the one contributor whose work nobody reviewed.
-  const [aiBusy, setAiBusy] = useState<"" | "rewrite" | "review" | "explanation" | "answer">("");
+  const [aiBusy, setAiBusy] = useState<"" | "rewrite" | "review" | "explanation" | "answer" | "check">("");
+  /** What "Check and approve" found (1.18.0). */
+  const [checked, setChecked] = useState<AiCheck | null>(null);
   const [aiError, setAiError] = useState("");
   const [proposal, setProposal] = useState<AiRewrite | null>(null);
   const [review, setReview] = useState<AiReview | null>(null);
@@ -316,6 +320,8 @@ export function QuestionEditor({
     apply: (value: string) => void;
   } | null>(null);
   const [canFormat, setCanFormat] = useState(false);
+  // A code block is for the explanation only (1.16.0).
+  const [canBlock, setCanBlock] = useState(false);
 
   // React writes the new value and drops the caret at the end, so the
   // selection goes back on the same words once that value is committed.
@@ -344,12 +350,23 @@ export function QuestionEditor({
     setNotice("");
   }
 
-  function formattable(apply: (value: string) => void) {
+  function applyBlock() {
+    const a = active.current;
+    if (!a) return;
+    const { el } = a;
+    const r = wrapFence(el.value, el.selectionStart ?? 0, el.selectionEnd ?? 0);
+    pendingSelection.current = { el, start: r.start, end: r.end };
+    a.apply(r.value);
+    setNotice("");
+  }
+
+  function formattable(apply: (value: string) => void, blocks = false) {
     return {
       "data-fmt": "1",
       onFocus: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         active.current = { el: e.currentTarget, apply };
         setCanFormat(true);
+        setCanBlock(blocks);
       },
       onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
@@ -447,6 +464,28 @@ export function QuestionEditor({
     setReview(null);
     setExplained(null);
     setAnswered(null);
+    setChecked(null);
+  };
+
+  /** Every check on the question as saved, then the gate (1.18.0): approved
+   *  if it passes them all, held for review with the findings if not. */
+  const runCheck = async () => {
+    setAiBusy("check");
+    setAiError("");
+    clearAi();
+    try {
+      const result = await api.aiCheck(draft.id);
+      setChecked(result);
+      const updated = await api.question(draft.id);
+      savedId.current = updated.id;
+      setDraft(updated);
+      setNotice(result.outcome === "approved" ? "Passed every check: approved" : "Held for review");
+      onSaved(updated);
+    } catch (e: unknown) {
+      setAiError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setAiBusy("");
+    }
   };
 
   const runExplanation = async () => {
@@ -538,6 +577,7 @@ export function QuestionEditor({
         if (t.dataset.fmt || t.closest(".format-bar")) return;
         active.current = null;
         setCanFormat(false);
+        setCanBlock(false);
       }}
     >
       <div className="toolbar">
@@ -574,6 +614,17 @@ export function QuestionEditor({
             {face}
           </button>
         ))}
+        <button
+          type="button"
+          className="secondary fmt"
+          title="Code block (explanation only)"
+          aria-label="Code block (explanation only)"
+          disabled={!canBlock}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={applyBlock}
+        >
+          <code>{"{ }"}</code>
+        </button>
         <span className="faint format-hint">
           {canFormat
             ? "Formats the selection in the field you are in."
@@ -697,14 +748,18 @@ export function QuestionEditor({
         </div>
       ))}
 
-      <Field label="Explanation" hint="Shown after the exam, never before.">
+      <Field
+        label="Explanation"
+        hint="Shown after the exam, never before. Say why the correct answer is right - not why the others are wrong. A blank line starts a new paragraph; **bold** the key terms."
+      >
         <textarea
-          rows={3}
+          rows={7}
+          className="explanation-input"
           value={draft.explanation}
           onChange={(e) => set("explanation", e.target.value)}
-          {...formattable(setText("explanation"))}
+          {...formattable(setText("explanation"), true)}
         />
-        <FormatPreview text={draft.explanation} />
+        <ExplanationCard text={draft.explanation} label="How candidates see it" />
       </Field>
 
       <div className="field-row">
@@ -772,6 +827,15 @@ export function QuestionEditor({
         </button>
         <button
           className="secondary ai"
+          onClick={runCheck}
+          disabled={busy || dirty || aiBusy !== ""}
+          title={dirty ? "Save first: the checks run on the question as saved."
+            : "Run every check on this question. It is approved if it passes them all, and held for review with the findings if not."}
+        >
+          {aiBusy === "check" ? "Checking…" : "Check and approve"}
+        </button>
+        <button
+          className="secondary ai"
           onClick={runExplanation}
           disabled={busy || aiBusy !== ""}
           title="Ask the model to write the explanation from the course's pages. Nothing is saved until you do."
@@ -816,15 +880,12 @@ export function QuestionEditor({
               ? `Written from ${explained.groundedOn}.`
               : "No course page was found for this question, so the model wrote it without one. Check every fact."}
           </p>
-          <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-            <Formatted text={explained.explanation} />
-          </p>
-          {explained.unnamed.length > 0 && (
-            <div className="advice">
-              It never names: {explained.unnamed.join("; ")}. The explanation should
-              address every option by its text.
+          <ExplanationCard text={explained.explanation} />
+          {(explained.notes ?? []).map((note) => (
+            <div key={note} className="advice">
+              <Formatted text={note} />
             </div>
-          )}
+          ))}
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
             <button
               className="add"
@@ -880,36 +941,11 @@ export function QuestionEditor({
           {proposal.unchanged && (
             <p className="muted">The model returned this unchanged.</p>
           )}
-          {proposal.proposed.scenario && (
-            <p className="muted" style={{ marginTop: 8 }}>
-              <Formatted text={proposal.proposed.scenario} />
-            </p>
-          )}
-          <p style={{ marginTop: 8 }}>
-            <Formatted text={proposal.proposed.stem} />
-          </p>
-          <OptionList
-            label="Proposed options"
-            options={[
-              ...(proposal.proposed.question_type === "multi"
-                ? proposal.proposed.keys
-                : [proposal.proposed.key]
-              ).map((k) => ({ text: k, correct: true })),
-              ...proposal.proposed.distractors.map((d) => ({ text: d, correct: false })),
-            ]}
+          <ProposedQuestion
+            proposed={proposal.proposed}
+            notes={proposal.notes ?? []}
+            problems={proposal.problems}
           />
-          {(proposal.notes ?? []).map((n) => (
-            <div key={n.message} className="advice">
-              {n.field === "scenario" ? "Scenario: " : "Question: "}
-              {n.message}
-            </div>
-          ))}
-          {proposal.problems.length > 0 && (
-            <div className="banner" style={{ marginTop: 8 }}>
-              This rewrite could not be graded:{" "}
-              {proposal.problems.map((p) => p.message).join("; ")}
-            </div>
-          )}
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
             <button className="add" onClick={acceptProposal} disabled={proposal.problems.length > 0}>
               Use this
@@ -921,6 +957,28 @@ export function QuestionEditor({
               Nothing is saved until you press Save.
             </span>
           </div>
+        </div>
+      )}
+
+      {checked && (
+        <div className="card" style={{ marginTop: 12 }} data-testid="check-result">
+          <strong>Every check</strong>
+          {checked.findings.length === 0 ? (
+            <p className="muted">Passed every check, so it is now approved.</p>
+          ) : (
+            <>
+              <p className="muted">
+                Held for review. Fix what is listed, save, and check it again.
+              </p>
+              <ul>
+                {checked.findings.map((f, i) => (
+                  <li key={`c${i}`} className="warn">
+                    <strong>{f.field}:</strong> {f.message}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
 

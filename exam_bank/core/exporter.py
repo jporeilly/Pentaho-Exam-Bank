@@ -19,7 +19,9 @@ except ImportError:
     HAS_DOCX = False
 
 from .bank import Question
-from .inline_format import fill_element, runs, to_html, to_plain
+from .inline_format import (
+    blocks, fill_element, runs, to_html, to_html_paragraphs, to_plain, to_plain_blocks,
+)
 from .stem_text import question_only
 
 
@@ -359,7 +361,8 @@ def export_moodle_xml(questions: List[Question], path: Path):
         # General feedback (explanation)
         if q.explanation:
             fb = SubElement(question_el, "generalfeedback", {"format": "html"})
-            SubElement(fb, "text").text = f"<p>{to_html(q.explanation)}</p>"
+            # One <p> per paragraph: explanations are written as paragraphs.
+            SubElement(fb, "text").text = to_html_paragraphs(q.explanation)
 
         SubElement(question_el, "defaultgrade").text = "1"
         SubElement(question_el, "penalty").text = "0.3333333"
@@ -422,7 +425,7 @@ def export_text(questions: List[Question], path: Path, include_answers: bool = T
         if include_answers:
             lines.append(f"Correct Answer: {key_letter}")
             if q.explanation:
-                lines.append(f"Explanation: {to_plain(q.explanation)}")
+                lines.append(f"Explanation: {to_plain_blocks(q.explanation)}")
         lines.append("")
         lines.append("")
 
@@ -441,6 +444,24 @@ def _add_formatted(para, text, bold=False, italic=False, color=None, literal=Fal
             run.font.name = "Consolas"
         if color is not None:
             run.font.color.rgb = color
+
+
+def _add_explanation(doc, first_para, text):
+    """An explanation as Word paragraphs: the first continues the labelled
+    paragraph, each later one is its own, and a code block (1.16.0) is a
+    Consolas paragraph with its lines kept, never parsed for markers."""
+    para = first_para
+    for n, (kind, body, _lang) in enumerate(blocks(text)):
+        if n:
+            para = doc.add_paragraph()
+        if kind == "code":
+            for k, line in enumerate(body.split("\n")):
+                run = para.add_run(line)
+                run.font.name = "Consolas"
+                if k < len(body.split("\n")) - 1:
+                    run.add_break()
+        else:
+            _add_formatted(para, body)
 
 
 def export_docx(questions: List[Question], path: Path):
@@ -511,7 +532,7 @@ def export_docx(questions: List[Question], path: Path):
             exp_para = doc.add_paragraph()
             exp_label = exp_para.add_run("Explanation: ")
             exp_label.bold = True
-            _add_formatted(exp_para, q.explanation)
+            _add_explanation(doc, exp_para, q.explanation)
 
         # -- Horizontal rule between questions (skip after last) --
         if i < len(questions):

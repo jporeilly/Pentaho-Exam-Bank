@@ -70,8 +70,9 @@ publishes to it.
 
 ## Explanation
 
-Shown to the candidate after the exam: why each correct answer is right and
-each distractor is wrong, naming each option by its text.
+Shown to the candidate after the exam: why the correct answer is right, in
+one to three paragraphs with the key terms in bold. It does not discuss the
+wrong options. See [the explanation](../writing/01-how-a-question-is-written.md#the-explanation).
 
 ## Key
 

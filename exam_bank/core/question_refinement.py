@@ -23,7 +23,41 @@ from typing import List, Optional
 
 from . import providers
 from .bank import Question
-from .generation_prompts import GENERATION_SYSTEM_PROMPT, SCENARIO_AND_STEM_RULES
+from .generation_prompts import (
+    ANSWER_RULES,
+    EXPLANATION_REWRITE_RULES,
+    EXPLANATION_RULES,
+    GENERATION_SYSTEM_PROMPT,
+    PROOFREAD_RULES,
+    REWRITE_CHECK_RULES,
+    REWRITE_SYSTEM_PROMPT,
+    SCENARIO_AND_STEM_RULES,
+    WRITING_RULES,
+)
+from .rewrite_checks import keep_capitals
+from .writing_style import tidy, tidy_question
+
+# The rewrite's default ask. The bulk rewrite sends the same one, so a
+# question rewritten on its own and one rewritten with its exam come back alike.
+#
+# A polish, not a re-author (1.14.0): the bank's questions have been through
+# review, so the rewrite proofreads them and brings the explanation to the
+# house rule, and leaves the rest as it found it. It used to say "Improve this
+# question", and a model told to improve rewrites.
+#
+# 1.18.0: "keep every detail of ... the answers" kept answers that had been cut
+# short, so a cut answer is now named as something to fix.
+#
+# 1.18.1: "rewrite the explanation" re-authored explanations that were already
+# right - the gated re-run lost facts and added padding to them - so one that
+# meets the rule is now kept.
+REWRITE_INSTRUCTION = (
+    "Polish this reviewed certification exam question. Proofread every field as an "
+    "exacting copy editor, complete any answer that is cut short, and bring the "
+    "explanation to the house rule: keep one that already explains only why the "
+    "correct answer is right, and rewrite one that does not. Keep every detail of "
+    "the scenario and the question, and what every answer claims. Change nothing else."
+)
 from .generation_parsing import _extract_json_array, _extract_json_object
 from .stem_text import question_only
 
@@ -32,10 +66,12 @@ def improve_question(
     question: Question,
     model: str,
     base_url: str = "http://localhost:11434",
-    instruction: str = "Improve this question following certification exam best practices.",
+    instruction: str = REWRITE_INSTRUCTION,
     system_prompt: str = "",
 ) -> Optional[Question]:
-    """Use AI to improve an existing question."""
+    """Use AI to improve an existing question: proofread it, and rewrite the
+    explanation to the house rule (the correct answer only, in paragraphs,
+    key terms in bold)."""
     is_multi = question.question_type == "multi" and question.keys and len(question.keys) > 1
     keys_str = json.dumps(question.keys) if is_multi else json.dumps(question.key)
 
@@ -53,13 +89,28 @@ Current question:
 IMPORTANT:
 - Keep the key answer(s) grounded in the original slide content.
 - The key_source_text must still reference the original source material.
-- ALL choices (keys + distractors) must be similar in length and detail.
-- The explanation MUST address each choice by its text content (NOT by letter A/B/C/D, since choices are shuffled).
+- Return key_source_text unchanged.
 
-The scenario and the stem do different jobs - keep them apart. If the current
-scenario asks a question, or the current stem opens with statements, move the
-statements into the scenario and leave only the question in the stem:
+Apply these rules in this order. Every one of them is checked before the
+question can be approved.
+
+1. What to keep, and what to fix:
+{PROOFREAD_RULES}
+
+2. The scenario and the question do different jobs - keep them apart. If the
+current scenario asks a question, or the current stem opens with statements,
+move the statements into the scenario and leave only the question in the stem:
 {SCENARIO_AND_STEM_RULES}
+
+3. The answers:
+{ANSWER_RULES}
+
+4. The explanation:
+{EXPLANATION_RULES}
+{EXPLANATION_REWRITE_RULES if (question.explanation or "").strip() else ""}
+
+5. The writing standard - quotes, names and punctuation, in every field:
+{WRITING_RULES}
 
 Return ONLY a JSON object with these keys:
 ```json
@@ -69,29 +120,22 @@ Return ONLY a JSON object with these keys:
   {"'keys': ['...', '...']," if is_multi else "'key': '...',"}
   "key_source_text": "...",
   "distractors": ["...", "..."],
-  "explanation": "'choice text' — Correct/Incorrect: <reason>. 'next choice' — ..."
+  "explanation": "Why the correct answer is right, with the **key term** in bold.\\n\\nA second short paragraph if it helps."
 }}
 ```"""
 
     response = providers.generate(
         prompt=prompt,
         model=model,
-        system=system_prompt or GENERATION_SYSTEM_PROMPT,
+        system=system_prompt or REWRITE_SYSTEM_PROMPT,
         base_url=base_url,
         timeout=120.0,
     )
 
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response, re.DOTALL)
-    text = fence_match.group(1) if fence_match else response
-
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        return None
-
-    try:
-        data = json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
+    # The shared extractor: an explanation may now hold a code block, whose
+    # fences sit inside the JSON (generation_parsing).
+    data = _extract_json_object(response)
+    if data is None:
         return None
 
     # A COPY. This used to assign straight onto the argument, so calling it
@@ -109,7 +153,32 @@ Return ONLY a JSON object with these keys:
     proposed.key_source_text = data.get("key_source_text", proposed.key_source_text)
     proposed.distractors = data.get("distractors", proposed.distractors)
     proposed.explanation = data.get("explanation", proposed.explanation)
-    return proposed
+    proposed.option_order = _carry_order(question, proposed)
+    # What the model missed of the writing standard's mechanical rules, and
+    # any capital it took off an answer (rewrite_checks).
+    return keep_capitals(question, tidy_question(proposed))
+
+
+def _carry_order(question: Question, proposed: Question) -> list[str]:
+    """The order the learner sees now, in the proposal's words.
+
+    The model rewords answers in place - the key stays the key, the second
+    distractor the second - so each answer keeps its position under its new
+    wording. Without this the stored order named the old wording, and once
+    every answer was reworded the correct one was shown first (1.15.0).
+    """
+    if not question.option_order:
+        # No recorded order: the exports scatter the answers by the id
+        # (exporter.stable_option_order). Recording the key-first list here
+        # would put the correct answer first.
+        return []
+    old = question.correct_answers + list(question.distractors)
+    new = proposed.correct_answers + list(proposed.distractors)
+    if len(old) != len(new) or len(set(new)) != len(new):
+        return []        # options added or merged: no position to keep
+    reworded = dict(zip(old, new))
+    order = [reworded.get(text, text) for text in question.all_choices]
+    return order if sorted(order) == sorted(new) else []
 
 
 def qa_check_question(
@@ -213,17 +282,19 @@ def generate_explanation(
     base_url: str = "http://localhost:11434",
     source_text: str = "",
 ) -> str:
-    """Propose the explanation: why each correct answer is right and each
-    distractor wrong, naming every option by its text (the options are
-    shuffled, so a letter means nothing). Returns "" on failure. Writes
-    nothing: the caller shows it, and the author decides.
+    """Propose the explanation: why the correct answer(s) are right, and
+    nothing about the wrong options (EXPLANATION_RULES: paragraphs, the key
+    terms in bold). Returns "" on failure. Writes nothing: the caller shows
+    it, and the author decides.
     """
     keys = question.keys if question.question_type == "multi" and question.keys else [question.key]
     keys = [k for k in keys if k]
     if not keys:
         return ""
+    # The wrong options are listed so the model knows what the candidate was
+    # choosing between, not to be discussed.
     lines = [f"- {k} (correct)" for k in keys] + \
-            [f"- {d} (incorrect)" for d in question.distractors if d and d not in keys]
+            [f"- {d} (incorrect - do not discuss)" for d in question.distractors if d and d not in keys]
     prompt = f"""Write the explanation for this certification exam question. Candidates read it after the exam.
 
 {_grounding_block(source_text)}
@@ -234,18 +305,18 @@ Options:
 {chr(10).join(lines)}
 
 Rules:
-- Say why each correct option is right and why each incorrect option is wrong.
-- Name every option by its text. Never refer to an option by a letter or a position: the options are shuffled.
-- Plain prose: one short paragraph of three to six sentences. No list, no headings.
+{EXPLANATION_RULES}
+- Correct spelling and grammar, and sentences that read smoothly.
 - Do not mention a course, a workshop, a lab or "the material": state the facts.
+{WRITING_RULES}
 
-Return only the explanation text."""
+Return only the explanation text, with a blank line between paragraphs."""
     try:
         response = providers.generate(
             prompt=prompt,
             model=model,
             system=("You write explanations for Pentaho certification exam questions: "
-                    "accurate, concise, and addressing every option by its text."),
+                    "accurate, concise, and about the correct answer only."),
             base_url=base_url,
             timeout=90.0,
         )
@@ -257,10 +328,140 @@ Return only the explanation text."""
         text = fence.group(1).strip()
     if len(text) > 1 and text[0] == text[-1] == '"':
         text = text[1:-1].strip()
-    return text
+    return tidy(text)
 
 
 _COUNT_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def _question_block(q: Question) -> str:
+    keys = q.correct_answers
+    lines = [f"Scenario: {q.scenario.strip() or '(none)'}", f"Question: {q.stem.strip()}", "Answers:"]
+    lines += [f"- {k} (marked correct)" for k in keys]
+    lines += [f"- {d} (marked wrong)" for d in q.distractors if d and d not in keys]
+    lines.append(f"Explanation: {q.explanation.strip() or '(none)'}")
+    return "\n".join(lines)
+
+
+# The second pass over a rewrite (1.17.0). The owner, after the first two
+# exams: "it must check at a deeper level the grammar, spelling, readability,
+# punctuation, and that the answer(s) and explanation are correct". One model
+# call, separate from the one that wrote the rewrite - a writer reviewing its
+# own text in the same breath finds little - grounded on the course pages when
+# there are any. It reports; it never edits. An unreadable reply is itself a
+# finding, so an unchecked rewrite can never pass as a clean one.
+CHECK_FAILED = "The answer and language check did not run, so read this one closely."
+
+
+def check_rewrite(
+    original: Optional[Question],
+    proposed: Question,
+    model: str,
+    base_url: str = "http://localhost:11434",
+    source_text: str = "",
+) -> List[tuple]:
+    """(field, message) findings on a question; [] when it is clean.
+
+    With an ``original`` it checks a rewrite against it (the bulk rewrite,
+    1.17.0). Without one it checks the question as it stands (1.18.0): the
+    gate a hand-edited question passes before it is approved, the same rules
+    less "nothing lost or added", which needs something to compare with."""
+    rules = REWRITE_CHECK_RULES
+    if original is None:
+        rules = _drop_rule(REWRITE_CHECK_RULES, "The rewrite lost")
+        what = "a certification exam question before it is approved"
+        body = f"QUESTION (to check):\n{_question_block(proposed)}\n\nCheck the QUESTION:"
+        compare = ""
+    else:
+        what = "a rewritten certification exam question before it is accepted"
+        body = (f"ORIGINAL (reviewed and approved):\n{_question_block(original)}\n\n"
+                f"REWRITE (to check):\n{_question_block(proposed)}\n\nCheck the REWRITE:")
+        compare = (
+            '\n  "lost": [],\n  "added": [],')
+    prompt = f"""You review {what}.
+
+{_grounding_block(source_text)}
+
+{body}
+{rules}
+
+Report only real problems, each with the exact words concerned. Do not report
+style preferences. Do not rewrite anything.
+
+Return ONLY a JSON object:
+{{
+  "answer_correct": true,
+  "answer_problem": "",
+  "also_correct": [],
+  "explanation_correct": true,
+  "explanation_problem": "",{compare}
+  "incomplete_answers": [],
+  "answer_stands_out": "",
+  "language": [{{"field": "scenario|question|answers|explanation", "text": "...", "fix": "..."}}]
+}}
+"also_correct" lists answers marked wrong that are also correct. "incomplete_answers"
+lists, word for word, any answer that is cut short, missing a word it needs, or hard to
+read on its own. "answer_stands_out" says how the correct answer stands out from the
+wrong ones - by length, detail, wording or form - or is empty.""" + ("" if original is None else """
+"lost" lists facts, conditions or caveats of the ORIGINAL missing from the REWRITE - but
+NOT what the original explanation said about the wrong answers: the rewrite drops that
+on purpose. "added" lists claims in the REWRITE that the ORIGINAL does not make.""") + """
+Empty lists and strings when there is nothing."""
+    try:
+        reply = providers.generate(
+            prompt=prompt,
+            model=model,
+            system=("You are a meticulous technical editor and Pentaho subject matter expert. "
+                    "Return ONLY valid JSON."),
+            base_url=base_url,
+            timeout=120.0,
+        )
+    except Exception:
+        return [("explanation", CHECK_FAILED)]
+    data = _extract_json_object(reply or "")
+    if not isinstance(data, dict) or "answer_correct" not in data:
+        return [("explanation", CHECK_FAILED)]
+
+    def words(x) -> str:
+        return str(x).strip()
+
+    found: List[tuple] = []
+    if data.get("answer_correct") is False:
+        found.append(("options", "The check doubts the answer marked correct: "
+                      + (words(data.get("answer_problem")) or "no reason given") + "."))
+    for a in data.get("also_correct") or []:
+        if words(a):
+            found.append(("options", f"The check says this wrong answer may also be correct: {words(a)}"))
+    if data.get("explanation_correct") is False:
+        found.append(("explanation", "The check doubts the explanation: "
+                      + (words(data.get("explanation_problem")) or "no reason given") + "."))
+    if original is not None:
+        for x in data.get("lost") or []:
+            if words(x):
+                found.append(("explanation", f"The rewrite may have lost: {words(x)}"))
+        for x in data.get("added") or []:
+            if words(x):
+                found.append(("explanation", f"The rewrite may have added: {words(x)}"))
+    for a in data.get("incomplete_answers") or []:
+        if words(a):
+            found.append(("options", f"The check says this answer is cut short or unclear: {words(a)}"))
+    if words(data.get("answer_stands_out") or ""):
+        found.append(("options", "The check says the correct answer stands out: "
+                      + words(data.get("answer_stands_out")) + "."))
+    fields = {"scenario": "scenario", "question": "stem", "answers": "options", "explanation": "explanation"}
+    for item in data.get("language") or []:
+        if isinstance(item, dict) and words(item.get("text", "")):
+            fix = words(item.get("fix", ""))
+            found.append((fields.get(str(item.get("field", "")).lower(), "explanation"),
+                          f"Language: \"{words(item['text'])}\"" + (f" -> \"{fix}\"" if fix else "")))
+    return found
+
+
+def _drop_rule(rules: str, opening: str) -> str:
+    """A bullet list of rules, less the bullet that starts with `opening`."""
+    bullets = [b for b in rules.split("\n- ")]
+    bullets[0] = bullets[0][2:] if bullets[0].startswith("- ") else bullets[0]
+    return "\n".join("- " + b for b in bullets if not b.startswith(opening))
 
 
 def expected_key_count(question: Question) -> int:

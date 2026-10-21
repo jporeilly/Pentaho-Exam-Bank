@@ -247,9 +247,9 @@ def _capture(monkeypatch, reply: str) -> list[dict]:
     return calls
 
 
-EXPLANATION = ("Moves and shapes rows is right: a transformation reads, changes and writes "
-               "rows. Prints a report is what Report Designer does. Installs the server is "
-               "the installer's job. Backs up a database is a DBA task.")
+EXPLANATION = ("A transformation **reads, changes and writes rows**: each step takes the rows "
+               "the step before it produced.\n\nThat makes it the place where data is moved "
+               "and shaped on its way to its target.")
 
 
 def test_an_explanation_is_proposed_and_nothing_is_saved(client, question, db_path, monkeypatch):
@@ -258,11 +258,15 @@ def test_an_explanation_is_proposed_and_nothing_is_saved(client, question, db_pa
     body = client.post("/api/questions/q-ai/ai/explanation").json()
 
     assert body["explanation"] == EXPLANATION
-    assert body["unnamed"] == [] and body["groundedOn"] == ""
+    assert body["notes"] == [] and body["groundedOn"] == ""
     prompt = calls[0]["prompt"]
+    # The model sees every option, so it knows what was being chosen between...
     for option in ("Moves and shapes rows", "Prints a report", "Installs the server", "Backs up a database"):
         assert option in prompt
-    assert "Never refer to an option by a letter" in prompt
+    # ...and is told to explain the correct one only, in paragraphs, with bold.
+    assert "why the correct answer is correct, and nothing else" in prompt
+    assert "do not discuss" in prompt and "**bold**" in prompt
+    assert "never by a letter" in prompt
     database = ExamBankDB(db_path)
     try:
         assert database.get("q-ai").explanation == question.explanation
@@ -270,12 +274,16 @@ def test_an_explanation_is_proposed_and_nothing_is_saved(client, question, db_pa
         database.close()
 
 
-def test_an_explanation_that_skips_an_option_says_which(client, question, monkeypatch):
-    _capture(monkeypatch, "Moves and shapes rows is right. Prints a report is wrong.")
+def test_an_explanation_that_still_judges_every_option_says_so(client, question, monkeypatch):
+    # The pre-1.14.0 form, which a model can slip back into.
+    _capture(monkeypatch, "'Moves and shapes rows' — Correct: it does. "
+                          "'Prints a report' — Incorrect: that is Report Designer.")
 
     body = client.post("/api/questions/q-ai/ai/explanation").json()
 
-    assert body["unnamed"] == ["Installs the server", "Backs up a database"]
+    assert "Correct/Incorrect" in body["notes"][0]
+    # Quoting each option by its text breaks the writing standard too (1.15.0).
+    assert any("Single quotes around 'Moves and shapes rows'" in n for n in body["notes"][1:])
 
 
 def test_the_answer_key_is_proposed_by_option_text_and_nothing_is_saved(client, question, db_path, monkeypatch):
@@ -408,3 +416,460 @@ def test_the_explanation_prompt_carries_the_course_page(client, db_path, course,
 
     assert body["groundedOn"] == "Creating a CDA"
     assert "Creating a CDA prose" in calls[0]["prompt"]
+
+
+# --- the rewrite's rules -------------------------------------------------------
+
+
+def test_the_rewrite_asks_for_a_proofread_and_a_correct_only_explanation(question, monkeypatch):
+    calls = _capture(monkeypatch, REWRITE)
+
+    question_refinement.improve_question(question, "a-model")
+
+    # Read with its line breaks folded: the rules are wrapped for the model.
+    prompt = " ".join(calls[0]["prompt"].split())
+    # A polish: the reviewed wording stays unless it is wrong...
+    assert "Fix every error; change nothing that is not one" in prompt
+    assert "keep it word for word" in prompt
+    assert "Change nothing else" in prompt and "Improve this question" not in prompt
+    # ...every detail of the scenario and every answer kept (1.17.0)...
+    assert "Never shorten, summarize or drop a detail" in prompt
+    assert "Never add a reason, a cause or a hint" in prompt
+    assert "copy it exactly unless it holds an error" in prompt
+    # ...but an answer cut short is an error to fix (1.18.0), where 1.17.0's
+    # "copy exactly" kept "URLs and codes split into several" as it was.
+    assert "complete any answer that is cut short" in prompt
+    assert "is cut short, is missing a word it needs, or is hard to read IS an error" in prompt
+    assert "Every answer is complete: a whole phrase or sentence" in prompt
+    # ...and the explanation keeps its facts, about the correct answer only.
+    assert "why the correct answer is correct, and nothing else" in prompt
+    assert "rewrite the CURRENT explanation" in prompt and "Add no claim" in prompt
+    # ...and one already right is kept, not re-authored (1.18.1).
+    assert "keep its sentences word for word, fixing only an error" in prompt
+    assert "keep one that already explains only why the correct answer is right" in prompt
+    # The old house rule is gone: no "'X' - Correct/Incorrect" template.
+    assert "Correct/Incorrect:" not in prompt
+
+
+def test_the_rewrite_gives_its_rules_in_the_template_order(question, monkeypatch):
+    calls = _capture(monkeypatch, REWRITE)
+
+    question_refinement.improve_question(question, "a-model")
+
+    prompt, system = calls[0]["prompt"], calls[0]["system"]
+    order = ["1. What to keep, and what to fix:", "2. The scenario and the question",
+             "3. The answers:", "4. The explanation:", "5. The writing standard"]
+    at = [prompt.index(h) for h in order]
+    assert at == sorted(at)
+    # Its own system prompt: a copy editor polishing, not the generator's
+    # "write questions from this course section" (1.18.0).
+    assert "exacting copy editor" in system and "never re-author" in system
+    assert "write exam questions" not in system.lower()
+
+
+def test_an_empty_explanation_is_written_fresh_not_rewritten(monkeypatch):
+    calls = _capture(monkeypatch, REWRITE)
+    bare = Question(id="q-bare", stem="What does a job do?", question_type="single",
+                    key="Orchestrates", distractors=["Stores rows", "Draws charts"])
+
+    question_refinement.improve_question(bare, "a-model")
+
+    assert "the CURRENT explanation" not in calls[0]["prompt"]
+
+
+def test_a_rewrite_that_still_judges_every_option_is_noted(client, question, monkeypatch):
+    # REWRITE keeps the old "- Correct. ... - Incorrect." form.
+    _stub_generate(monkeypatch, REWRITE)
+
+    notes = client.post("/api/questions/q-ai/ai/rewrite", json={}).json()["notes"]
+
+    assert any(n["field"] == "explanation" and "Correct/Incorrect" in n["message"] for n in notes)
+
+
+# --- the bulk rewrite -------------------------------------------------------------
+
+import time
+
+from exam_bank.api import jobs as job_registry
+
+
+def _add(db_path, **fields):
+    database = ExamBankDB(db_path)
+    try:
+        database.save(Question(question_type="single", topic="Basics", **fields))
+    finally:
+        database.close()
+
+
+def _bank(db_path, qid):
+    database = ExamBankDB(db_path)
+    try:
+        return database.get(qid)
+    finally:
+        database.close()
+
+
+def _finish(client, job_id, timeout=10.0):
+    """Wait for a job, then return it as the client sees it."""
+    deadline = time.time() + timeout
+    while job_registry.get(job_id).status == job_registry.RUNNING:
+        assert time.time() < deadline, "the rewrite job did not finish"
+        time.sleep(0.02)
+    return client.get(f"/api/jobs/{job_id}").json()
+
+
+CLEAN = ("A transformation **moves and shapes rows**: each step works on the rows the "
+         "step before it produced.\n\nThat is why it sits between a source and a target.")
+
+
+CLEAN_CHECK = json.dumps({"answer_correct": True, "answer_problem": "", "also_correct": [],
+                          "explanation_correct": True, "explanation_problem": "",
+                          "lost": [], "added": [], "language": []})
+
+
+def _by_stem(monkeypatch, replies, check=CLEAN_CHECK):
+    """Answer each question's rewrite by a phrase in its stem, and the second
+    pass (check_rewrite, 1.17.0) with `check`."""
+    def fake(**kw):
+        if kw["prompt"].startswith("You review a rewritten"):
+            return check
+        for phrase, reply in replies.items():
+            if phrase in kw["prompt"]:
+                return reply
+        return "no idea"
+    monkeypatch.setattr(providers, "generate", fake)
+
+
+def _rewrite_of(stem, key, distractors, explanation=CLEAN):
+    return json.dumps({"stem": stem, "key": key, "distractors": distractors,
+                       "explanation": explanation})
+
+
+# A clean polish keeps the answers word for word (PROOFREAD_RULES, 1.17.0).
+TRANSFORMATION = _rewrite_of(
+    "What is a transformation responsible for?", "Moves and shapes rows",
+    ["Prints a report", "Installs the server", "Backs up a database"])
+
+
+def test_a_bulk_rewrite_proposes_and_saves_nothing_until_accepted(client, question, db_path, monkeypatch):
+    _add(db_path, id="q-two", stem="Where does a job run?", key="On Carte or locally",
+         distractors=["Only in the browser", "Only on Linux", "Inside the database"],
+         explanation="On Carte or locally - Correct.")
+    _by_stem(monkeypatch, {
+        "What does a transformation do": TRANSFORMATION,
+        "Where does a job run": _rewrite_of(
+            "Where can a job run?", "On Carte or locally",
+            ["Only in the browser", "Only on Linux", "Inside the database"]),
+    })
+
+    started = client.post("/api/questions/ai/rewrite-all", json={"exact_topic": "Basics"})
+    assert started.status_code == 202 and started.json()["total"] == 2
+    job = _finish(client, started.json()["jobId"])
+
+    assert job["status"] == "done" and job["kind"] == "rewrite"
+    entries = {e["id"]: e for e in job["result"]}
+    assert set(entries) == {"q-ai", "q-two"}
+    assert entries["q-ai"]["proposed"]["explanation"] == CLEAN
+    assert entries["q-ai"]["notes"] == [] and entries["q-ai"]["problems"] == []
+    # Nothing has reached the bank.
+    assert _bank(db_path, "q-ai").stem == question.stem
+
+    accepted = client.post(f"/api/questions/ai/rewrite-jobs/{job['id']}/accept",
+                           json={"question_ids": ["q-ai"]}).json()
+
+    # Clean on every check, so the gate takes it to approved (1.18.0).
+    assert accepted == {"saved": ["q-ai"], "approved": ["q-ai"], "review": [], "skipped": []}
+    saved = _bank(db_path, "q-ai")
+    assert saved.status == "approved"
+    assert [(h["to_status"], h["sme_name"]) for h in saved.review_history] == [
+        ("sme_review", "AI checks"), ("approved", "AI checks")]
+    assert saved.stem == "What is a transformation responsible for?"
+    assert saved.explanation == CLEAN
+    changed = [h for h in saved.version_history if h["field"] in ("stem", "explanation")]
+    assert changed and {h["editor"] for h in changed} == {"AI rewrite (bulk)"}
+    assert _bank(db_path, "q-two").stem == "Where does a job run?", "only what was accepted"
+
+
+def test_accepting_refuses_a_question_edited_since_its_rewrite(client, question, db_path, monkeypatch):
+    _by_stem(monkeypatch, {"What does a transformation do": TRANSFORMATION})
+    job = _finish(client, client.post("/api/questions/ai/rewrite-all",
+                                      json={"id": "q-ai"}).json()["jobId"])
+    # The author edits it by hand while the rewrite sat in the review list.
+    assert client.put("/api/questions/q-ai", json={"tags": ["edited"]}).status_code == 200
+
+    body = client.post(f"/api/questions/ai/rewrite-jobs/{job['id']}/accept",
+                       json={"question_ids": ["q-ai"]}).json()
+
+    assert body["saved"] == [] and "changed since" in body["skipped"][0]["reason"]
+    assert _bank(db_path, "q-ai").stem == question.stem
+
+
+def test_accepting_skips_what_cannot_be_taken(client, question, db_path, monkeypatch):
+    _add(db_path, id="q-same", stem="Same stem?", key="Yes", distractors=["No", "Maybe", "Never"],
+         explanation=CLEAN)
+    _add(db_path, id="q-bad", stem="Bad stem?", key="Yes", distractors=["No", "Maybe", "Never"])
+    _add(db_path, id="q-junk", stem="Junk stem?", key="Yes", distractors=["No", "Maybe", "Never"])
+    _by_stem(monkeypatch, {
+        "What does a transformation do": TRANSFORMATION,
+        "Same stem": _rewrite_of("Same stem?", "Yes", ["No", "Maybe", "Never"]),
+        "Bad stem": _rewrite_of("Bad stem?", "Yes", []),  # nothing to get wrong
+        # "Junk stem" is answered "no idea": not a question at all.
+    })
+    job = _finish(client, client.post("/api/questions/ai/rewrite-all",
+                                      json={"exact_topic": "Basics"}).json()["jobId"])
+
+    body = client.post(f"/api/questions/ai/rewrite-jobs/{job['id']}/accept",
+                       json={"question_ids": ["q-ai", "q-same", "q-bad", "q-junk", "q-ai"]}).json()
+
+    assert body["saved"] == ["q-ai"]
+    # Unchanged saves nothing, but still goes through the gate (1.18.0).
+    assert "q-same" in body["approved"] and "q-same" not in body["saved"]
+    reasons = {s["id"]: s["reason"] for s in body["skipped"]}
+    assert "could not be graded" in reasons["q-bad"]
+    assert "usable question" in reasons["q-junk"]
+    again = client.post(f"/api/questions/ai/rewrite-jobs/{job['id']}/accept",
+                        json={"question_ids": ["q-ai"]}).json()
+    assert "already accepted" in again["skipped"][0]["reason"]
+
+
+def test_a_bulk_rewrite_with_nothing_to_rewrite_is_a_conflict(client, question, monkeypatch):
+    _stub_generate(monkeypatch, REWRITE)
+
+    r = client.post("/api/questions/ai/rewrite-all", json={"exact_topic": "No such topic"})
+
+    assert r.status_code == 409
+
+
+def test_a_rewrite_job_is_not_committed_as_new_questions(client, question, monkeypatch):
+    _stub_generate(monkeypatch, REWRITE)
+    job = _finish(client, client.post("/api/questions/ai/rewrite-all",
+                                      json={"id": "q-ai"}).json()["jobId"])
+
+    r = client.post(f"/api/jobs/{job['id']}/commit", json={})
+
+    assert r.status_code == 409
+
+
+def test_a_bulk_rewrite_tries_a_question_twice_before_giving_up(client, question, monkeypatch):
+    replies = iter(["{ not json", TRANSFORMATION])
+    monkeypatch.setattr(providers, "generate", lambda **kw: next(replies))
+
+    job = _finish(client, client.post("/api/questions/ai/rewrite-all",
+                                      json={"id": "q-ai"}).json()["jobId"])
+
+    entry = job["result"][0]
+    assert entry["error"] == "" and entry["proposed"]["stem"] == "What is a transformation responsible for?"
+
+
+# --- the gate (1.18.0) ------------------------------------------------------------
+
+
+def test_a_rewrite_the_check_flags_is_saved_and_held_for_review(client, question, db_path, monkeypatch):
+    flagged = json.loads(CLEAN_CHECK)
+    flagged["incomplete_answers"] = ["Moves and shapes rows"]
+    _by_stem(monkeypatch, {"What does a transformation do": TRANSFORMATION}, check=json.dumps(flagged))
+    job = _finish(client, client.post("/api/questions/ai/rewrite-all",
+                                      json={"id": "q-ai"}).json()["jobId"])
+
+    body = client.post(f"/api/questions/ai/rewrite-jobs/{job['id']}/accept",
+                       json={"question_ids": ["q-ai"]}).json()
+
+    assert body["saved"] == ["q-ai"] and body["approved"] == []
+    held = body["review"][0]
+    assert held["id"] == "q-ai" and held["status"] == "sme_review"
+    assert any("cut short or unclear: Moves and shapes rows" in r for r in held["reasons"])
+    saved = _bank(db_path, "q-ai")
+    assert saved.status == "sme_review" and "cut short" in saved.review_history[-1]["comment"]
+
+
+def _standalone(monkeypatch, check):
+    """The model's check of a question as it stands (check_rewrite, no original)."""
+    seen = []
+
+    def fake(**kw):
+        seen.append(kw["prompt"])
+        assert kw["prompt"].startswith("You review a certification exam question before it is approved")
+        return check
+    monkeypatch.setattr(providers, "generate", fake)
+    return seen
+
+
+def test_the_check_approves_a_question_that_passes_everything(client, db_path, monkeypatch):
+    _add(db_path, id="q-clean", scenario="A team loads orders every night.",
+         stem="What does a transformation do?", key="Moves and shapes rows",
+         distractors=["Prints a report", "Installs the server", "Backs up a database"],
+         explanation=CLEAN)
+    seen = _standalone(monkeypatch, CLEAN_CHECK)
+
+    body = client.post("/api/questions/q-clean/ai/check").json()
+
+    assert body["outcome"] == "approved" and body["status"] == "approved" and body["findings"] == []
+    assert _bank(db_path, "q-clean").status == "approved"
+    # Nothing to compare with, so no "lost or added" in the rules it is given.
+    assert "The rewrite lost" not in seen[0] and "Every answer is complete" in seen[0]
+
+
+def test_the_check_holds_a_question_that_fails_a_house_rule(client, question, db_path, monkeypatch):
+    _standalone(monkeypatch, CLEAN_CHECK)
+
+    body = client.post("/api/questions/q-ai/ai/check").json()
+
+    # "(Choose one.)" in the stem, and an explanation that judges every option.
+    assert body["outcome"] == "review" and body["status"] == "sme_review"
+    messages = " ".join(f["message"] for f in body["findings"])
+    assert "Correct/Incorrect" in messages
+    assert _bank(db_path, "q-ai").status == "sme_review"
+
+
+def test_the_check_reports_what_the_model_finds(client, db_path, monkeypatch):
+    _add(db_path, id="q-clean", scenario="A team loads orders every night.",
+         stem="What does a transformation do?", key="Moves and shapes rows",
+         distractors=["Prints a report", "Installs the server", "Backs up a database"],
+         explanation=CLEAN)
+    found = json.loads(CLEAN_CHECK)
+    found["answer_stands_out"] = "it is the only answer about rows"
+    _standalone(monkeypatch, json.dumps(found))
+
+    body = client.post("/api/questions/q-clean/ai/check").json()
+
+    assert body["outcome"] == "review"
+    assert any("correct answer stands out: it is the only answer about rows" in f["message"]
+               for f in body["findings"])
+
+
+def test_the_house_style_is_the_rules_the_prompts_carry(client):
+    from exam_bank.core import generation_prompts as gp
+
+    sections = client.get("/api/house-style").json()["sections"]
+
+    rules = "\n".join(s["rules"] for s in sections)
+    for constant in (gp.SCENARIO_AND_STEM_RULES, gp.ANSWER_RULES, gp.EXPLANATION_RULES,
+                     gp.WRITING_RULES, gp.PROOFREAD_RULES, gp.EXPLANATION_REWRITE_RULES,
+                     gp.REWRITE_CHECK_RULES):
+        assert constant in rules
+    # In the template's order: the question, its answers, its explanation,
+    # then the writing every field shares (1.18.0).
+    titles = [s["title"] for s in sections]
+    assert titles[:4] == ["Scenario and question", "Answers", "Explanation",
+                          "Quotes, names and punctuation"]
+
+
+def test_generation_carries_the_answer_rules():
+    from exam_bank.core import generation_prompts as gp
+
+    assert gp.ANSWER_RULES in gp.GENERATION_SYSTEM_PROMPT
+    at = [gp.GENERATION_SYSTEM_PROMPT.index(r) for r in
+          (gp.SCENARIO_AND_STEM_RULES, gp.ANSWER_RULES, gp.EXPLANATION_RULES, gp.WRITING_RULES)]
+    assert at == sorted(at)
+
+
+def test_every_check_has_a_rule_the_model_is_given():
+    """A question written to the rules passes the gate: each check the gate
+    runs is named in a rule the prompts carry (the owner, 2026-10-11)."""
+    from exam_bank.core import generation_prompts as gp
+
+    told = " ".join((gp.SCENARIO_AND_STEM_RULES + gp.ANSWER_RULES + gp.EXPLANATION_RULES
+                     + gp.WRITING_RULES + gp.PROOFREAD_RULES).split())
+    for rule in [
+        "never a question",                      # form_notes: a question in the scenario
+        'ending in "?"',                         # form_notes: the stem is a question
+        "(Choose ...)",                          # form_notes: no count directive
+        "Every answer is complete",              # answer_notes: cut short
+        "never ends on a word such as",          # answer_notes: the dangling word
+        "about as long as the wrong ones",       # answer_notes: the key's length
+        "all short phrases with none",           # style_notes: full stops alike
+        "the wrong answers name things in `code` too",  # style_notes: code singles out
+        "Bold (double asterisks) only for the explanation",  # style_notes: bold
+        "Every answer differs from the others and none is empty",  # problems_with
+        'do NOT label options "Correct:" or "Incorrect:"',  # explanation_notes
+        "never by a letter or position",         # explanation_notes
+        "under 700 characters",                  # explanation_notes: long paragraph
+        "At most 10 lines",                      # code_notes
+        "valid as written (JSON that parses)",   # code_notes
+        "Arrows are for PDI steps only",         # flow_notes
+        "no padding such as",                    # explanation_notes: padding (1.18.1)
+        "Never in quotation marks",              # text_notes: quotes
+        "No contractions",                       # text_notes
+    ]:
+        assert rule in told, rule
+
+
+# --- the writing standard (1.15.0) -------------------------------------------
+
+
+def test_every_prompt_carries_the_writing_standard(question, monkeypatch):
+    from exam_bank.core import generation_prompts as gp
+    from exam_bank.core import question_refinement as qr
+
+    assert gp.WRITING_RULES in gp.GENERATION_SYSTEM_PROMPT
+    prompts = _capture(monkeypatch, REWRITE)
+    qr.improve_question(question, model="m")
+    qr.generate_explanation(question, model="m")
+    assert len(prompts) == 2
+    assert all(gp.WRITING_RULES in p["prompt"] for p in prompts)
+
+
+def test_a_rewrite_comes_back_tidied_with_what_is_left_noted(client, question, monkeypatch):
+    _stub_generate(monkeypatch, json.dumps({
+        "scenario": "A team enriches 'sales' records with a 'Stream Lookup' step.",
+        "stem": "Which field does the lookup match on?",
+        "key": "The 'region_code' field",
+        "distractors": ["The 'sales' table", "The 'row_id' field", "The file name"],
+        "explanation": "A **Stream lookup** matches on the key field and doesn\u2019t filter rows.",
+    }))
+
+    body = client.post("/api/questions/q-ai/ai/rewrite", json={}).json()
+
+    p = body["proposed"]
+    assert p["scenario"] == "A team enriches 'sales' records with a Stream lookup step."
+    assert p["key"] == "The `region_code` field"
+    assert p["distractors"][1] == "The `row_id` field"
+    assert p["explanation"] == "A **Stream lookup** matches on the key field and does not filter rows."
+    quotes = [n for n in body["notes"] if "Single quotes around 'sales'" in n["message"]]
+    assert {n["field"] for n in quotes} == {"scenario", "options"}
+
+
+def test_the_house_style_shows_the_writing_standard(client):
+    from exam_bank.core import generation_prompts as gp
+
+    sections = client.get("/api/house-style").json()["sections"]
+    assert {"title": "Quotes, names and punctuation", "rules": gp.WRITING_RULES} in sections
+
+
+# --- the second pass and the exact checks (1.17.0) ----------------------------
+
+
+def test_every_rewrite_is_checked_and_the_findings_are_notes(client, question, monkeypatch):
+    finding = json.dumps({"answer_correct": False, "answer_problem": "a transformation does not schedule",
+                          "also_correct": ["Prints a report"], "explanation_correct": True,
+                          "explanation_problem": "", "lost": ["the caveat about hops"], "added": [],
+                          "language": [{"field": "question", "text": "responsable", "fix": "responsible"}]})
+    _by_stem(monkeypatch, {"What does a transformation do": TRANSFORMATION}, check=finding)
+
+    body = client.post("/api/questions/q-ai/ai/rewrite", json={}).json()
+
+    messages = " | ".join(n["message"] for n in body["notes"])
+    assert "doubts the answer marked correct: a transformation does not schedule" in messages
+    assert "may also be correct: Prints a report" in messages
+    assert "may have lost: the caveat about hops" in messages
+    assert '"responsable" -> "responsible"' in messages
+
+
+def test_an_unreadable_check_is_a_note_not_a_pass(client, question, monkeypatch):
+    _by_stem(monkeypatch, {"What does a transformation do": TRANSFORMATION}, check="I think it is fine.")
+
+    body = client.post("/api/questions/q-ai/ai/rewrite", json={}).json()
+
+    assert any("check did not run" in n["message"] for n in body["notes"])
+
+
+def test_the_check_is_given_the_original_and_the_rewrite(question, monkeypatch):
+    calls = _capture(monkeypatch, CLEAN_CHECK)
+    proposed = Question(id="q-ai", stem="What is a transformation for?", key="Moves and shapes rows",
+                        distractors=["Prints a report"], explanation="It **moves rows**.")
+
+    assert question_refinement.check_rewrite(question, proposed, "m", source_text="Course text.") == []
+    prompt = calls[0]["prompt"]
+    assert "ORIGINAL (reviewed and approved)" in prompt and question.stem in prompt
+    assert "REWRITE (to check)" in prompt and "What is a transformation for?" in prompt
+    assert "- Moves and shapes rows (marked correct)" in prompt and "Course text." in prompt

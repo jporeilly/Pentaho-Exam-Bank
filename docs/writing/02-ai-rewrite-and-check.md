@@ -5,13 +5,41 @@ Four buttons in the question editor. All need an AI model set up in
 proposes, you take the proposal into the editor, and you press **Save** if you
 agree.
 
-**AI rewrite** asks the model for a better version of the question. The model
-is told the house form: the scenario is statements that set the scene, the
-question is only the question. The proposal shows the new scenario, question
-and options. If the model broke the form anyway — say, put a question in the
-scenario — the proposal says so under it. Press **Use this** to copy the
-proposal into the editor (still unsaved; press Save if you agree), or
-**Discard**.
+**AI rewrite** polishes the question to the
+[house style](01-how-a-question-is-written.md#the-house-style). It proofreads
+the scenario, the question and the answers - spelling, grammar, punctuation
+and clumsy wording only, keeping what each one says - and rewrites the
+explanation to say why the correct answer is right, in paragraphs with the
+key terms in bold. The explanation is rewritten from the current one: it
+keeps the facts about the correct answer and drops what it said about the
+wrong options. The proposal shows the new scenario, question, options and
+explanation. If the model broke the form anyway - say, put a question in the
+scenario, or left an option labelled "Incorrect" - the proposal says so under
+it. Press **Use this** to copy the proposal into the editor (still unsaved;
+press Save if you agree), or **Discard**.
+
+Every rewrite is then **checked** (from 1.17.0), and what the checks find
+appears as notes under the proposal:
+
+- **A second AI pass** reads the original and the rewrite side by side, with
+  the course pages the question was written from: is the answer marked
+  correct really correct, is any answer marked wrong also correct, is the
+  explanation accurate, did the rewrite lose a fact or caveat or add a claim,
+  and is any spelling, grammar or punctuation error left. It reports; it never
+  edits. If it cannot give a readable answer, that is a note too, so an
+  unchecked rewrite never looks like a clean one.
+- **Exact checks**, made without a model, because a model does not reliably
+  report its own cuts: the content words the rewrite took out of the scenario
+  or the question, or put in (a dropped detail can make a question
+  unanswerable; an added reason can give the answer away), and any answer
+  whose words changed. A capital letter the model took off an answer is put
+  back on its own.
+
+The model gets two calls per question instead of one, so a rewrite takes about
+twice as long.
+
+To rewrite many questions at once, use **AI rewrite all** in the Bank; see
+[Rewriting every question at once](../guides/05-the-bank.md#rewriting-every-question-at-once).
 
 **AI check answers** asks the model whether the question can be answered
 correctly as written — for example, whether a distractor is also true — and
@@ -19,13 +47,15 @@ proofreads it. Beside its opinion you see the bank's own checks: whether the
 question can be graded, and whether it follows the form. It is a second
 opinion, not a guarantee.
 
-**AI explanation** writes the explanation: why each correct answer is right
-and each distractor wrong, naming every option by its text (never by a letter
-— the options are shuffled). It is written from the course page the question
-cites — or, failing that, the pages of its module — and the proposal says
-which; for a question with no course page it says so, and every fact needs
-checking. If the text never names one of the options, the proposal lists it.
-Press **Use this explanation** to put it in the Explanation field.
+**AI explanation** writes a new explanation to the house style: why the
+correct answer is right, in one to three paragraphs with the key terms in
+bold, naming an answer by its text (never by a letter — the options are
+shuffled). It is written from the course page the question cites — or,
+failing that, the pages of its module — and the proposal says which; for a
+question with no course page it says so, and every fact needs checking. If
+the text still labels options "Correct" and "Incorrect" or names one by its
+letter, the proposal says so. Press **Use this explanation** to put it in the
+Explanation field.
 
 **AI answer key** decides which options are correct, from the same course
 pages, and shows its reasoning option by option: the sentence it relied on,

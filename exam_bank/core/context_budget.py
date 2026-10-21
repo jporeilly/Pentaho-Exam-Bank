@@ -38,7 +38,15 @@ CHARS_PER_TOKEN = 4
 # model ran past it, and Ollama returned `done_reason: "length"` with an EMPTY
 # response after two minutes of work. Reserving for the thinking too costs
 # some source text and buys a reply that actually arrives.
-RESERVED_OUTPUT_TOKENS = 4500
+#
+# Since 1.14.0 every Ollama call sends "think": false (ollama_client), so
+# there is no thinking to reserve for. Measured 2026-10-10 (gemma4:12b, an
+# 8,192 window, a 760-character DI section, three questions): 3,284 prompt
+# tokens and a 638-token answer - about 210 a question. 2,500 holds some
+# eleven, twice a busy section. At 4,500 the 1.15/1.16 house rules (the
+# writing standard, flow lines, code blocks) left a typical section a
+# quarter of the window's room for source; this gives it back.
+RESERVED_OUTPUT_TOKENS = 2500
 
 
 def estimate_tokens(text: str) -> int:
