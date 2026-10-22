@@ -7,7 +7,26 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-10-22
+
 ### Added
+
+- **Results loads the results workbook (.xlsx), with filters.** The Sheet's
+  *File > Download > Microsoft Excel* file imports directly: every course
+  tab's attempts and the Detail tab's answers come in together (the
+  repeated "All results" tab is read once, and CSV import still works).
+  - **Every attempt is its own row.** A candidate who sat an exam again
+    appears twice, numbered by submission order ("2 of 2"), never merged
+    or dropped. The attempt list shows date, course, candidate, attempt,
+    score, % and pass/fail.
+  - **Filters**: a date range (the browser's calendar, plus Last 7 days /
+    Last 30 days / All dates), course, candidate, passed or failed, and
+    attempt number. They narrow the attempt list and the per-question
+    item analysis together.
+  - **Privacy unchanged**: names, emails and notes are never read; a
+    candidate is shown by the anonymous `cand_...` id.
+  - New `POST /api/results/import-xlsx`, `GET /api/results/attempts`, and
+    filter parameters on `GET /api/results/analysis`.
 
 - **A seeded installer, for a machine with no Content Manager checkout.**
   `npm run dist:seeded` (in `desktop/`) builds
