@@ -18,6 +18,7 @@ import {
   type ResultsDbDeletePlan,
   type ResultsDbStatus,
   type ResultsFilters,
+  type ResultsSchedule,
 } from "./api";
 import { filtersActive, FilterBar } from "./ResultsPane";
 
@@ -43,6 +44,10 @@ export function ResultsDbAdmin() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState("");
+  const [sched, setSched] = useState<ResultsSchedule | null>(null);
+  const [workbook, setWorkbook] = useState("");
+  const [time, setTime] = useState("02:00");
+  const [enabled, setEnabled] = useState(false);
 
   const refresh = useCallback(
     (p: string) =>
@@ -61,6 +66,17 @@ export function ResultsDbAdmin() {
 
   useEffect(() => {
     void refresh(path);
+    api
+      .resultsSchedule()
+      .then((r) => {
+        if (!r || typeof r.time !== "string") return;
+        setSched(r);
+        setWorkbook(r.workbookPath ?? "");
+        setTime(r.time);
+        setEnabled(Boolean(r.enabled));
+        if (!path && r.targetPath) setPath(r.targetPath);
+      })
+      .catch(() => undefined);
     api.resultsAttempts().then((a) => setOptions(a?.options)).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -86,6 +102,7 @@ export function ResultsDbAdmin() {
         /* a remembered path is a convenience */
       }
       await refresh(path);
+      api.resultsSchedule().then((r) => r && typeof r.time === "string" && setSched(r)).catch(() => undefined);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
     } finally {
@@ -136,6 +153,63 @@ export function ResultsDbAdmin() {
               : "No file yet; the first append creates it."}
           </dd>
         </dl>
+      )}
+
+      <h4>Daily load from the results workbook</h4>
+      <p className="faint">
+        Imports the downloaded results workbook (.xlsx) and appends its new attempts to the file
+        above, once a day at the time set, while the app is open (or at the next check if it was
+        closed then). Only new attempts are added, so a repeat load changes nothing. Replace the
+        workbook at this path each day with the Sheet&rsquo;s latest download.
+      </p>
+      <div className="toolbar">
+        <label className="field grow">
+          <span className="field-label">Workbook (.xlsx)</span>
+          <input
+            aria-label="Results workbook path"
+            className="mono"
+            value={workbook}
+            placeholder="C:\Users\you\Downloads\results.xlsx"
+            onChange={(e) => setWorkbook(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Time</span>
+          <input type="time" aria-label="Daily load time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </label>
+        <label className="checkbox-inline">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Load daily
+        </label>
+      </div>
+      <div className="toolbar">
+        <button
+          className="secondary info"
+          disabled={busy}
+          onClick={() =>
+            run(
+              () => api.saveResultsSchedule({ enabled, workbookPath: workbook, targetPath: path.trim() || status?.defaultPath || "", time }),
+              (r) => {
+                setSched(r);
+                return enabled ? `Daily load saved: every day at ${r.time}.` : "Saved. The daily load is off.";
+              },
+            )
+          }
+        >
+          Save schedule
+        </button>
+        <button
+          className="add"
+          disabled={busy || !sched?.workbookPath}
+          title="Load the saved workbook now; save the schedule first if you changed the path"
+          onClick={() => run(() => api.runResultsLoad(), (r) => r.message)}
+        >
+          Load now
+        </button>
+      </div>
+      {sched?.lastAttempt && (
+        <p className={sched.lastOk ? "faint" : "banner"} role="status">
+          Last load {sched.lastAttempt.replace("T", " ")}: {sched.lastMessage}
+        </p>
       )}
 
       <h4>Add records</h4>

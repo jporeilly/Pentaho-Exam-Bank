@@ -7,6 +7,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-10-22
+
+### Added
+
+- **Daily load of the results workbook into the results database.** On the
+  Admin page, set the path of the downloaded results `.xlsx`, a time, and
+  *Load daily*. At that time each day, while the app is open (or at the next
+  check if it was closed), the workbook is imported (the existing
+  upsert-by-attempt-id import) and its new attempts and answers are appended
+  to the results database; a repeat load adds nothing. A failed load (for
+  example the workbook is not there yet) is shown on the page and retried at
+  most hourly. **Load now** runs the same load at any time. New
+  `GET`/`PUT /api/admin/results-schedule` and
+  `POST /api/admin/results-schedule/run`.
+
 ## [1.20.0] - 2026-10-22
 
 ### Added

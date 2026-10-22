@@ -21,6 +21,11 @@ function server(status = STATUS, refuse = false) {
     const json = (body: unknown, code = 200) =>
       Promise.resolve(new Response(JSON.stringify(body), { status: code, headers: { "Content-Type": "application/json" } }));
     if (path.includes("/api/results/attempts")) return json({ attempts: [], summary: {}, options: OPTIONS });
+    if (path.includes("/results-schedule/run")) return json({ message: "Read 4 attempts; added 2 attempts." });
+    if (path.includes("/results-schedule"))
+      return json({ enabled: true, workbookPath: "C:/dl/results.xlsx", targetPath: "C:/data/exam_results.db",
+                    time: "03:30", lastAttempt: "2026-10-22T03:30:01", lastSuccess: "", lastOk: false,
+                    lastMessage: "The workbook is not there" });
     if (path.includes("/results-db/append"))
       return json({ addedAttempts: 2, addedAnswers: 4, skippedAttempts: 1, totalAttempts: 8, totalAnswers: 16 });
     if (path.includes("/delete/preview"))
@@ -83,5 +88,18 @@ describe("ResultsDbAdmin", () => {
     expect(await screen.findByRole("button", { name: "Delete 2" })).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText("Result"), "fail");
     expect(screen.queryByRole("button", { name: "Delete 2" })).toBeNull();
+  });
+
+  it("shows the saved schedule and its last outcome, saves it, and loads on demand", async () => {
+    const calls = server();
+    render(<ResultsDbAdmin />);
+    expect(await screen.findByDisplayValue("C:/dl/results.xlsx")).toBeInTheDocument();
+    expect(screen.getByLabelText("Daily load time")).toHaveValue("03:30");
+    expect(screen.getByText(/The workbook is not there/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save schedule" }));
+    expect(await screen.findByText(/every day at/)).toBeInTheDocument();
+    expect(calls.find((c) => c.method === "PUT")!.body).toMatchObject({ workbook_path: "C:/dl/results.xlsx", time: "03:30" });
+    await userEvent.click(screen.getByRole("button", { name: "Load now" }));
+    expect(await screen.findByText("Read 4 attempts; added 2 attempts.")).toBeInTheDocument();
   });
 });

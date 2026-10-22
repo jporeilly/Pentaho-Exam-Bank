@@ -579,6 +579,18 @@ export interface ResultsDbRemoved {
   safetyBackup: string;
 }
 
+export interface ResultsSchedule {
+  enabled: boolean;
+  workbookPath: string;
+  targetPath: string;
+  time: string;
+  lastAttempt: string;
+  lastSuccess: string;
+  lastMessage: string;
+  lastOk: boolean | null;
+  defaultTarget?: string;
+}
+
 export interface DatabaseStatus {
   database: {
     exists: boolean;
@@ -1236,6 +1248,17 @@ export const api = {
   /** The separate results database the Results tab exports to (a SQLite file). */
   resultsDbStatus: (path = "") =>
     request<ResultsDbStatus>(`/api/admin/results-db${query({ path })}`),
+  resultsSchedule: () => request<ResultsSchedule>("/api/admin/results-schedule"),
+  saveResultsSchedule: (s: { enabled: boolean; workbookPath: string; targetPath: string; time: string }) =>
+    request<ResultsSchedule>("/api/admin/results-schedule", {
+      method: "PUT",
+      body: JSON.stringify({
+        enabled: s.enabled, workbook_path: s.workbookPath, target_path: s.targetPath, time: s.time,
+      }),
+    }),
+  /** Run the load now, as the daily schedule would. */
+  runResultsLoad: () =>
+    request<{ message: string }>("/api/admin/results-schedule/run", { method: "POST" }),
   resultsDbAppend: (path: string, f: ResultsFilters) =>
     request<ResultsDbAppend>("/api/admin/results-db/append", {
       method: "POST",

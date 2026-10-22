@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from ...core import db_backup, results_export, results_workbook
+from ...core import db_backup, results_export, results_schedule, results_workbook
 from ...core.admin import DeletionRefused, delete_questions, plan_deletion
 from ...core.bank import ExamBankDB
 from ..deps import get_db
@@ -271,3 +271,37 @@ def results_db_delete(body: ResultsDbRequest, db: ExamBankDB = Depends(get_db)) 
     target = _results_target(db, body.path)
     flt = _results_filters(body)
     return _refusing(lambda: results_export.delete(target, flt, body.expect_count))
+
+
+class ScheduleRequest(BaseModel):
+    enabled: bool = False
+    workbook_path: str = ""
+    target_path: str = ""
+    time: str = "02:00"
+
+
+def _protected(db: ExamBankDB) -> tuple[Path, ...]:
+    return (Path(db.db_path), db_backup.DB_PATH)
+
+
+@router.get("/api/admin/results-schedule")
+def results_schedule_get(db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    return {**results_schedule.load(), "defaultTarget": str(results_export.default_target(db.db_path))}
+
+
+@router.put("/api/admin/results-schedule")
+def results_schedule_put(body: ScheduleRequest, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    target = body.target_path or str(results_export.default_target(db.db_path))
+    try:
+        return results_schedule.save_settings(body.enabled, body.workbook_path, target, body.time, _protected(db))
+    except results_export.ResultsExportError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+@router.post("/api/admin/results-schedule/run")
+def results_schedule_run(db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """Run the daily load now with the saved settings."""
+    try:
+        return results_schedule.run_load(Path(db.db_path), _protected(db))
+    except results_export.ResultsExportError as e:
+        raise HTTPException(409, str(e)) from e

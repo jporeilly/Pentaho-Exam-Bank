@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
-from ..core import auto_backup, auto_export
+from ..core import auto_backup, auto_export, results_schedule
 from ..core.providers import ProviderError
 from .routers import (
     admin, certifications, chat, courses, docs, exam, export, generation, importing,
@@ -81,8 +81,11 @@ async def lifespan(app: FastAPI):
     # Automatic backups (Settings): checked now and every few minutes. The
     # thread reads the setting each time, so switching it on needs no restart.
     stop_backups = auto_backup.start()
+    # The daily results load (Admin > Results database) reads its schedule each minute.
+    stop_results = results_schedule.start()
     yield
     stop_backups.set()
+    stop_results.set()
 
 
 app = FastAPI(
