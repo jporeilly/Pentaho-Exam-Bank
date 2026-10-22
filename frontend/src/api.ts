@@ -788,6 +788,25 @@ export interface AiFinding {
 /** What `/ai/review` reports. Answer faults are kept apart from
  *  proofreading: "the key is also true of option C" and "a comma is
  *  missing" are not the same kind of news. */
+/** What `/ai/check` did (1.18.0): every check run on the question as it
+ *  stands, and the gate - approved when nothing is found, held for review
+ *  with the findings when anything is. */
+export interface AiCheck {
+  id: string;
+  status: string;
+  outcome: string;
+  findings: { field: string; message: string }[];
+}
+
+/** What accepting bulk rewrites did: saved the changed ones, then passed
+ *  each through the gate (1.18.0). */
+export interface AcceptResult {
+  saved: string[];
+  approved: string[];
+  review: { id: string; status: string; reasons: string[] }[];
+  skipped: { id: string; reason: string }[];
+}
+
 export interface AiReview {
   answers: AiFinding[];
   prose: AiFinding[];
@@ -821,12 +840,50 @@ export interface Vocabulary {
   bloomLevels: string[];
 }
 
-/** A proposed explanation. `unnamed` are options it never names. */
+/** A proposed explanation. `notes` are where it breaks the house rule
+ *  (the correct answer only, in paragraphs): a model can slip back. */
 export interface AiExplanation {
   explanation: string;
   /** The course page it was grounded on, or "" when there was none. */
   groundedOn: string;
-  unnamed: string[];
+  notes: string[];
+}
+
+/** One part of the house style, as the prompts carry it. */
+export interface HouseStyleSection {
+  title: string;
+  /** "- " bullets, each wrapped over indented lines; **bold** allowed. */
+  rules: string;
+}
+
+/** One question of a bulk rewrite, as the review list shows it. */
+export interface RewriteEntry {
+  id: string;
+  /** The question as the rewrite found it. */
+  original: Question;
+  /** null when the model gave nothing usable (see `error`). */
+  proposed: Question | null;
+  problems: { field: string; message: string }[];
+  notes: { field: string; message: string }[];
+  unchanged: boolean;
+  error: string;
+  accepted: boolean;
+}
+
+/** A bulk rewrite job: a Job whose results are review entries. */
+export type RewriteJob = Omit<Job, "result"> & { result: RewriteEntry[] };
+
+/** The Bank's filters, as the bulk rewrite takes them. */
+export interface RewriteScope {
+  text?: string;
+  topic?: string;
+  difficulty?: string;
+  bloom_level?: string;
+  status?: string;
+  certification_id?: string;
+  id?: string;
+  exact_topic?: string;
+  sort?: string;
 }
 
 /** A proposed answer key: which options are correct, by their text. */
@@ -1259,6 +1316,30 @@ export const api = {
     request<AiRewrite>(`/api/questions/${encodeURIComponent(id)}/ai/rewrite`, {
       method: "POST",
       body: JSON.stringify({ instruction }),
+    }),
+  /** The template every question is written to. */
+  houseStyle: () => request<{ sections: HouseStyleSection[] }>("/api/house-style"),
+  /** Start rewriting every question the filters match. Writes nothing:
+   *  poll `rewriteJob`, then `acceptRewrites` the ones to keep. */
+  aiRewriteAll: (scope: RewriteScope) =>
+    request<{ jobId: string; total: number; status: string }>("/api/questions/ai/rewrite-all", {
+      method: "POST",
+      body: JSON.stringify(scope),
+    }),
+  rewriteJob: (id: string) => request<RewriteJob>(`/api/jobs/${encodeURIComponent(id)}`),
+  /** Save the named proposals, as the editor's own save would, then pass
+   *  each through the gate: approved if every check is clean, held for
+   *  review if not. */
+  acceptRewrites: (jobId: string, questionIds: string[]) =>
+    request<AcceptResult>(
+      `/api/questions/ai/rewrite-jobs/${encodeURIComponent(jobId)}/accept`,
+      { method: "POST", body: JSON.stringify({ question_ids: questionIds }) },
+    ),
+  /** Run every check on the question as it stands, and approve it if it
+   *  passes them all; hold it for review if not. Writes the status only. */
+  aiCheck: (id: string) =>
+    request<AiCheck>(`/api/questions/${encodeURIComponent(id)}/ai/check`, {
+      method: "POST",
     }),
   /** Check the answers, and proofread. Writes nothing. */
   aiReview: (id: string) =>

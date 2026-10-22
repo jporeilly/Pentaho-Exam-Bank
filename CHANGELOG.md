@@ -40,6 +40,311 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 - `collect-installer.ps1 -Suffix <name>` keeps a seeded and a plain
   installer of one version side by side in `dist\`.
 
+## [1.18.2] - 2026-10-11
+
+### Fixed
+
+- **The padding check missed "This structure ensures".** It knew a list of
+  openers ("This ensures", "This approach", "This allows" and the like), and
+  the gated re-run approved explanations opening "This structure ensures",
+  "This caching allows", "This metric allows". Now any single word between
+  "This" and ensures, allows, enables, guarantees, helps or lets counts as
+  padding; "This is why" and "This step reads" still do not. Swept over the
+  whole bank it found 14 approved explanations, each corrected and gated
+  again.
+
+## [1.18.1] - 2026-10-11
+
+### Fixed
+
+- **The gate let a rewrite re-author an explanation that was already right.**
+  The first exam of the gated re-run (the try-it lab, 2026-10-11) approved
+  21 rewrites, and reading them found explanations that had lost the fact
+  the question turns on ("which is why 20 customers make 21 rows") and
+  gained padding ("This design allows the process to continue..."). No
+  check looked at the explanation. Now:
+  - The rewrite keeps an explanation that already meets the rule word for
+    word, fixing only an error; it may add one visual. REWRITE_INSTRUCTION
+    and EXPLANATION_REWRITE_RULES said "rewrite the explanation", and a
+    model told to rewrite does.
+  - `preservation_notes` holds a rewrite that drops words or numbers from an
+    explanation that already met the rule, or lengthens its prose by more
+    than a third. One that still judged every option may lose that talk.
+  - `explanation_notes` notes padding: a sentence that opens "This ensures",
+    "This approach", "This allows" and the like. The rule (EXPLANATION_RULES:
+    say each point once, directly) and the model's check say the same.
+  Replayed on the 30 rewrites the gate had approved, these hold 17 of them,
+  every damaging one among them.
+
+## [1.18.0] - 2026-10-11
+
+### Added
+
+- **A gate between a question and approval.** The owner: "Each AI rewrite
+  should have all the checks that pass the question through the process to
+  approved, passing all the checks." Accepting a bulk rewrite now saves it
+  and then runs every check: the bank's own validator, the house form of
+  the scenario and the question, the explanation rule, the writing standard
+  (now including the answers), and the model's checking pass. A question
+  that passes them all moves to approved (draft -> SME review -> approved,
+  recorded as "AI checks"); one with any finding is held for review, with
+  the reasons on its review history. An unchanged proposal can be accepted
+  too: it saves nothing, but still goes through the gate.
+  `core/question_gate.py`; the accept response adds `approved` and
+  `review`, and the bulk rewrite shows each outcome.
+- **Check and approve**, in the editor (`POST /api/questions/{id}/ai/check`):
+  the same checks and gate on a question as it stands, so one edited by hand
+  reaches approved by the same road. The model's check runs without an
+  original (`check_rewrite(None, ...)`), less "nothing lost or added".
+- **Answers cut short are caught.** The owner found keys such as "Text
+  becomes tokens, and URLs and codes split into several": answers written
+  toward a length had lost the word that makes them mean something, and a
+  readability check that only proofread let them through. Three layers now:
+  the rule (ANSWER_RULES: every answer complete, reading on its own), the
+  model's check (it lists `incomplete_answers`, and says if the correct
+  answer stands out), and a deterministic note (`answer_notes`) on an answer
+  that ends on a word no phrase ends on, or a key much longer than every
+  wrong answer.
+
+### Changed
+
+- **One template, the rules in a logical order.** The owner: "check all the
+  rules make sense and are applied in a logical order", "add any rules that
+  ensure the question passes the checks", and "this forms the question
+  template, so each exam question should have the same look and feel".
+  - ANSWER_RULES (new) gathers what makes the answers right - complete, one
+    form, none standing out, all distinct - from PROOFREAD_RULES and
+    WRITING_RULES, and generation and the answer fix now carry it too.
+  - Every check the gate runs now has a rule the model is given (a test
+    pins the pairing): bold only in the explanation, paragraphs under 700
+    characters, code blocks that parse, arrows for PDI steps only.
+  - The rewrite gives its rules in the template's order - what to keep,
+    the scenario and question, the answers, the explanation, the writing
+    standard - and the check mirrors it. The House Style page shows the
+    same order.
+  - The rewrite has its own system prompt, a copy editor polishing to one
+    template. It ran under the generator's ("write exam questions from this
+    course section") while told to polish: two jobs at odds.
+  - "Keep every detail of the answers" kept answers cut short; a cut
+    answer is now named as an error to fix.
+  - Explanations use visuals more readily: a flow line for the order of
+    PDI steps, a code block for code, and (new) a small text diagram for a
+    structure such as a hierarchy, report bands or nested grants. One at
+    most, up to 10 lines - the same 10 the check now enforces (the rule
+    said eight and the check 12).
+
+## [1.17.0] - 2026-10-11
+
+### Changed
+
+- **A tighter rewrite template.** The owner, after the first two exams were
+  rewritten and reviewed: "tighten up the exam template and improve the
+  instructions for the model. It must check at a deeper level the grammar,
+  spelling, readability, punctuation, and that the answer(s) and explanation
+  are correct." The review of 100 rewrites had found gemma4:12b, told to
+  proofread, cutting the scenario detail a question turns on, adding the
+  answer's reason to it, swapping the author's terms for synonyms, changing
+  a word in an answer ("decoded" to "deployed"), lowercasing answers,
+  punctuating only the correct one, dropping explanation caveats and
+  examples, inventing claims, and writing sentence fragments.
+  `PROOFREAD_RULES` and `EXPLANATION_REWRITE_RULES` now name each of those,
+  and the instruction asks for an exacting copy editor who keeps every
+  detail.
+
+### Added
+
+- **Every rewrite is checked** (`check_rewrite`): a second model call reads
+  the original and the rewrite side by side, grounded on the course pages,
+  and reports whether the answer marked correct is correct, whether a wrong
+  answer is also correct, whether the explanation is accurate, what was lost
+  or added, and any language error left. Its findings are notes; an
+  unreadable reply is a note too. The house style panel shows the rules as
+  *What every rewrite is checked for* (`REWRITE_CHECK_RULES`).
+- **Exact checks on what a rewrite changed** (`core/rewrite_checks.py`), no
+  model: content words dropped from or added to the scenario or the
+  question, and any answer whose words changed - US spelling, digits for
+  numbers and contractions are not counted as changes, and an answer holding
+  a topic filter, path or expression is compared character for character
+  (`+/sensor/#` came back as `+/sensor_#`). Tuned on the 60 reviewed
+  rewrites of the first two exams: it flags all 17 that had lost or gained
+  content. A capital the model took off an answer is put back, in every copy
+  of it.
+
+Measured on SD Specialty (40 questions), old template against new: rewrites
+that changed a scenario, question or answer's content fell from 28 to 8, and
+reworded answers from 23 to 3.
+
+## [1.16.0] - 2026-10-10
+
+### Added
+
+- **Code blocks in explanations.** About 64 of the bank's questions are
+  about code (JSONPath, SQL, variables and properties, expressions); their
+  explanations can now show it: a line of ``` with an optional language, the
+  code, a line of ```. Kept whole - blank lines, indentation, `*` and
+  backticks - and never parsed for formatting. The formatting contract
+  gains a block layer (`blocks()` in `inlineFormat.tsx` and
+  `core/inline_format.py`, the `blocks` cases in `inlineFormat.cases.json`);
+  a fence that never closes stays text.
+  - **Where it shows**: the editor's card and the bulk review as a `<pre>`;
+    Moodle as `<pre><code class="language-…">`; Word in Consolas, a line per
+    line; the printed paper in Courier; plain text indented four spaces; CSV,
+    JSON and exam.json keep the fences. The course draws it from the
+    Content Manager release after 0.7.22.
+  - **The editor's { } button** wraps the selection in fences, a blank line
+    from the prose; it works in the Explanation field only.
+  - **The AI is told** when one helps (a question about code), at most one,
+    eight lines, and only code the question gives or a minimal sample of
+    what it describes. **The app keeps code verbatim** - tidy and the notes
+    skip it, so SQL keeps its quotes - and **notes** a code block outside the
+    explanation, more than one, one past 12 lines, or a `json` block that
+    does not parse.
+
+### Fixed
+
+- **A reply holding a code block is read whole.** A model wraps its JSON in
+  a ```json fence, and the rewrite, generation and its auto-fix took the
+  text between the first two fences - which, once an explanation held a
+  code block, was half the JSON. 2hr-m3-q10 failed every rewrite. One
+  extractor now (`generation_parsing`) tries the outermost fence, then the
+  first, then the bare text; the rewrite's and auto-fix's own copies are
+  gone. Live: 2hr-m3-q10 and di-m3-q2 now come back with a JSON sample of
+  the structure their scenarios describe, both samples parsing.
+
+### Changed
+
+- **More room for course material in a generation call.** The window kept
+  4,500 tokens for the reply because gemma4 used to think first; since
+  1.14.0 nothing thinks. Measured with thinking off, three questions took
+  638 tokens. The reserve is now 2,500, which gives back the room the
+  longer house rules took: at an 8,192 window a section of about 10,700
+  characters fits, where 4,500 left 2,676.
+
+## [1.15.0] - 2026-10-10
+
+### Added
+
+- **A writing standard for quotes, names and punctuation.** Reviewing the
+  first bulk rewrite, the owner found single quotes everywhere, used no
+  standard way. A survey of the 489 questions: 143 single-quoted spans doing
+  six jobs (field names, values, paths, step names, ordinary words, option
+  text), "Stream Lookup" 15 times beside PDI's "Stream lookup" 37, 26 curly
+  quotes, 5 contractions. `WRITING_RULES` gives one rule per job - `code` for
+  an exact name or value, PDI's own step names plain, no quotes on ordinary
+  words, double quotes only to quote - plus straight quotes, no
+  contractions, American spelling, answers in one form, a serial comma and
+  numbers. Generation, AI rewrite (one or all), AI fix and AI explanation
+  carry it, and the house style panel shows it as *Quotes, names and
+  punctuation*.
+- **The mechanical half is applied by the app** (`core/writing_style.py`),
+  after the model, to every proposal: curly quotes straightened, "n't"
+  written out (not inside a double-quoted quotation), spaces closed up, a
+  Title Case step name put back to PDI's, quotes taken off a step name, a
+  quoted identifier or path put in code, a bare number taken out of code,
+  and code taken off the correct answer when no wrong answer has any. Every
+  copy of an answer (key, keys, order) is tidied alike. Dry run on the live
+  bank: 77 fields in 51 questions; every kind of change checked, with a
+  sample read in full.
+- **PDI's step and job-entry names** (`core/pdi_names.py`), read from the
+  PDI 11.0.0.3 install: 176 steps and 50 job entries, sentence case.
+- **Style notes** on proposals, for what needs a reader: quotes left around
+  a word, a value in double quotes, an ordinary word in code (`customer`
+  data), a contraction such as "it's", answers that mix sentences and
+  phrases, bold outside the explanation, code in the correct answer alone.
+  "Accept all ready" leaves these for the author. Notes now draw their
+  `code` as code, and name the answers (*Answers:*).
+
+- **Flow lines in explanations.** Where a question is about the order or
+  routing of steps, the explanation may show the path as a line of its own:
+  Table input → Filter rows → Table output. A typed `->` becomes an arrow,
+  and the printed paper, whose font has no arrow, prints `->`. A first
+  trial drew a flow in six of seven explanations, naming "Preview" and
+  "Input step"; the rule now says most explanations need none, and a note
+  flags a flow naming anything that is not a PDI step, or more than one
+  flow. Re-run: flows in the two routing questions only, both flagged for
+  the author.
+
+Live trial on a copy of the bank (gemma4:12b, the 12 questions of 2hr-m3):
+single-quoted spans 89 to 0, no ordinary word or number in code after the
+rule was sharpened, answers' words unchanged; the one answer marked by code
+was caught.
+
+### Fixed
+
+- **A reworded answer keeps its place.** The display order names answers by
+  their text, so rewording them left it stale, and the fallback filled each
+  hole with the next answer left - right for one edit, but with every
+  answer reworded the correct one, first in line, was shown first. In the
+  live bank 27 orders were stale and 23 of them showed the correct answer
+  first (the course shuffles, so candidates there never saw it; Word, QTI
+  and Moodle exports did). A hole now takes the answer most like the text
+  it held: 11 remain first, 7 of them where the author put it. The AI
+  rewrite (one or all) carries each answer's position to its new wording,
+  and leaves a question with no recorded order with none, so the exports
+  still scatter it.
+
+### Changed
+
+- The generation prompt's own example no longer reads "e.g customer" or
+  "repository the entire data estate".
+
+## [1.14.0] - 2026-10-10
+
+### Added
+
+- **AI rewrite all, in the Bank.** Rewrites every question the filters show
+  (up to 1,000), one model call each, as a background job; the review list
+  grows as each finishes. Nothing is saved until accepted: **Accept** one,
+  **Skip**, or **Accept all ready** (only proposals with no notes). Accepting
+  is the editor's own save, recorded in the version history under *AI
+  rewrite (bulk)*; a question edited since the run started is skipped, not
+  overwritten (seen failing with the check disabled). Each proposal names
+  what it changed (*Changed: Explanation*) and can show the original. A
+  model reply that is not usable JSON is retried once.
+- **The house style.** The rules every question is written to - scenario,
+  question, explanation, and what a rewrite may change - are now shared
+  constants that generation, AI rewrite (one or all), AI fix and AI
+  explanation all carry, and `GET /api/house-style` returns them. A
+  collapsible **The house style** panel shows them on the Generate screen
+  and the bulk rewrite's confirmation, so what the author reads is what the
+  model is told.
+- **Explanations in paragraphs.** A blank line in any text starts a new
+  paragraph (a single newline stays a line break; CRLF is normalised). The
+  editor previews the explanation as a card, *How candidates see it*, and
+  the Moodle export writes `<p>` paragraphs. The formatting contract
+  (`inlineFormat.cases.json`) gains the paragraph cases. The course already
+  keeps line breaks in explanations, so it shows them unchanged.
+
+### Changed
+
+- **An explanation says why the correct answer is right, and nothing
+  else.** The house rule was to address every option ("'X' - Correct: ...
+  'Y' - Incorrect: ..."); now it is one to three short paragraphs, the one to
+  three key terms in bold, an answer named by its text. AI rewrite proofreads
+  the scenario, question and answers (spelling, grammar and wording only;
+  what they say is kept) and rewrites the explanation from the current one,
+  keeping its facts and adding none. Proposals note an explanation that still
+  labels options or names one by its letter (`core/explanation_style.py`).
+- **Ollama calls send `"think": false`.** gemma4:12b thinks by default,
+  which took minutes per question; a rewrite now takes about 15 seconds.
+- The single AI rewrite's proposal now shows the explanation too.
+
+## [1.13.2] - 2026-10-09
+
+### Fixed
+
+- **The Bank's column filters were stacked in the first column** (1.13.1).
+  The Exam paper redesign styled its pill row with a bare
+  `.filter-row { display: flex }`, and `filter-row` is also the class on the
+  Bank table's filter `<tr>`: the row became a flex box and its eight
+  filters piled up under ID. The Exam paper's row is now `.exam-filters`.
+  New guard, `styles.tables.test.ts`: it reads styles.css and every
+  component and fails when a class whose bare rule sets `display` is on a
+  table element. This is the second such clash (`.row` was the first), and
+  jsdom never applies the stylesheet, so no pane test could see it. Seen
+  failing on this clash; a first assertion checks it found what it checks
+  (it caught `styles.css?raw` arriving empty under Vitest).
+
 ## [1.13.1] - 2026-10-08
 
 ### Changed

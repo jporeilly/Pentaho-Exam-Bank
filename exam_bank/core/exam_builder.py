@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from fpdf import FPDF
 
 from .bank import _TOPIC_ORDER, Question, ExamBankDB
-from .inline_format import to_plain
+from .inline_format import blocks, to_plain
 from .stem_text import question_only
 
 
@@ -277,6 +277,7 @@ def _latin1_safe(text: str) -> str:
         '\u200b': '',    # zero-width space
         '\u2003': ' ',   # em space
         '\u2002': ' ',   # en space
+        '\u2192': '->',  # arrow: a flow of steps (1.15.0)
     }
     for ch, repl in replacements.items():
         text = text.replace(ch, repl)
@@ -628,10 +629,17 @@ def generate_exam_pdf(
 
                 # Explanation
                 if explanation:
-                    pdf.set_font("Helvetica", "", 9)
                     pdf.set_text_color(80, 80, 80)
-                    pdf.set_x(pdf.l_margin + 14)
-                    pdf.multi_cell(page_w - 14, 5, _latin1_safe(to_plain(explanation)))
+                    # Paragraphs in Helvetica; a code block (1.16.0) in
+                    # Courier, its lines as written.
+                    for n, (kind, body, _lang) in enumerate(blocks(explanation)):
+                        if n:
+                            pdf.ln(1.5)
+                        pdf.set_font("Courier" if kind == "code" else "Helvetica", "", 8.5 if kind == "code" else 9)
+                        pdf.set_x(pdf.l_margin + 14)
+                        text = body if kind == "code" else to_plain(body)
+                        pdf.multi_cell(page_w - 14, 5 if kind != "code" else 4.2, _latin1_safe(text))
+                    pdf.set_font("Helvetica", "", 9)
                     pdf.set_text_color(0, 0, 0)
 
                 # Left accent bar spanning the entry

@@ -8,36 +8,41 @@ from .bank import Question
 from .source import SlideInfo
 
 
+# A model wraps its JSON in a ```json fence. Since 1.16.0 an explanation can
+# hold a fenced code block of its own, so the reply has fences INSIDE the JSON
+# too, and taking the text between the first two fences cut the JSON in half
+# (2hr-m3-q10 failed every rewrite that way). So the outermost fence - first
+# to last - is tried first, then the first pair, then the bare text, and the
+# first that parses wins.
+_OUTER_FENCE = re.compile(r"```(?:json)?[ \t]*\n?(.*)\n?```", re.DOTALL)
+_FIRST_FENCE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL)
+
+
+def _parse_between(text: str, open_ch: str, close_ch: str):
+    for candidate in (
+        *(m.group(1) for m in (_OUTER_FENCE.search(text), _FIRST_FENCE.search(text)) if m),
+        text,
+    ):
+        start, end = candidate.find(open_ch), candidate.rfind(close_ch)
+        if start == -1 or end <= start:
+            continue
+        try:
+            return json.loads(candidate[start:end + 1])
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
 def _extract_json_array(text: str) -> Optional[list]:
     """Extract a JSON array from AI response text, handling markdown fences."""
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
-    if fence_match:
-        text = fence_match.group(1)
-
-    start = text.find("[")
-    end = text.rfind("]")
-    if start == -1 or end == -1 or end <= start:
-        return None
-
-    try:
-        return json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
-        return None
+    parsed = _parse_between(text, "[", "]")
+    return parsed if isinstance(parsed, list) else None
 
 
 def _extract_json_object(text: str) -> Optional[dict]:
-    """Extract a JSON object from AI response text."""
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
-    if fence_match:
-        text = fence_match.group(1)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        return None
-    try:
-        return json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
-        return None
+    """Extract a JSON object from AI response text, handling markdown fences."""
+    parsed = _parse_between(text, "{", "}")
+    return parsed if isinstance(parsed, dict) else None
 
 
 def validate_key_against_notes(question: Question, slide: SlideInfo) -> bool:

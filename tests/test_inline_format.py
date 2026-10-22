@@ -10,15 +10,51 @@ import pytest
 
 from exam_bank.core import inline_format as fmt
 
-CASES = json.loads(
+CONTRACT = json.loads(
     (Path(__file__).resolve().parents[1] / "frontend" / "src" / "inlineFormat.cases.json")
     .read_text(encoding="utf-8")
-)["cases"]
+)
+CASES = CONTRACT["cases"]
+PARAGRAPHS = CONTRACT["paragraphs"]
 
 
 @pytest.mark.parametrize("case", CASES, ids=[json.dumps(c["in"]) for c in CASES])
 def test_contract(case):
     assert fmt.parse(case["in"]) == case["nodes"]
+
+
+@pytest.mark.parametrize("case", PARAGRAPHS, ids=[json.dumps(c["in"]) for c in PARAGRAPHS])
+def test_paragraph_contract(case):
+    assert fmt.paragraphs(case["in"]) == case["paragraphs"]
+
+
+BLOCKS = CONTRACT["blocks"]
+
+
+@pytest.mark.parametrize("case", BLOCKS, ids=[json.dumps(c["in"]) for c in BLOCKS])
+def test_block_contract(case):
+    got = [list(b) if b[0] == "code" else [b[0], b[1]] for b in fmt.blocks(case["in"])]
+    assert got == case["blocks"]
+
+
+def test_a_code_block_is_pre_code_escaped_and_never_formatted():
+    assert fmt.to_html_paragraphs("Given:\n\n```json\n{\"a\": \"<b>**x**</b>\"}\n```") == (
+        '<p>Given:</p><pre><code class="language-json">'
+        '{"a": "&lt;b&gt;**x**&lt;/b&gt;"}</code></pre>'
+    )
+
+
+def test_plain_text_indents_a_code_block():
+    assert fmt.to_plain_blocks("Read **this**:\n\n```sql\nSELECT *\nFROM t\n```\n\nDone.") == (
+        "Read this:\n\n    SELECT *\n    FROM t\n\nDone."
+    )
+
+
+def test_paragraphs_become_p_elements_with_line_breaks():
+    assert fmt.to_html_paragraphs("the **key** idea\nstill one\n\nsecond <b>") == (
+        "<p>the <strong>key</strong> idea<br/>still one</p><p>second &lt;b&gt;</p>"
+    )
+    assert fmt.to_html_paragraphs("   ") == ""
 
 
 def test_html_escapes_everything_but_the_three():

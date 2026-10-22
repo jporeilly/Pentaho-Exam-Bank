@@ -455,7 +455,9 @@ tbody tr.selected { background: color-mix(in srgb, var(--accent) 10%, transparen
 .cert-option input, .chip input { margin: 0; accent-color: var(--group-questions); }
 .cert-name { flex: 1; min-width: 0; }
 .cert-count { color: var(--text-faint); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.filter-row { display: flex; flex-wrap: wrap; gap: 10px 36px; margin: 16px 0 6px; }
+/* Not `.filter-row`: that is the Bank table's <tr>, and a bare display rule
+   on it made the row a flex box (1.13.1). styles.tables.test.ts guards this. */
+.exam-filters { display: flex; flex-wrap: wrap; gap: 10px 36px; margin: 16px 0 6px; }
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .chips .field-label { margin: 0 6px 0 0; }
 .chip {
@@ -1171,6 +1173,89 @@ td.empty { text-align: center; color: var(--text-faint); padding: 18px 10px; }
 .results-options li.correct { font-weight: 600; color: var(--key-ink); }
 .results-opt-text { position: relative; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .results-opt-share { position: relative; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+
+/* ── Explanations and the bulk AI rewrite (1.14.0) ──────────────────────
+   An explanation says why the correct answer is right, in paragraphs with
+   the key terms in bold. A blank line in the text is a paragraph (.fmt-p,
+   drawn by Formatted); a single newline is a line break inside one. */
+.fmt-p { display: block; white-space: pre-line; }
+.fmt-p + .fmt-p { margin-top: 0.65em; }
+
+.explanation-input { min-height: 9.5em; line-height: 1.55; }
+/* How a candidate reads it: on its own card, the green edge of a correct
+   answer down its side (colour by role - this is the key's own text). */
+.explanation-card {
+  margin-top: 8px; padding: 12px 16px;
+  background: var(--bg-raised); border: 1px solid var(--line);
+  border-left: 3px solid var(--key-line); border-radius: var(--radius);
+}
+.explanation-card__label {
+  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-faint); margin-bottom: 6px;
+}
+.explanation-card__body { line-height: 1.6; }
+.explanation-card__body strong { color: var(--text-strong); }
+
+.proposal__scenario, .proposal__stem { margin: 8px 0 0; }
+.proposal__problems { margin-top: 8px; }
+
+.bulk-rewrite { margin-bottom: 14px; border-top: 3px solid var(--c-ai); }
+.bulk-rewrite__actions, .bulk-rewrite__head { margin-bottom: 8px; }
+.bulk-rewrite__progress { width: 100%; height: 6px; accent-color: var(--c-ai); margin: 2px 0 10px; }
+.rewrite-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.rewrite-entry {
+  padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg);
+}
+.rewrite-entry.is-settled { opacity: 0.72; }
+.rewrite-entry__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rewrite-entry__head button { padding: 4px 10px; font-size: 13px; }
+.rewrite-entry__original { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.rewrite-chip {
+  font-size: 11.5px; font-weight: 600; padding: 1px 9px; border-radius: 999px;
+  background: var(--bg-input); color: var(--text-dim);
+}
+.rewrite-chip-accepted { background: var(--c-add-soft); color: var(--c-add-ink); }
+.rewrite-chip-failed, .rewrite-chip-cannot { background: var(--c-bad-soft); color: var(--c-bad-ink); }
+.rewrite-chip-notes { background: #fdf1dc; color: #7c3a0a; }
+/* What the gate did with an accepted question (1.18.0). */
+.rewrite-chip-approved { background: var(--c-add-soft); color: var(--c-add-ink); }
+.rewrite-chip-held { background: #fdf1dc; color: #7c3a0a; }
+.rewrite-entry__changed { font-size: 12.5px; }
+
+/* The house style: the rules every question is written to, read from the
+   server so the panel and the prompts never disagree. Reference, not a step,
+   so it sits collapsed in the AI colour. */
+.house-style {
+  margin: 10px 0 4px; padding: 8px 14px; border-radius: var(--radius);
+  background: var(--c-ai-soft); border-left: 3px solid var(--c-ai);
+}
+.house-style > summary { cursor: pointer; font-weight: 600; color: var(--c-ai-ink); }
+.house-style > p { margin: 8px 0 0; }
+.house-style__section h4 {
+  margin: 12px 0 4px; font-size: 11px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--c-ai-ink);
+}
+.house-style__section ul { margin: 0; padding-left: 20px; line-height: 1.55; }
+.house-style__section li + li { margin-top: 3px; }
+
+/* A code block in an explanation (1.16.0): drawn as typed, in the same
+   mono face and ground as inline code, scrolling sideways rather than
+   wrapping - a wrapped JSON line reads as two. */
+.fmt-code {
+  display: block;
+  margin: 0.65em 0;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-strong);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.45;
+  white-space: pre;
+  overflow-x: auto;
+}
+.fmt-code + .fmt-p, .fmt-p + .fmt-code { margin-top: 0.65em; }
 
 /* Results filters (1.14.0): one quiet card above the attempt list. */
 .results-filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; padding: 12px 14px; margin-bottom: 14px; }

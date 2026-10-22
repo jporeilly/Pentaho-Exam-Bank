@@ -48,6 +48,46 @@ Two kinds of message appear under the fields:
 Every edit is recorded field by field in the question's version history, with
 the old and new value.
 
+## Rewriting every question at once
+
+**AI rewrite all (N)**, above the table, runs the editor's
+[AI rewrite](../writing/02-ai-rewrite-and-check.md) on every question the
+filters show - pick a certification, a topic or an ID first to rewrite fewer.
+Each question is proofread, and its explanation rewritten to the
+[house style](../writing/01-how-a-question-is-written.md#the-house-style):
+why the correct answer is right, in paragraphs, with the key terms in bold.
+Quotes, names and punctuation are brought to the
+[writing standard](../writing/01-how-a-question-is-written.md#quotes-names-and-punctuation),
+the mechanical parts by the app itself after the AI.
+
+1. Press **AI rewrite all**. A card says how many questions it will rewrite
+   and shows the house style; press **Rewrite N questions** to start, or
+   **Cancel**. Up to 1,000 at a time.
+2. The questions are rewritten one at a time, each with two model calls -
+   the rewrite and its [check](../writing/02-ai-rewrite-and-check.md) - and
+   each appears in a review list as it finishes. You can review while it
+   runs; **Stop** ends the run, keeping what is done.
+3. Each proposal shows the new question and its explanation, and **Changed:**
+   names what moved - mostly *Explanation*. A *Scenario*, *Question* or
+   *Answers* there is where to look first, because a reworded question can
+   ask something different. **Show original** puts the old one beside it.
+4. Press **Accept** on one, **Skip** to pass it over, or **Accept all ready**
+   to take every proposal with no notes. A proposal with notes - an
+   explanation that still labels options "Incorrect", say, or a word left in
+   quotes - is left for you.
+
+**Nothing is saved until you accept.** Accepting is the editor's own save:
+each changed field goes into the question's version history, under the editor
+*AI rewrite (bulk)*. A question edited since the rewrite started is not
+overwritten - it is skipped, and the list says why. Questions the model
+could not rewrite are marked *Failed*; those it left as they were,
+*Unchanged*.
+
+The model can drop a caveat or reword a scenario more than it should, so read
+each proposal before accepting it.
+
+## Changing a question's module
+
 A course question's id names its module (`di-m3-q7` is module 3), so changing
 its **topic** to another module gives it that module's next number
 (`di-m5-q13`). The saved message says so, the Bank row follows it, and the

@@ -134,7 +134,9 @@ def get_job(job_id: str) -> dict[str, Any]:
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, f"No job '{job_id}'")
-    return job.as_json(serialise=question_json)
+    # A generation job holds Questions; a rewrite job holds review entries,
+    # which are JSON already.
+    return job.as_json(serialise=lambda r: r if isinstance(r, dict) else question_json(r))
 
 
 @router.post("/api/jobs/{job_id}/cancel")
@@ -166,6 +168,10 @@ def commit_job(
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, f"No job '{job_id}'")
+    if job.kind != "generate":
+        # A rewrite job holds proposals for questions already in the bank;
+        # it has its own accept (routers/questions.py), never this insert.
+        raise HTTPException(409, "Only a generation job is committed this way.")
     if job.status == jobs.RUNNING:
         raise HTTPException(409, "That job is still running.")
     if job.status == jobs.ERROR:

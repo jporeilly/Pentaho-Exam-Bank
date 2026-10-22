@@ -241,7 +241,7 @@ export function ExamPane() {
           ))}
         </div>
 
-        <div className="filter-row">
+        <div className="exam-filters">
           <Chips
             label="Difficulty"
             options={vocabulary.difficulties.map((d) => ({ value: d, label: d }))}

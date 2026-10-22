@@ -8,6 +8,7 @@ import {
   type QuestionFilters,
 } from "./api";
 import { Formatted, plainText } from "./inlineFormat";
+import { BulkRewrite } from "./BulkRewrite";
 import { QuestionEditor } from "./QuestionEditor";
 import { statusLabel, useVocabulary } from "./vocabulary";
 
@@ -40,6 +41,8 @@ export function BankPane({
   // so the editor can render immediately from the row already on screen -
   // fetching by id would blank the panel for a round trip on every click.
   const [editing, setEditing] = useState<Question | null>(null);
+  // The bulk AI rewrite's review list, over what the filters show.
+  const [rewriting, setRewriting] = useState(false);
 
   // Guards against an out-of-order response overwriting a newer one.
   const latest = useRef(0);
@@ -236,7 +239,27 @@ export function BankPane({
         <a href={api.exportUrl(exportFormat, selection)}>
           <button className="secondary info">Export</button>
         </a>
+        <button
+          className="secondary ai"
+          onClick={() => setRewriting(true)}
+          disabled={rewriting || total === 0}
+          title="Proofread every question shown and rewrite its explanation. You review each one before anything is saved."
+        >
+          AI rewrite all ({total})
+        </button>
       </div>
+
+      {rewriting && (
+        <BulkRewrite
+          scope={{ ...selection, sort }}
+          total={total}
+          onClose={() => setRewriting(false)}
+          onSaved={() => {
+            load();
+            onChanged?.();
+          }}
+        />
+      )}
 
       {notAdopted && (
         <div className="banner warn">

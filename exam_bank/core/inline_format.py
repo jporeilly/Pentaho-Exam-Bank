@@ -15,6 +15,7 @@ a backslash keeps a marker literal. Nothing is ever passed through as markup.
 from __future__ import annotations
 
 import html
+import re
 from typing import Iterator, List, Tuple, Union
 
 Node = Union[Tuple[str, str], Tuple[str, list]]
@@ -154,6 +155,88 @@ def to_html(s: str | None) -> str:
                 parts.append(f"<{n[0]}>{walk(n[1])}</{n[0]}>")
         return "".join(parts)
     return walk(parse(s))
+
+
+_PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n\s*")
+
+
+def paragraphs(s: str | None) -> List[str]:
+    """The text split into paragraphs at blank lines, each trimmed; [] when
+    empty. A single newline stays inside its paragraph as a line break.
+
+    Above the inline rules, not part of them: markers never span a paragraph
+    break, because each paragraph is parsed on its own. The contract's
+    ``paragraphs`` cases pin this for all three parsers.
+    """
+    text = (s or "").replace("\r\n", "\n").strip()
+    if not text:
+        return []
+    return [p.strip() for p in _PARAGRAPH_BREAK.split(text) if p.strip()]
+
+
+# A fence line: ``` and an optional language name (json, sql, properties).
+_FENCE_OPEN = re.compile(r"^\s*```([\w+.-]*)\s*$")
+_FENCE_CLOSE = re.compile(r"^\s*```\s*$")
+
+
+def blocks(s: str | None) -> List[Tuple[str, str, str]]:
+    """The text as blocks: ("p", paragraph, "") and ("code", code, language).
+
+    A fenced block - a line of ``` (with an optional language), the code, a
+    line of ``` - is kept whole, blank lines and all, and never parsed for
+    markers: in code `*` and `` ` `` are just characters (1.16.0, for the
+    explanations of questions about JSONPath, SQL or a properties file). The
+    prose between blocks splits into paragraphs as ``paragraphs`` does. A
+    fence that never closes is not a block; its line stays text. The
+    contract's ``blocks`` cases pin this for all three parsers.
+    """
+    lines = (s or "").replace("\r\n", "\n").split("\n")
+    out: List[Tuple[str, str, str]] = []
+    prose: List[str] = []
+
+    def flush() -> None:
+        out.extend(("p", p, "") for p in paragraphs("\n".join(prose)))
+        prose.clear()
+
+    i = 0
+    while i < len(lines):
+        opening = _FENCE_OPEN.match(lines[i])
+        if opening:
+            close = next((j for j in range(i + 1, len(lines)) if _FENCE_CLOSE.match(lines[j])), -1)
+            if close > i:
+                flush()
+                out.append(("code", "\n".join(lines[i + 1:close]), opening.group(1)))
+                i = close + 1
+                continue
+        prose.append(lines[i])
+        i += 1
+    flush()
+    return out
+
+
+def to_html_paragraphs(s: str | None) -> str:
+    """One <p> per paragraph, each as to_html; a single newline is a <br/>.
+    A code block is a <pre><code>, its text escaped and never parsed."""
+    parts = []
+    for kind, text, lang in blocks(s):
+        if kind == "code":
+            cls = f' class="language-{html.escape(lang)}"' if lang else ""
+            parts.append(f"<pre><code{cls}>{html.escape(text, quote=False)}</code></pre>")
+        else:
+            parts.append("<p>" + to_html(text).replace("\n", "<br/>") + "</p>")
+    return "".join(parts)
+
+
+def to_plain_blocks(s: str | None) -> str:
+    """The words without their markers, paragraphs a blank line apart, and a
+    code block's lines indented four spaces - for plain text and the PDF."""
+    parts = []
+    for kind, text, _lang in blocks(s):
+        if kind == "code":
+            parts.append("\n".join("    " + line for line in text.split("\n")))
+        else:
+            parts.append(to_plain(text))
+    return "\n\n".join(parts)
 
 
 def runs(s: str | None) -> Iterator[Tuple[str, bool, bool, bool]]:

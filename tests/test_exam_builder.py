@@ -321,3 +321,14 @@ class TestPlanExam:
         direct = select_exam_questions(db, **args)
 
         assert [q.id for q in planned] == [q.id for q in direct]
+
+
+def test_the_paper_prints_a_code_block_and_a_flow(tmp_path):
+    q = Question(
+        id="c1", stem="Which expression reads every region?", key="$.customers[*].region_code",
+        distractors=["$.region_code[*]", "$.customers.region_code"], topic="JSON",
+        explanation="It walks the array.\n\nJSON input \u2192 Table output\n\n```json\n{\"a\": [1, 2]}\n```",
+    )
+    out = generate_exam_pdf(questions=[q], title="Code", include_answer_key=True,
+                            include_explanations=True, output_path=tmp_path / "c.pdf")
+    assert out.stat().st_size > 0
