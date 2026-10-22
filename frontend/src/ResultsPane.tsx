@@ -255,6 +255,7 @@ export function FilterBar({
   };
   return (
     <div className="card results-filters" role="group" aria-label="Filter results">
+      <div className="results-filter-row">
       <label className="field">
         <span>From</span>
         <input
@@ -275,11 +276,16 @@ export function FilterBar({
           onChange={(e) => set({ dateTo: e.target.value })}
         />
       </label>
-      <div className="results-presets">
-        <button className="secondary" onClick={() => preset(7)}>Last 7 days</button>
-        <button className="secondary" onClick={() => preset(30)}>Last 30 days</button>
-        <button className="secondary" onClick={() => set({ dateFrom: "", dateTo: "" })}>All dates</button>
+      <div className="field">
+        <span aria-hidden="true">&nbsp;</span>
+        <div className="results-presets">
+          <button className="secondary" onClick={() => preset(7)}>Last 7 days</button>
+          <button className="secondary" onClick={() => preset(30)}>Last 30 days</button>
+          <button className="secondary" onClick={() => set({ dateFrom: "", dateTo: "" })}>All dates</button>
+        </div>
       </div>
+      </div>
+      <div className="results-filter-row">
       <label className="field">
         <span>Course</span>
         <select aria-label="Course" value={filters.course} onChange={(e) => set({ course: e.target.value })}>
@@ -330,10 +336,14 @@ export function FilterBar({
         </select>
       </label>
       {filtersActive(filters) && (
-        <button className="secondary" onClick={() => onChange(NO_RESULTS_FILTERS)}>
-          Clear filters
-        </button>
+        <div className="field">
+          <span aria-hidden="true">&nbsp;</span>
+          <button className="secondary" onClick={() => onChange(NO_RESULTS_FILTERS)}>
+            Clear filters
+          </button>
+        </div>
       )}
+      </div>
     </div>
   );
 }

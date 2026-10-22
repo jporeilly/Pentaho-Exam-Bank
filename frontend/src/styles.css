@@ -1155,7 +1155,7 @@ td.empty { text-align: center; color: var(--text-faint); padding: 18px 10px; }
    Quiet by default: info flags are faint, a warning amber, a "check the
    key" red. An option's bar is its share of answers; the key is green. */
 .checkbox-inline { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-dim); }
-.results-how { margin: 0 0 12px; font-size: 13px; max-width: 72ch; }
+.results-how { margin: 0 0 12px; font-size: 13px; }
 .results-exam { margin-bottom: 22px; }
 .results-thin td { color: var(--text-dim); }
 .results-flag { font-size: 12px; margin-top: 3px; }
@@ -1258,7 +1258,9 @@ td.empty { text-align: center; color: var(--text-faint); padding: 18px 10px; }
 .fmt-code + .fmt-p, .fmt-p + .fmt-code { margin-top: 0.65em; }
 
 /* Results filters (1.14.0): one quiet card above the attempt list. */
-.results-filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; padding: 12px 14px; margin-bottom: 14px; }
+.results-filters { display: grid; gap: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.results-filter-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; }
+.results-filters input, .results-filters select, .results-filters button { height: 34px; box-sizing: border-box; }
 .results-filters .field { display: grid; gap: 3px; font-size: 12px; color: var(--text-dim); }
 .results-filters .field input,
 .results-filters .field select { min-width: 140px; }

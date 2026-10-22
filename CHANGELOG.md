@@ -7,6 +7,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-10-22
+
+### Fixed
+
+- **Results filters line up.** The date boxes and their Last 7 days / Last 30 days / All dates
+  buttons sit on one row at one height, with course, candidate, result and attempt on a second row;
+  the explanatory text now spans the page instead of a narrow column.
+
 ## [1.21.0] - 2026-10-22
 
 ### Added
