@@ -65,6 +65,17 @@ function filterParams(f: ResultsFilters) {
   };
 }
 
+function resultsDbFilters(f: ResultsFilters) {
+  return {
+    course: f.course,
+    candidate: f.candidate,
+    passed: f.passed,
+    attempt_no: f.attemptNo,
+    date_from: f.dateFrom,
+    date_to: f.dateTo,
+  };
+}
+
 function query(params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -318,6 +329,52 @@ export interface ResultsAnalysis {
   exams: ResultsExam[];
 }
 
+export interface TopicRow {
+  label: string;
+  courseId: string;
+  course: string;
+  questions: number;
+  answers: number;
+  wrong: number;
+  wrongRate: number | null;
+  shareOfWrong: number;
+  /** Too few answers to judge. */
+  thin: boolean;
+  worstQuestions: { id: string; answers: number; wrong: number; wrongRate: number | null; stem: string }[];
+}
+
+export interface TopicReportCourse {
+  courseId: string;
+  name: string;
+  attempts: number;
+  answers: number;
+  wrong: number;
+  wrongRate: number | null;
+  topics: TopicRow[];
+  modules: TopicRow[];
+}
+
+export interface TopicReport {
+  minAnswers: number;
+  answers: number;
+  wrong: number;
+  courses: TopicReportCourse[];
+}
+
+export interface TopicAdvice {
+  summary: string;
+  suggestions: {
+    course: string;
+    topic: string;
+    questionIds: string[];
+    priority: "high" | "medium" | "low";
+    advice: string;
+  }[];
+  dropped: number;
+  model: string;
+  provider: string;
+}
+
 export interface QuestionFilters {
   text?: string;
   /** Part of a question id, e.g. "m4" or "ba-m4-q9". */
@@ -488,6 +545,38 @@ export interface BackupFile {
   name: string;
   sizeKb: number;
   created: string;
+}
+
+export interface ResultsDbStatus {
+  path: string;
+  defaultPath: string;
+  exists: boolean;
+  attempts: number;
+  answers: number;
+  sizeKb: number;
+  backups: BackupFile[];
+}
+
+export interface ResultsDbAppend {
+  offeredAttempts: number;
+  offeredAnswers: number;
+  addedAttempts: number;
+  addedAnswers: number;
+  skippedAttempts: number;
+  totalAttempts: number;
+  totalAnswers: number;
+}
+
+export interface ResultsDbDeletePlan {
+  attempts: number;
+  answers: number;
+  sample: { attemptId: string; candidateId: string; day: string; courseId: string }[];
+}
+
+export interface ResultsDbRemoved {
+  removedAttempts: number;
+  removedAnswers: number;
+  safetyBackup: string;
 }
 
 export interface DatabaseStatus {
@@ -1144,6 +1233,34 @@ export const api = {
     request<void>("/api/open-url", { method: "POST", body: JSON.stringify({ url }) }),
 
   databaseStatus: () => request<DatabaseStatus>("/api/admin/database"),
+  /** The separate results database the Results tab exports to (a SQLite file). */
+  resultsDbStatus: (path = "") =>
+    request<ResultsDbStatus>(`/api/admin/results-db${query({ path })}`),
+  resultsDbAppend: (path: string, f: ResultsFilters) =>
+    request<ResultsDbAppend>("/api/admin/results-db/append", {
+      method: "POST",
+      body: JSON.stringify({ path, ...resultsDbFilters(f) }),
+    }),
+  resultsDbBackup: (path: string, label = "") =>
+    request<{ name: string; backups: BackupFile[] }>("/api/admin/results-db/backup", {
+      method: "POST",
+      body: JSON.stringify({ path, label }),
+    }),
+  resultsDbTruncate: (path: string, expectCount: number) =>
+    request<ResultsDbRemoved>("/api/admin/results-db/truncate", {
+      method: "POST",
+      body: JSON.stringify({ path, expect_count: expectCount }),
+    }),
+  resultsDbDeletePreview: (path: string, f: ResultsFilters) =>
+    request<ResultsDbDeletePlan>("/api/admin/results-db/delete/preview", {
+      method: "POST",
+      body: JSON.stringify({ path, ...resultsDbFilters(f) }),
+    }),
+  resultsDbDelete: (path: string, f: ResultsFilters, expectCount: number) =>
+    request<ResultsDbRemoved>("/api/admin/results-db/delete", {
+      method: "POST",
+      body: JSON.stringify({ path, ...resultsDbFilters(f), expect_count: expectCount }),
+    }),
   createBackup: (label = "") =>
     request<{ name: string; backups: BackupFile[] }>("/api/admin/backups", {
       method: "POST",
@@ -1373,6 +1490,12 @@ export const api = {
   /** Each attempt (repeats are separate rows), filtered, with the filter choices. */
   resultsAttempts: (f: ResultsFilters = NO_RESULTS_FILTERS) =>
     request<ResultsAttempts>(`/api/results/attempts${query(filterParams(f))}`),
+  /** Wrong answers by topic and module, under the Results filters. */
+  resultsTopics: (f: ResultsFilters = NO_RESULTS_FILTERS) =>
+    request<TopicReport>(`/api/results/topics${query(filterParams(f))}`),
+  /** An AI reading of that report (only its numbers are sent). */
+  resultsTopicAdvice: (f: ResultsFilters = NO_RESULTS_FILTERS) =>
+    request<TopicAdvice>(`/api/results/topics/advice${query(filterParams(f))}`, { method: "POST" }),
   /** Every topic with questions, in course order; one certification's when given. */
   topics: (certification_id = "") =>
     request<{ topic: string; questionCount: number }[]>(`/api/topics${query({ certification_id })}`),

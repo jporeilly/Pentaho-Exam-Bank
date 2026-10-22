@@ -1,5 +1,5 @@
 /**
- * Backups, and bulk deletion.
+ * Backups, bulk deletion, and the results database.
  *
  * The two are in one pane on purpose: this is the only part of the app with
  * no undo short of a backup, and somebody about to delete four hundred
@@ -22,6 +22,7 @@ import {
   type DeletionFilters,
   type DeletionPlan,
 } from "./api";
+import { ResultsDbAdmin } from "./ResultsDbAdmin";
 import { statusLabel, useVocabulary } from "./vocabulary";
 
 
@@ -161,6 +162,8 @@ export function AdminPane({ onChanged }: { onChanged?: () => void } = {}) {
         }
         onDelete={(name) => run(() => api.deleteBackup(name), () => setNote(`Deleted ${name}.`))}
       />
+
+      <ResultsDbAdmin />
 
       <section className="settings-section">
         <h3>Delete questions in bulk</h3>

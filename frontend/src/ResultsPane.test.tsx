@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ResultsPane } from "./ResultsPane";
-import type { ResultsAnalysis, ResultsAttempts } from "./api";
+import type { ResultsAnalysis, ResultsAttempts, TopicAdvice, TopicReport } from "./api";
 
 const ANALYSIS: ResultsAnalysis = {
   minAttempts: 20,
@@ -58,6 +58,28 @@ const ATTEMPTS: ResultsAttempts = {
   },
 };
 
+const row = (label: string, wrong: number, answers: number, thin = false) => ({
+  label, courseId: "developer-di-practitioner", course: "DI Practitioner", questions: 2, answers, wrong,
+  wrongRate: wrong / answers, shareOfWrong: wrong / 30, thin,
+  worstQuestions: [{ id: "di-m1-q2", answers: 40, wrong: 20, wrongRate: 0.5, stem: "Which step writes rows?" }],
+});
+
+const TOPICS: TopicReport = {
+  minAnswers: 20, answers: 80, wrong: 30,
+  courses: [{
+    courseId: "developer-di-practitioner", name: "DI Practitioner", attempts: 40, answers: 80, wrong: 30,
+    wrongRate: 0.375,
+    topics: [row("Getting Started", 20, 40), row("Jobs", 10, 12, true)],
+    modules: [row("Module 1", 20, 40)],
+  }],
+};
+
+const ADVICE: TopicAdvice = {
+  summary: "Getting Started is missed most.", dropped: 1, model: "m1", provider: "ollama",
+  suggestions: [{ course: "DI Practitioner", topic: "Getting Started", questionIds: ["di-m1-q2"],
+                  priority: "high", advice: "Check the key on di-m1-q2." }],
+};
+
 const EMPTY_ATTEMPTS: ResultsAttempts = {
   attempts: [], summary: { attempts: 0, candidates: 0, passed: 0, failed: 0, meanPercentage: null },
   options: { courses: [], candidates: [], maxAttemptNo: 0, firstDay: "", lastDay: "" },
@@ -83,6 +105,10 @@ function fakeServer(analysis: ResultsAnalysis, importReply: unknown = null, stat
       code = status;
     } else if (u.includes("/api/results/attempts")) {
       body = attempts;
+    } else if (u.includes("/api/results/topics/advice")) {
+      body = ADVICE;
+    } else if (u.includes("/api/results/topics")) {
+      body = TOPICS;
     } else if (u.includes("/api/results/service")) {
       body = { configured: false, env: "X" };
     }
@@ -96,10 +122,36 @@ function fakeServer(analysis: ResultsAnalysis, importReply: unknown = null, stat
 afterEach(() => vi.unstubAllGlobals());
 
 describe("ResultsPane", () => {
+  it("ranks topics by wrong answers, switches to modules, and dims thin rows", async () => {
+    fakeServer(ANALYSIS);
+    render(<ResultsPane />);
+    const head = await screen.findByText("Where candidates go wrong");
+    const table = head.closest("section")!.querySelector("table")!;
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows[0]).toHaveTextContent("Getting Started");
+    expect(rows[1]).toHaveClass("results-thin");
+    expect(within(table).getByLabelText(/20 wrong, 67%/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "By module" }));
+    expect(within(head.closest("section")!).getByText("Module 1")).toBeInTheDocument();
+  });
+
+  it("Analyse with AI shows the reading, and drops it when the filters change", async () => {
+    const calls = fakeServer(ANALYSIS, null, 200, ATTEMPTS);
+    render(<ResultsPane />);
+    await userEvent.click(await screen.findByRole("button", { name: "Analyse with AI" }));
+    const region = await screen.findByRole("region", { name: "AI reading" });
+    expect(region).toHaveTextContent("Getting Started is missed most.");
+    expect(region).toHaveTextContent("Check the key on di-m1-q2.");
+    expect(region).toHaveTextContent("1 suggestion named something not in the report");
+    expect(calls.urls.some((u) => u.includes("/api/results/topics/advice"))).toBe(true);
+    await userEvent.selectOptions(screen.getByLabelText("Result"), "pass");
+    await waitFor(() => expect(screen.queryByRole("region", { name: "AI reading" })).toBeNull());
+  });
+
   it("shows each question's numbers, its options and its flags", async () => {
     fakeServer(ANALYSIS);
     render(<ResultsPane />);
-    expect(await screen.findByText("DI Practitioner")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "DI Practitioner" })).toBeInTheDocument();
     expect(screen.getByText(/40 attempts · mean score 62%/)).toBeInTheDocument();
     expect(screen.getByText("reads").tagName).toBe("STRONG");
     expect(screen.getByText("0.71")).toBeInTheDocument();
@@ -110,10 +162,10 @@ describe("ResultsPane", () => {
   it("Only flagged questions hides the ones with nothing to say", async () => {
     fakeServer(ANALYSIS);
     render(<ResultsPane />);
-    await screen.findByText("DI Practitioner");
+    await screen.findByRole("heading", { name: "DI Practitioner" });
     await userEvent.click(screen.getByLabelText("Only flagged questions"));
     expect(screen.queryByText("di-m1-q1")).not.toBeInTheDocument();
-    expect(screen.getByText("di-m1-q2")).toBeInTheDocument();
+    expect(screen.getAllByText("di-m1-q2").length).toBeGreaterThan(0);
   });
 
   it("imports a CSV the author picks, and says what came in", async () => {

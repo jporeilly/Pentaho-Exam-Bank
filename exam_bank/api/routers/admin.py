@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from ...core import db_backup
+from ...core import db_backup, results_export, results_workbook
 from ...core.admin import DeletionRefused, delete_questions, plan_deletion
 from ...core.bank import ExamBankDB
 from ..deps import get_db
@@ -181,3 +181,93 @@ def bulk_delete(
     except DeletionRefused as e:
         raise HTTPException(409, str(e)) from e
     return {"deleted": deleted}
+
+
+# -- the results database (1.20.0) -------------------------------------------
+# A separate SQLite file the Results tab exports to. The same Admin page holds
+# it because it has the same shape of risk as the bank: backups, and deletion
+# that is count-first and refused if the count has moved.
+
+
+class ResultsDbRequest(BaseModel):
+    #: The results database file. Empty means the default beside the bank.
+    path: str = ""
+    course: str = ""
+    candidate: str = ""
+    passed: str = ""
+    attempt_no: int = 0
+    date_from: str = ""
+    date_to: str = ""
+    label: str = ""
+    #: From the preview or status. A mismatch means it changed in between.
+    expect_count: int = Field(-1)
+
+
+def _results_target(db: ExamBankDB, raw: str) -> Path:
+    try:
+        default = results_export.default_target(db.db_path)
+        return results_export.resolve_target(raw or str(default), (Path(db.db_path), db_backup.DB_PATH))
+    except results_export.ResultsExportError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+def _results_filters(body: ResultsDbRequest) -> results_workbook.Filters:
+    try:
+        return results_workbook.Filters(body.course, body.candidate, body.passed, body.attempt_no,
+                                        body.date_from, body.date_to)
+    except ValueError as e:
+        raise HTTPException(422, f"Bad filter: {e}") from e
+
+
+def _refusing(work):
+    try:
+        return work()
+    except results_export.ResultsExportError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@router.get("/api/admin/results-db")
+def results_db_status(path: str = "", db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    target = _results_target(db, path)
+    return {**_refusing(lambda: results_export.status(target)),
+            "defaultPath": str(results_export.default_target(db.db_path))}
+
+
+@router.post("/api/admin/results-db/append")
+def results_db_append(body: ResultsDbRequest, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """Copy the Results tab's records (under its filters) into the results database."""
+    target = _results_target(db, body.path)
+    flt = _results_filters(body)
+    return _refusing(lambda: results_export.append(db.conn, target, flt))
+
+
+@router.post("/api/admin/results-db/backup", status_code=201)
+def results_db_backup(body: ResultsDbRequest, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    target = _results_target(db, body.path)
+    label = re.sub(r"[^A-Za-z0-9_-]+", "-", body.label.strip())[:40].strip("-")
+    saved = _refusing(lambda: results_export.backup(target, label))
+    return {"name": saved.name, "backups": results_export.list_backups(target)}
+
+
+@router.post("/api/admin/results-db/truncate")
+def results_db_truncate(body: ResultsDbRequest, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    if body.expect_count < 0:
+        raise HTTPException(400, "Truncating needs the attempt count from the status.")
+    target = _results_target(db, body.path)
+    return _refusing(lambda: results_export.truncate(target, body.expect_count))
+
+
+@router.post("/api/admin/results-db/delete/preview")
+def results_db_delete_preview(body: ResultsDbRequest, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    target = _results_target(db, body.path)
+    flt = _results_filters(body)
+    return _refusing(lambda: results_export.plan_delete(target, flt))
+
+
+@router.post("/api/admin/results-db/delete")
+def results_db_delete(body: ResultsDbRequest, db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    if body.expect_count < 0:
+        raise HTTPException(400, "Deleting needs the count from a preview.")
+    target = _results_target(db, body.path)
+    flt = _results_filters(body)
+    return _refusing(lambda: results_export.delete(target, flt, body.expect_count))

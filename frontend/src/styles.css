@@ -1263,3 +1263,24 @@ td.empty { text-align: center; color: var(--text-faint); padding: 18px 10px; }
 .results-filters .field input,
 .results-filters .field select { min-width: 140px; }
 .results-presets { display: flex; gap: 6px; }
+
+/* Where candidates go wrong (1.20.0): topic and module tables. The bar is a
+   row's wrong answers against the course's worst row; wrong-answer colour,
+   since that is what it counts. */
+.topic-course { margin-bottom: 14px; }
+.topic-course-head { display: flex; gap: 12px; align-items: baseline; padding: 10px 14px 4px; }
+.topic-bar { display: flex; align-items: center; gap: 8px; height: 22px; }
+.topic-fill { flex: 1; height: 14px; border-radius: 3px; background: var(--wrong-bg); opacity: .55; overflow: hidden; }
+.topic-fill i { display: block; height: 100%; background: var(--wrong-line); }
+.topic-bar em { font-style: normal; font-variant-numeric: tabular-nums; font-size: 12px; min-width: 70px; text-align: right; }
+.topic-worst { font-size: 12px; }
+.topic-seg { display: flex; gap: 6px; }
+.topic-advice { padding: 12px 14px; }
+.topic-advice h4 { margin: 0; font-size: 15px; color: var(--text-strong); }
+.topic-suggestions { margin: 0; padding-left: 18px; display: grid; gap: 10px; }
+.topic-priority { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: var(--c-info-soft); color: var(--c-info-ink); }
+.topic-priority.high { background: var(--wrong-bg); color: var(--wrong-ink); }
+.topic-priority.medium { background: #fbeed3; color: var(--warn); }
+.results-db .toolbar .field.grow { flex: 1; }
+.results-db .toolbar .field.grow input { width: 100%; }
+.results-db h4 { margin: 18px 0 6px; font-size: 14px; color: var(--text-strong); }

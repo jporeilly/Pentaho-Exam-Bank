@@ -8,7 +8,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ...core import results_service, results_workbook
+from ...core import results_service, results_workbook, topic_advice, topic_report
+from ...core.providers import ProviderError
 from ...core.bank import ExamBankDB
 from ...core.item_analysis import ResultsImportError, analyse, import_rows, parse_detail_csv
 from ...core.pcm_reader import read_course_json
@@ -112,6 +113,31 @@ def pull_results(db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
         return {"rows": 0, "added": 0, "attempts": 0, "courses": [], "services": len(urls),
                 "totalResponses": db.conn.execute("SELECT COUNT(*) FROM responses").fetchone()[0]}
     return {**import_rows(db.conn, rows), "services": len(urls)}
+
+
+def _topic_report(db: ExamBankDB, flt: results_workbook.Filters) -> dict[str, Any]:
+    names = {c.source_ref: c.name for c in db.list_certifications() if getattr(c, "source_ref", "")}
+    return topic_report.build(db, results_workbook.matching_attempt_ids(db.conn, flt), names)
+
+
+@router.get("/api/results/topics")
+def results_topics(course: str = "", candidate: str = "", passed: str = "", attempt_no: int = 0,
+                   date_from: str = "", date_to: str = "",
+                   db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """Wrong answers by topic and by module, per course, under the Results filters."""
+    return _topic_report(db, _filters(course, candidate, passed, attempt_no, date_from, date_to))
+
+
+@router.post("/api/results/topics/advice")
+def results_topics_advice(course: str = "", candidate: str = "", passed: str = "", attempt_no: int = 0,
+                          date_from: str = "", date_to: str = "",
+                          db: ExamBankDB = Depends(get_db)) -> dict[str, Any]:
+    """An AI reading of that report. Only the report's numbers are sent."""
+    report = _topic_report(db, _filters(course, candidate, passed, attempt_no, date_from, date_to))
+    try:
+        return topic_advice.advise(report)
+    except ProviderError as e:
+        raise HTTPException(503, str(e)) from e
 
 
 @router.get("/api/results/analysis")

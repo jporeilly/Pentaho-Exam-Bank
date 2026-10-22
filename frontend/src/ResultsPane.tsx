@@ -13,6 +13,7 @@ import {
   type ResultsItem,
 } from "./api";
 import { Formatted } from "./inlineFormat";
+import { TopicReport } from "./TopicReport";
 
 /**
  * How each question performs with real candidates.
@@ -35,6 +36,7 @@ export function ResultsPane() {
   const [busy, setBusy] = useState(false);
   const [onlyFlagged, setOnlyFlagged] = useState(false);
   const [service, setService] = useState<{ configured: boolean; env: string } | null>(null);
+  const [refresh, setRefresh] = useState(0);
   const file = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
@@ -42,6 +44,7 @@ export function ResultsPane() {
       .then(([a, at]) => {
         setAnalysis(a);
         setAttempts(at);
+        setRefresh((n) => n + 1);
         setError("");
       })
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : String(e)));
@@ -163,6 +166,8 @@ export function ResultsPane() {
         </div>
       )}
 
+      <TopicReport filters={filters} refresh={refresh} />
+
       {analysis && exams.length === 0 && !filtersActive(filters) && (
         <div className="card empty">No results imported yet.</div>
       )}
@@ -207,7 +212,7 @@ function readBase64(f: File): Promise<string> {
   });
 }
 
-const filtersActive = (f: ResultsFilters) =>
+export const filtersActive = (f: ResultsFilters) =>
   Object.keys(NO_RESULTS_FILTERS).some(
     (k) => f[k as keyof ResultsFilters] !== NO_RESULTS_FILTERS[k as keyof ResultsFilters],
   );
@@ -233,7 +238,7 @@ const ordinal = (n: number) =>
  * date boxes open the browser's calendar; the presets fill both. The choices
  * come from every attempt, so narrowing one filter never empties another's.
  */
-function FilterBar({
+export function FilterBar({
   filters,
   onChange,
   options,

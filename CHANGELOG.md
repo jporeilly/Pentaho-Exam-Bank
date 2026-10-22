@@ -7,6 +7,33 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-10-22
+
+### Added
+
+- **Results: where candidates go wrong.** A new report on the Results tab
+  ranks topics (the bank's topic for each question, joined through
+  `responses.question_id`) and modules (read from the question id's `-m<N>-`)
+  by wrong answers, per course, as tables with bars, the rate, and the three
+  most-missed questions. It honours the same filters as the rest of the tab
+  (date range, course, candidate, pass/fail, attempt number); rows with fewer
+  than 20 answers are dimmed, not judged. New `GET /api/results/topics`.
+- **AI reading of that report.** *Analyse with AI* sends only the report's
+  numbers (topic and module labels, counts, the worst questions' ids and stems)
+  to the configured provider and shows a summary with prioritised suggestions.
+  Nothing about candidates is sent (none is stored). The reply is checked
+  against the report: a suggestion naming a topic or question the report does
+  not contain is dropped and counted. With no wrong answers there is no model
+  call. New `POST /api/results/topics/advice`.
+- **Admin: results database.** Export Results to a separate SQLite file and
+  manage it from the Admin page: *append* the records that pass the filters
+  (records already there are skipped), *back up*, *delete* by filter, and
+  *truncate*. Delete and truncate are count-first (the count is on the button,
+  a tick is required, the server refuses if the count moved) and each takes a
+  safety backup first, in `<name>_backups` beside the file. A file that this
+  app did not create (the bank itself, any other SQLite file) is refused, never
+  written to. New `/api/admin/results-db/*` endpoints.
+
 ## [1.19.0] - 2026-10-22
 
 ### Added

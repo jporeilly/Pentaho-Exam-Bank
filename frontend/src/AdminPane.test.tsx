@@ -39,6 +39,11 @@ function plan(over: Partial<DeletionPlan> = {}): DeletionPlan {
   };
 }
 
+const RESULTS_DB = {
+  path: "C:/data/exam_results.db", defaultPath: "C:/data/exam_results.db", exists: true,
+  attempts: 6, answers: 12, sizeKb: 40, backups: [],
+};
+
 function mockApi(handlers: {
   status?: DatabaseStatus;
   preview?: DeletionPlan | { status: number; detail: string };
@@ -59,6 +64,10 @@ function mockApi(handlers: {
         }),
       );
 
+    if (path.includes("/admin/results-db")) return json(RESULTS_DB);
+    if (path.includes("/api/results/attempts")) {
+      return json({ attempts: [], summary: {}, options: { courses: [], candidates: [], maxAttemptNo: 0 } });
+    }
     if (path.includes("/delete/preview")) {
       const r = handlers.preview ?? plan();
       return "status" in r ? json({ detail: r.detail }, r.status) : json(r);
