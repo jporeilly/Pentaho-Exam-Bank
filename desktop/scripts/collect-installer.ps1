@@ -33,7 +33,11 @@
     Windows PowerShell 5.1+. ASCII-only on purpose.
 #>
 [CmdletBinding()]
-param()
+param(
+    # "seeded" -> <name>-seeded-setup.exe, so the seeded and plain installers
+    # of one version sit side by side in dist\ instead of overwriting each other.
+    [string]$Suffix = ""
+)
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -72,19 +76,21 @@ if ($exe.Name -notmatch [regex]::Escape("_${declared}_")) {
 }
 
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-$final = Join-Path $distDir $exe.Name
+$finalName = $exe.Name
+if ($Suffix) { $finalName = $finalName -replace '-setup\.exe$', "-$Suffix-setup.exe" }
+$final = Join-Path $distDir $finalName
 Copy-Item -LiteralPath $exe.FullName -Destination $final -Force
 
 $hash = (Get-FileHash -LiteralPath $final -Algorithm SHA256).Hash
-Set-Content -LiteralPath "$final.sha256" -Value "$hash  $($exe.Name)" -Encoding ASCII
+Set-Content -LiteralPath "$final.sha256" -Value "$hash  $finalName" -Encoding ASCII
 
 $size = [math]::Round((Get-Item -LiteralPath $final).Length / 1MB, 1)
-Ok "$($exe.Name) - $size MB"
+Ok "$finalName - $size MB"
 Say "sha256  $hash"
 Say "path    $final"
 
 $others = @(Get-ChildItem -LiteralPath $distDir -Filter "*-setup.exe" |
-            Where-Object { $_.Name -ne $exe.Name } |
+            Where-Object { $_.Name -ne $finalName } |
             Sort-Object LastWriteTime -Descending)
 if ($others.Count -gt 0) {
     Write-Host ""

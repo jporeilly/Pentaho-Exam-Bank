@@ -7,6 +7,108 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-10-22
+
+### Fixed
+
+- **Results filters line up.** The date boxes and their Last 7 days / Last 30 days / All dates
+  buttons sit on one row at one height, with course, candidate, result and attempt on a second row;
+  the explanatory text now spans the page instead of a narrow column.
+
+## [1.21.0] - 2026-10-22
+
+### Added
+
+- **Daily load of the results workbook into the results database.** On the
+  Admin page, set the path of the downloaded results `.xlsx`, a time, and
+  *Load daily*. At that time each day, while the app is open (or at the next
+  check if it was closed), the workbook is imported (the existing
+  upsert-by-attempt-id import) and its new attempts and answers are appended
+  to the results database; a repeat load adds nothing. A failed load (for
+  example the workbook is not there yet) is shown on the page and retried at
+  most hourly. **Load now** runs the same load at any time. New
+  `GET`/`PUT /api/admin/results-schedule` and
+  `POST /api/admin/results-schedule/run`.
+
+## [1.20.0] - 2026-10-22
+
+### Added
+
+- **Results: where candidates go wrong.** A new report on the Results tab
+  ranks topics (the bank's topic for each question, joined through
+  `responses.question_id`) and modules (read from the question id's `-m<N>-`)
+  by wrong answers, per course, as tables with bars, the rate, and the three
+  most-missed questions. It honours the same filters as the rest of the tab
+  (date range, course, candidate, pass/fail, attempt number); rows with fewer
+  than 20 answers are dimmed, not judged. New `GET /api/results/topics`.
+- **AI reading of that report.** *Analyse with AI* sends only the report's
+  numbers (topic and module labels, counts, the worst questions' ids and stems)
+  to the configured provider and shows a summary with prioritised suggestions.
+  Nothing about candidates is sent (none is stored). The reply is checked
+  against the report: a suggestion naming a topic or question the report does
+  not contain is dropped and counted. With no wrong answers there is no model
+  call. New `POST /api/results/topics/advice`.
+- **Admin: results database.** Export Results to a separate SQLite file and
+  manage it from the Admin page: *append* the records that pass the filters
+  (records already there are skipped), *back up*, *delete* by filter, and
+  *truncate*. Delete and truncate are count-first (the count is on the button,
+  a tick is required, the server refuses if the count moved) and each takes a
+  safety backup first, in `<name>_backups` beside the file. A file that this
+  app did not create (the bank itself, any other SQLite file) is refused, never
+  written to. New `/api/admin/results-db/*` endpoints.
+
+## [1.19.0] - 2026-10-22
+
+### Added
+
+- **Results loads the results workbook (.xlsx), with filters.** The Sheet's
+  *File > Download > Microsoft Excel* file imports directly: every course
+  tab's attempts and the Detail tab's answers come in together (the
+  repeated "All results" tab is read once, and CSV import still works).
+  - **Every attempt is its own row.** A candidate who sat an exam again
+    appears twice, numbered by submission order ("2 of 2"), never merged
+    or dropped. The attempt list shows date, course, candidate, attempt,
+    score, % and pass/fail.
+  - **Filters**: a date range (the browser's calendar, plus Last 7 days /
+    Last 30 days / All dates), course, candidate, passed or failed, and
+    attempt number. They narrow the attempt list and the per-question
+    item analysis together.
+  - **Privacy unchanged**: names, emails and notes are never read; a
+    candidate is shown by the anonymous `cand_...` id.
+  - New `POST /api/results/import-xlsx`, `GET /api/results/attempts`, and
+    filter parameters on `GET /api/results/analysis`.
+
+- **A seeded installer, for a machine with no Content Manager checkout.**
+  `npm run dist:seeded` (in `desktop/`) builds
+  `Pentaho Exam Bank_<version>_x64-seeded-setup.exe`, which carries the
+  text of some Content Manager courses and opens onto them. The plain
+  installer is unchanged and stays the right one for an author who has a
+  checkout.
+  - **What it carries**: only what the bank reads - `course.json`,
+    `SUMMARY.md`, `exam.json`, `glossary.json` and each lab's
+    `manifest.json` and `guide.md`. Lab files, images and sample data stay
+    behind, so all twelve courses are about 3 MB. Only files git tracks
+    ship (the distribution repo is public); outside git a file-type rule
+    and a short skip list apply. `PEB_SEED_COURSES=a,b` picks a subset.
+  - **First run** lays the courses out under the app's data folder
+    (`%APPDATA%\com.pentaho.exam-bank\pcm-seed\courses`). It ranks below
+    `PCM_REPO`, the installer's registry hint and any real checkout.
+  - **Shared with the Content Editor.** When the editor's own seeded copy
+    exists (`%APPDATA%\com.pentaho.content-editor\pcm-seed`), the bank
+    reads that one instead of its own, so an author edits labs in the
+    editor and generates questions from the same text, not two copies that
+    drift.
+  - **Additive.** A course is copied only if missing; an author's exams
+    survive every upgrade and nothing is deleted.
+  - **What a seeded copy cannot do**: *Publish and push* commits in an
+    authoring repository, and a seeded copy is not one, so the push is not
+    offered. Publishing still writes the course's `exam.json`.
+  - `/api/health` reports `courses.seeded`.
+- `desktop/scripts/stage-seed.mjs`, plain Node, tested under pytest on any
+  OS; it will not delete a directory that is not a seed.
+- `collect-installer.ps1 -Suffix <name>` keeps a seeded and a plain
+  installer of one version side by side in `dist\`.
+
 ## [1.18.2] - 2026-10-11
 
 ### Fixed
