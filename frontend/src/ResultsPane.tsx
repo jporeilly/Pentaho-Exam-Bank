@@ -3,8 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
+  NO_RESULTS_FILTERS,
   type ResultsAnalysis,
+  type ResultsAttempt,
+  type ResultsAttempts,
   type ResultsExam,
+  type ResultsFilters,
   type ResultsImport,
   type ResultsItem,
 } from "./api";
@@ -13,13 +17,19 @@ import { Formatted } from "./inlineFormat";
 /**
  * How each question performs with real candidates.
  *
- * The results Sheet's Detail tab is imported as a CSV (emails are never
- * kept); every question then shows its % correct, whether it separates
- * strong candidates from weak ones, and how often each option is picked.
- * Below a minimum number of attempts the numbers are shown but not judged.
+ * The results workbook (.xlsx, every tab) or the Detail tab as a CSV is
+ * imported - names and emails are never kept. Every attempt is listed on its
+ * own, so a candidate who sat an exam twice shows twice, as attempt 1 and 2.
+ * Every question then shows its % correct, whether it separates strong
+ * candidates from weak ones, and how often each option is picked; below a
+ * minimum number of attempts the numbers are shown but not judged. The
+ * filters (exam dates, course, candidate, result, attempt number) narrow
+ * the attempt list and the question numbers together.
  */
 export function ResultsPane() {
   const [analysis, setAnalysis] = useState<ResultsAnalysis | null>(null);
+  const [attempts, setAttempts] = useState<ResultsAttempts | null>(null);
+  const [filters, setFilters] = useState<ResultsFilters>(NO_RESULTS_FILTERS);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,14 +38,14 @@ export function ResultsPane() {
   const file = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
-    api
-      .resultsAnalysis()
-      .then((a) => {
+    Promise.all([api.resultsAnalysis("", filters), api.resultsAttempts(filters)])
+      .then(([a, at]) => {
         setAnalysis(a);
+        setAttempts(at);
         setError("");
       })
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : String(e)));
-  }, []);
+  }, [filters]);
 
   useEffect(load, [load]);
   useEffect(() => {
@@ -65,11 +75,21 @@ export function ResultsPane() {
     setError("");
     setNotice("");
     try {
-      const r: ResultsImport = await api.importResults(await readText(f));
-      setNotice(
-        `Imported ${r.rows} answers from ${r.attempts} attempt${r.attempts === 1 ? "" : "s"}` +
-          ` (${r.added} new). The bank now holds ${r.totalResponses}.`,
-      );
+      if (/\.xlsx$/i.test(f.name)) {
+        const r = await api.importResultsWorkbook(await readBase64(f));
+        const tabs = r.sheets.filter((s) => s.kind !== "ignored").length;
+        setNotice(
+          `Read ${tabs} tab${tabs === 1 ? "" : "s"}: ${r.attempts} attempt${r.attempts === 1 ? "" : "s"}` +
+            ` (${r.addedAttempts} new) and ${r.answers} answers (${r.added} new).` +
+            ` The bank now holds ${r.totalAttempts} attempts.`,
+        );
+      } else {
+        const r: ResultsImport = await api.importResults(await readText(f));
+        setNotice(
+          `Imported ${r.rows} answers from ${r.attempts} attempt${r.attempts === 1 ? "" : "s"}` +
+            ` (${r.added} new). The bank now holds ${r.totalResponses}.`,
+        );
+      }
       load();
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : String(e));
@@ -96,8 +116,8 @@ export function ResultsPane() {
         <input
           ref={file}
           type="file"
-          accept=".csv,text/csv"
-          aria-label="Results CSV file"
+          accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          aria-label="Results file"
           style={{ display: "none" }}
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -117,16 +137,24 @@ export function ResultsPane() {
           Pull from results service
         </button>
         <button className="info" disabled={busy} onClick={() => file.current?.click()}>
-          {busy ? "Working…" : "Import results CSV"}
+          {busy ? "Working…" : "Import results workbook"}
         </button>
       </div>
 
       <p className="muted results-how">
-        From the results Sheet: open the <strong>Detail</strong> tab, then{" "}
-        <strong>File › Download › Comma-separated values</strong>, and import that file here.
-        Importing it again later adds only the new attempts. Candidates&rsquo; emails in the
-        file are never kept.
+        From the results Sheet: <strong>File › Download › Microsoft Excel (.xlsx)</strong>, and
+        import that workbook here: every course tab&rsquo;s attempts and the Detail tab&rsquo;s
+        answers come in together. (The Detail tab alone, downloaded as a CSV, still works.)
+        Importing again later adds only the new attempts. Names and emails in the file are never
+        kept; a candidate is shown by their anonymous id.
       </p>
+
+      <FilterBar filters={filters} onChange={setFilters} options={attempts?.options} />
+
+      {attempts && attempts.attempts.length > 0 && <AttemptList data={attempts} />}
+      {attempts && attempts.attempts.length === 0 && attempts.options.courses.length > 0 && (
+        <div className="card empty">No attempts match these filters.</div>
+      )}
 
       {error && <div className="banner">{error}</div>}
       {notice && (
@@ -135,7 +163,7 @@ export function ResultsPane() {
         </div>
       )}
 
-      {analysis && exams.length === 0 && (
+      {analysis && exams.length === 0 && !filtersActive(filters) && (
         <div className="card empty">No results imported yet.</div>
       )}
 
@@ -160,6 +188,217 @@ function readText(f: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsText(f);
   });
+}
+
+/** A picked file as base64 (the API takes JSON, so the bytes travel as text). */
+function readBase64(f: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const bytes = new Uint8Array(reader.result as ArrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      resolve(btoa(binary));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(f);
+  });
+}
+
+const filtersActive = (f: ResultsFilters) =>
+  Object.keys(NO_RESULTS_FILTERS).some(
+    (k) => f[k as keyof ResultsFilters] !== NO_RESULTS_FILTERS[k as keyof ResultsFilters],
+  );
+
+const isoDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** [from, to] for "the last n days", today included. */
+function lastDays(n: number): [string, string] {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(to.getDate() - (n - 1));
+  return [isoDay(from), isoDay(to)];
+}
+
+const ordinal = (n: number) =>
+  n % 100 >= 11 && n % 100 <= 13
+    ? "th"
+    : (({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th");
+
+/**
+ * Filters for the attempt list and the question numbers below it. The two
+ * date boxes open the browser's calendar; the presets fill both. The choices
+ * come from every attempt, so narrowing one filter never empties another's.
+ */
+function FilterBar({
+  filters,
+  onChange,
+  options,
+}: {
+  filters: ResultsFilters;
+  onChange: (f: ResultsFilters) => void;
+  options: ResultsAttempts["options"] | undefined;
+}) {
+  if (!options || options.courses.length === 0) return null;
+  const set = (patch: Partial<ResultsFilters>) => onChange({ ...filters, ...patch });
+  const preset = (n: number) => {
+    const [dateFrom, dateTo] = lastDays(n);
+    set({ dateFrom, dateTo });
+  };
+  return (
+    <div className="card results-filters" role="group" aria-label="Filter results">
+      <label className="field">
+        <span>From</span>
+        <input
+          type="date"
+          aria-label="From date"
+          value={filters.dateFrom}
+          max={filters.dateTo || undefined}
+          onChange={(e) => set({ dateFrom: e.target.value })}
+        />
+      </label>
+      <label className="field">
+        <span>To</span>
+        <input
+          type="date"
+          aria-label="To date"
+          value={filters.dateTo}
+          min={filters.dateFrom || undefined}
+          onChange={(e) => set({ dateTo: e.target.value })}
+        />
+      </label>
+      <div className="results-presets">
+        <button className="secondary" onClick={() => preset(7)}>Last 7 days</button>
+        <button className="secondary" onClick={() => preset(30)}>Last 30 days</button>
+        <button className="secondary" onClick={() => set({ dateFrom: "", dateTo: "" })}>All dates</button>
+      </div>
+      <label className="field">
+        <span>Course</span>
+        <select aria-label="Course" value={filters.course} onChange={(e) => set({ course: e.target.value })}>
+          <option value="">All courses</option>
+          {options.courses.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        <span>Candidate</span>
+        <input
+          list="results-candidates"
+          aria-label="Candidate"
+          placeholder="Any (cand_…)"
+          value={filters.candidate}
+          onChange={(e) => set({ candidate: e.target.value })}
+        />
+        <datalist id="results-candidates">
+          {options.candidates.map((c) => <option key={c} value={c} />)}
+        </datalist>
+      </label>
+      <label className="field">
+        <span>Result</span>
+        <select
+          aria-label="Result"
+          value={filters.passed}
+          onChange={(e) => set({ passed: e.target.value as ResultsFilters["passed"] })}
+        >
+          <option value="">Pass and fail</option>
+          <option value="pass">Passed</option>
+          <option value="fail">Failed</option>
+        </select>
+      </label>
+      <label className="field">
+        <span>Attempt</span>
+        <select
+          aria-label="Attempt number"
+          value={filters.attemptNo}
+          onChange={(e) => set({ attemptNo: Number(e.target.value) })}
+        >
+          <option value={0}>Any attempt</option>
+          {Array.from({ length: Math.max(options.maxAttemptNo, 1) }, (_, i) => i + 1).map((n) => (
+            <option key={n} value={n}>
+              {n === 1 ? "1st (first sitting)" : `${n}${ordinal(n)} (a retake)`}
+            </option>
+          ))}
+        </select>
+      </label>
+      {filtersActive(filters) && (
+        <button className="secondary" onClick={() => onChange(NO_RESULTS_FILTERS)}>
+          Clear filters
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** One row per attempt, newest first. A retake is its own row, marked "2 of 3". */
+function AttemptList({ data }: { data: ResultsAttempts }) {
+  const s = data.summary;
+  return (
+    <section className="results-exam">
+      <div className="report-head">
+        <h3>Attempts</h3>
+        <span className="muted">
+          {s.attempts} attempt{s.attempts === 1 ? "" : "s"}
+          {s.candidates > 0 && ` · ${s.candidates} candidate${s.candidates === 1 ? "" : "s"}`}
+          {" · "}
+          {s.passed} passed · {s.failed} failed
+          {s.meanPercentage !== null && ` · mean ${pct(s.meanPercentage)}`}
+        </span>
+      </div>
+      <div className="card report-table">
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: 100 }}>Date</th>
+              <th>Course</th>
+              <th>Candidate</th>
+              <th style={{ width: 90 }}>Attempt</th>
+              <th style={{ width: 90, textAlign: "right" }}>Score</th>
+              <th style={{ width: 80, textAlign: "right" }}>%</th>
+              <th style={{ width: 90 }}>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.attempts.map((a: ResultsAttempt) => (
+              <tr key={a.attemptId}>
+                <td>{a.day || "–"}</td>
+                <td>{a.course}</td>
+                <td className="mono faint">{a.candidateId || "–"}</td>
+                <td>
+                  {a.attemptNo === null ? (
+                    "–"
+                  ) : (
+                    <>
+                      {a.attemptNo}
+                      {a.ofAttempts !== null && a.ofAttempts > 1 && (
+                        <span className="faint"> of {a.ofAttempts}</span>
+                      )}
+                    </>
+                  )}
+                </td>
+                <td className="num">
+                  {a.score === null ? "–" : `${a.score}${a.total !== null ? ` / ${a.total}` : ""}`}
+                </td>
+                <td className="num">{pct(a.percentage)}</td>
+                <td>
+                  {a.passed === null ? (
+                    "–"
+                  ) : (
+                    <span className={`pill ${a.passed ? "approved" : "rejected"}`}>
+                      {a.passed ? "Passed" : "Failed"}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 const pct = (v: number | null) => (v === null ? "–" : `${Math.round(v * 100)}%`);

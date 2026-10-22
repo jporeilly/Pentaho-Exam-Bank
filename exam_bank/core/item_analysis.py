@@ -68,6 +68,25 @@ CREATE TABLE IF NOT EXISTS responses (
 );
 CREATE INDEX IF NOT EXISTS idx_responses_course ON responses(course_id);
 CREATE INDEX IF NOT EXISTS idx_responses_question ON responses(question_id);
+
+-- One row per exam attempt, from the results workbook's attempt tabs (see
+-- results_workbook.py). No name, email or notes: a candidate is an opaque id.
+CREATE TABLE IF NOT EXISTS attempts (
+    attempt_id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL DEFAULT '',
+    course_id TEXT NOT NULL DEFAULT '',
+    course_tab TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT '',
+    submitted_at TEXT NOT NULL DEFAULT '',
+    company TEXT NOT NULL DEFAULT '',
+    score REAL,
+    total REAL,
+    percentage REAL,
+    passed INTEGER,
+    partner_id TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_attempts_course ON attempts(course_id);
+CREATE INDEX IF NOT EXISTS idx_attempts_candidate ON attempts(candidate_id);
 """
 
 
@@ -172,8 +191,12 @@ def split_answer(answer: str, options: list[str]) -> list[str]:
     return found + leftover
 
 
-def analyse(db, certification_id: str = "") -> dict[str, Any]:
-    """Per exam, per question: attempts, % correct, discrimination, option use, flags."""
+def analyse(db, certification_id: str = "", attempt_ids: Optional[set[str]] = None) -> dict[str, Any]:
+    """Per exam, per question: attempts, % correct, discrimination, option use, flags.
+
+    `attempt_ids` narrows the analysis to those attempts (the Results view's
+    filters); None means all of them.
+    """
     conn = db.conn
     ensure_schema(conn)
     certs = {c.source_ref: c for c in db.list_certifications() if getattr(c, "source_ref", "")}
@@ -181,6 +204,8 @@ def analyse(db, certification_id: str = "") -> dict[str, Any]:
         "SELECT attempt_id, question_id, course_id, submitted_at, user_answer, correct_answer, was_correct "
         "FROM responses"
     ).fetchall()
+    if attempt_ids is not None:
+        rows = [r for r in rows if r[0] in attempt_ids]
 
     by_course: dict[str, list] = defaultdict(list)
     for r in rows:

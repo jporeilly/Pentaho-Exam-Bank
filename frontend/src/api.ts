@@ -54,6 +54,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+function filterParams(f: ResultsFilters) {
+  return {
+    course: f.course,
+    candidate: f.candidate,
+    passed: f.passed,
+    attempt_no: f.attemptNo || undefined,
+    date_from: f.dateFrom,
+    date_to: f.dateTo,
+  };
+}
+
 function query(params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -202,6 +213,64 @@ export interface ResultsImport {
   courses: string[];
   totalResponses: number;
 }
+
+export interface ResultsWorkbookImport extends ResultsImport {
+  /** Attempt rows read / new / held after the import (the Detail answers are `rows` / `added`). */
+  addedAttempts: number;
+  totalAttempts: number;
+  answers: number;
+  sheets: { name: string; kind: "attempts" | "answers" | "ignored"; rows: number }[];
+}
+
+export interface ResultsAttempt {
+  attemptId: string;
+  candidateId: string;
+  courseId: string;
+  course: string;
+  role: string;
+  company: string;
+  submittedAt: string;
+  day: string;
+  /** Which sitting this is for the candidate and course; null when the candidate is unknown. */
+  attemptNo: number | null;
+  ofAttempts: number | null;
+  score: number | null;
+  total: number | null;
+  percentage: number | null;
+  passed: boolean | null;
+}
+
+export interface ResultsAttempts {
+  attempts: ResultsAttempt[];
+  summary: {
+    attempts: number;
+    candidates: number;
+    passed: number;
+    failed: number;
+    meanPercentage: number | null;
+  };
+  options: {
+    courses: { id: string; name: string }[];
+    candidates: string[];
+    maxAttemptNo: number;
+    firstDay: string;
+    lastDay: string;
+  };
+}
+
+/** What the Results view narrows by; empty means no restriction. Dates are YYYY-MM-DD. */
+export interface ResultsFilters {
+  course: string;
+  candidate: string;
+  passed: "" | "pass" | "fail";
+  attemptNo: number;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export const NO_RESULTS_FILTERS: ResultsFilters = {
+  course: "", candidate: "", passed: "", attemptNo: 0, dateFrom: "", dateTo: "",
+};
 
 export interface ResultsOption {
   text: string;
@@ -1212,8 +1281,17 @@ export const api = {
   importResults: (csv: string) =>
     request<ResultsImport>("/api/results/import", { method: "POST", body: JSON.stringify({ csv }) }),
   /** Item analysis per exam; one certification's when given. */
-  resultsAnalysis: (certification_id = "") =>
-    request<ResultsAnalysis>(`/api/results/analysis${query({ certification_id })}`),
+  resultsAnalysis: (certification_id = "", f: ResultsFilters = NO_RESULTS_FILTERS) =>
+    request<ResultsAnalysis>(`/api/results/analysis${query({ certification_id, ...filterParams(f) })}`),
+  /** The results workbook (.xlsx, base64): every tab's attempts, and the Detail answers. */
+  importResultsWorkbook: (xlsx: string) =>
+    request<ResultsWorkbookImport>("/api/results/import-xlsx", {
+      method: "POST",
+      body: JSON.stringify({ xlsx }),
+    }),
+  /** Each attempt (repeats are separate rows), filtered, with the filter choices. */
+  resultsAttempts: (f: ResultsFilters = NO_RESULTS_FILTERS) =>
+    request<ResultsAttempts>(`/api/results/attempts${query(filterParams(f))}`),
   /** Every topic with questions, in course order; one certification's when given. */
   topics: (certification_id = "") =>
     request<{ topic: string; questionCount: number }[]>(`/api/topics${query({ certification_id })}`),
